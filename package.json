@@ -4,10 +4,10 @@
   "description": "Eden - A sarcastic WhatsApp bot that responds with mean human-like responses using free LLMs",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "start:rpi": "NODE_OPTIONS='--max-old-space-size=512' node index.js",
+    "start": "node start.js",
+    "start:direct": "node index.js",
+    "start:rpi": "node -e \"process.env.NODE_OPTIONS='--max-old-space-size=512'\" index.js",
     "dev": "nodemon index.js",
-    "setup": "./setup.sh",
     "test": "node test.js",
     "demo": "node demo.js",
     "test-sticker": "node test-sticker.js",

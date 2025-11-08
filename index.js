@@ -27,8 +27,10 @@ class WhatsAppBot {
       }
     }
     
-    // Detect if running on Raspberry Pi
-    const isRaspberryPi = os.arch() === 'arm' || os.arch() === 'arm64';
+    // Detect if running on Raspberry Pi (not macOS with Apple Silicon)
+    const isRaspberryPi = (os.arch() === 'arm' || os.arch() === 'arm64') && 
+                          os.platform() === 'linux' && 
+                          fs.existsSync('/proc/device-tree/model');
     
     // Enhanced args for Raspberry Pi and low-resource devices
     const browserArgs = [
@@ -116,25 +118,60 @@ class WhatsAppBot {
     this.currentMood = "sarcastic"; // sarcastic, savage, playful, annoyed
     this.moodTimer = null;
 
+    // Statistics
+    this.messageCount = 0;
+    this.commandCount = 0;
+    this.startTime = Date.now();
+
     this.initializeEventHandlers();
   }
 
   initializeEventHandlers() {
-    // QR Code for authentication
-    this.client.on("qr", (qr) => {
-      console.log("🔗 Scan this QR code with your WhatsApp:");
-      qrcode.generate(qr, { small: true });
+    // Loading state
+    this.client.on("loading_screen", (percent, message) => {
+      console.log(`⏳ Loading... ${percent}% - ${message}`);
     });
 
-    // Bot ready
-    this.client.on("ready", () => {
-      console.log("✅ Eden is ready to be mean!");
+    // QR Code for authentication
+    this.client.on("qr", (qr) => {
+      console.log("\n🔗 Scan this QR code with your WhatsApp:");
+      qrcode.generate(qr, { small: true });
+      console.log("\n⏰ QR code expires in 60 seconds. Scan it now!\n");
+    });
 
-      // Start mood system
-      if (this.enableMoodSystem) {
-        this.changeMood();
-        console.log("🎭 Mood system activated");
-      }
+    // Authentication success
+    this.client.on("authenticated", () => {
+      console.log("\n✅ Authentication successful!");
+      console.log("🔐 Session saved - you won't need to scan QR next time");
+      console.log("⏳ Connecting to WhatsApp...");
+      console.log("💡 This usually takes 30-90 seconds, please be patient...\n");
+      
+      // Warn if taking too long
+      this.warningTimeout = setTimeout(() => {
+        if (!this.isReady) {
+          console.log("⚠️  Still connecting... Please wait, WhatsApp Web is initializing...\n");
+        }
+      }, 60000);
+      
+      // Final warning if stuck
+      this.readyTimeout = setTimeout(() => {
+        if (!this.isReady) {
+          console.log("⚠️  Connection is stuck. The ready event hasn't fired.");
+          console.log("\n💡 Please restart the bot:");
+          console.log("   1. Press Ctrl+C to stop");
+          console.log("   2. Run: rm -rf .wwebjs_auth/");
+          console.log("   3. Run: npm start");
+          console.log("   4. Scan QR code again\n");
+          console.log("⏳ Or keep waiting, it might still connect...\n");
+        }
+      }, 120000); // Wait 2 minutes before final warning
+    });
+
+    this.isReady = false;
+
+    // Bot ready
+    this.client.on("ready", async () => {
+      await this.onReady();
     });
 
     // Handle incoming messages
@@ -142,18 +179,54 @@ class WhatsAppBot {
       try {
         await this.handleMessage(message);
       } catch (error) {
-        console.error("Error handling message:", error);
+        console.error("❌ Error handling message:", error);
       }
     });
 
     // Handle authentication failures
     this.client.on("auth_failure", (msg) => {
-      console.error("❌ Authentication failed:", msg);
+      console.error("\n❌ Authentication failed:", msg);
+      console.log("💡 Try deleting the .wwebjs_auth folder and scan QR again");
+      console.log("   Run: rm -rf .wwebjs_auth/\n");
     });
 
     // Handle disconnections
     this.client.on("disconnected", (reason) => {
-      console.log("📱 Client was logged out:", reason);
+      console.log("\n⚠️  Client was disconnected!");
+      console.log("📱 Reason:", reason);
+      console.log("🔄 Restarting... Please wait or scan QR code again\n");
+    });
+
+    // Handle remote session saved (when device is linked/unlinked)
+    this.client.on("remote_session_saved", () => {
+      console.log("💾 Remote session saved");
+    });
+
+    // Handle change state
+    this.client.on("change_state", (state) => {
+      console.log("🔄 Connection state:", state);
+      
+      // If we reach CONNECTED state but ready doesn't fire, something is wrong
+      if (state === "CONNECTED" && !this.isReady) {
+        setTimeout(() => {
+          if (!this.isReady) {
+            console.log("\n⚠️  State is CONNECTED but ready event hasn't fired!");
+            console.log("🐛 This means WhatsApp Web.js is stuck.");
+            console.log("\n� You need to restart with fresh session:");
+            console.log("   1. Press Ctrl+C");
+            console.log("   2. Run: rm -rf .wwebjs_auth/");
+            console.log("   3. Run: npm start");
+            console.log("   4. Scan QR code again\n");
+          }
+        }, 45000); // Check after 45 seconds in CONNECTED state
+      }
+    });
+
+    // Handle message creation (useful for debugging)
+    this.client.on("message_create", (message) => {
+      if (!this.isReady && message.fromMe) {
+        console.log("📨 Message system is active - bot should be ready soon...");
+      }
     });
   }
 
@@ -162,6 +235,8 @@ class WhatsAppBot {
     if (message.from === "status@broadcast" || message.fromMe) {
       return;
     }
+
+    this.messageCount++;
 
     const messageBody = message.body.trim();
     const commandPrefix = process.env.COMMAND_PREFIX || "-";
@@ -175,7 +250,8 @@ class WhatsAppBot {
 
     // Check if message starts with command prefix
     if (messageBody.startsWith(commandPrefix)) {
-      console.log(`📨 Command received: ${messageBody}`);
+      this.commandCount++;
+      console.log(`📨 Command #${this.commandCount}: ${messageBody}`);
       console.log(`👤 From: ${senderName}`);
 
       const command = messageBody.slice(1).trim();
@@ -308,6 +384,54 @@ class WhatsAppBot {
     }
   }
 
+  async onReady() {
+    this.isReady = true;
+    
+    // Clear timeout timers
+    if (this.readyTimeout) clearTimeout(this.readyTimeout);
+    if (this.warningTimeout) clearTimeout(this.warningTimeout);
+    
+    console.log("\n" + "=".repeat(60));
+    console.log("🎉 EDEN IS NOW ACTIVE AND READY!");
+    console.log("=".repeat(60));
+    
+    try {
+      // Get bot info
+      const info = this.client.info;
+      console.log("\n📱 WhatsApp Connection Info:");
+      console.log(`   👤 Logged in as: ${info.pushname || 'WhatsApp User'}`);
+      console.log(`   📞 Phone: ${info.wid.user}`);
+      console.log(`   🌐 Platform: ${info.platform}`);
+    } catch (error) {
+      console.log("\n📱 Connected to WhatsApp successfully");
+    }
+
+    console.log("\n😈 Eden's Status:");
+    console.log("   🤖 Bot: Active and ready to roast");
+    console.log("   🧠 LLM: " + (process.env.GROQ_API_KEY ? "Groq (Free)" : "Fallback responses"));
+    console.log("   💬 Command prefix: -");
+    console.log("   🎯 Triggers: " + this.triggerNames.join(", "));
+    
+    // Start mood system
+    if (this.enableMoodSystem) {
+      this.changeMood();
+      console.log("   🎭 Mood system: Active");
+    }
+
+    console.log("\n📝 Quick Commands:");
+    console.log("   -help     - Show all commands");
+    console.log("   -roast    - Get roasted");
+    console.log("   -ask      - Ask anything");
+    console.log("   -sticker  - Create stickers");
+    console.log("   -voice    - Create voice messages");
+    console.log("   -ping     - Check if bot is responsive");
+    
+    console.log("\n" + "=".repeat(60));
+    console.log("✨ Eden is now monitoring all messages!");
+    console.log("💡 Mention 'Eden' or 'Ansh' in any chat to trigger responses");
+    console.log("=".repeat(60) + "\n");
+  }
+
   changeMood() {
     const moods = ["sarcastic", "savage", "playful", "annoyed", "dramatic"];
     this.currentMood = moods[Math.floor(Math.random() * moods.length)];
@@ -322,7 +446,8 @@ class WhatsAppBot {
 
   async start(retryCount = 0, maxRetries = 3) {
     try {
-      console.log("🚀 Starting Eden - Your Sarcastic WhatsApp Companion...");
+      console.log("\n🚀 Starting Eden - Your Sarcastic WhatsApp Companion...");
+      console.log("⏳ Initializing WhatsApp Web connection...");
       
       if (retryCount > 0) {
         console.log(`🔄 Retry attempt ${retryCount}/${maxRetries}...`);
@@ -330,7 +455,9 @@ class WhatsAppBot {
         await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
       }
       
+      console.log("🔌 Connecting to WhatsApp servers...");
       await this.client.initialize();
+      console.log("✅ Connection established successfully!");
     } catch (error) {
       console.error("❌ Failed to start Eden:", error.message);
       
@@ -371,10 +498,12 @@ class WhatsAppBot {
 
 // Start the bot
 const bot = new WhatsAppBot();
+global.edenBot = bot; // Make bot accessible for status command
 bot.start();
 
 // Handle graceful shutdown
 process.on("SIGINT", () => {
-  console.log("🛑 Shutting down Eden...");
+  console.log("\n🛑 Shutting down Eden gracefully...");
+  console.log(`📊 Final Stats: ${bot.messageCount} messages, ${bot.commandCount} commands`);
   process.exit(0);
 });

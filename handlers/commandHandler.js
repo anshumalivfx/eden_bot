@@ -41,6 +41,9 @@ class CommandHandler {
       v: this.createVoice.bind(this), // Short alias for voice
       speak: this.createVoice.bind(this),
       tts: this.createVoice.bind(this), // Text-to-speech alias
+      status: this.showStatus.bind(this),
+      stats: this.showStatus.bind(this), // Alias for status
+      ping: this.ping.bind(this), // Quick response check
       image: this.generateImage.bind(this),
       img: this.generateImage.bind(this), // Short alias for image
       draw: this.generateImage.bind(this),
@@ -103,7 +106,9 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-excuse [situation]\` - Generate a creative excuse
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create funny voice message (🎤)
-- \`-image [prompt]\` or \`-img\` - Generate AI art from text (NEW! �)
+- \`-image [prompt]\` or \`-img\` - Generate AI art from text (NEW! 🎨)
+- \`-status\` or \`-stats\` - Check bot statistics and uptime
+- \`-ping\` - Quick response check (am I alive?)
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -695,6 +700,56 @@ Remember, I'm Eden - mean but lovable! 😈💖${ownerNote}`;
     } catch (error) {
       return "Unknown";
     }
+  }
+
+  async showStatus(args, message) {
+    try {
+      // Get bot instance from global (we'll set this up)
+      const bot = global.edenBot;
+      
+      if (!bot) {
+        return "📊 *Eden Status*\n\n✅ Bot is active and responding!\n🤖 All systems operational";
+      }
+
+      const uptime = Date.now() - bot.startTime;
+      const hours = Math.floor(uptime / 3600000);
+      const minutes = Math.floor((uptime % 3600000) / 60000);
+      const seconds = Math.floor((uptime % 60000) / 1000);
+
+      let status = "📊 *EDEN BOT STATUS*\n\n";
+      status += "✅ *Status:* Active and Ready\n";
+      status += `⏰ *Uptime:* ${hours}h ${minutes}m ${seconds}s\n`;
+      status += `📨 *Messages Received:* ${bot.messageCount}\n`;
+      status += `🎯 *Commands Executed:* ${bot.commandCount}\n`;
+      status += `😈 *Current Mood:* ${bot.currentMood}\n`;
+      status += `🧠 *LLM Provider:* ${process.env.GROQ_API_KEY ? 'Groq (Free)' : 'Fallback'}\n`;
+      status += `💬 *Command Prefix:* -\n`;
+      status += `🎭 *Features:*\n`;
+      status += `   • Name Triggers: ${bot.triggerNames.join(', ')}\n`;
+      status += `   • Mood System: ${bot.enableMoodSystem ? 'Active' : 'Disabled'}\n`;
+      status += `   • Random Messages: ${bot.enableRandomMessages ? 'Active' : 'Disabled'}\n`;
+      status += `   • Smart Context: ${bot.enableSmartContext ? 'Active' : 'Disabled'}\n`;
+      status += `\n💡 *Tip:* Use \`-help\` to see all commands`;
+
+      return status;
+    } catch (error) {
+      return "✅ Bot is active and responding to commands!";
+    }
+  }
+
+  async ping(args, message) {
+    const responses = [
+      "🏓 Pong! I'm alive and ready to be mean!",
+      "✅ Yep, still here... unfortunately for you.",
+      "🤖 Online and fully operational! Ready to roast!",
+      "💚 I'm here! Did you miss my sarcasm?",
+      "⚡ Fast as lightning and twice as shocking!",
+      "🎯 Bulls eye! Direct hit! I'm active!",
+      "😈 Present and accounted for! What do you want?",
+      "🔥 Alive, active, and ready to burn!",
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
   }
 }
 
