@@ -8,9 +8,10 @@ class WhatsAppBot {
   constructor() {
     // Detect available browser (checks multiple locations)
     const fs = require('fs');
+    const os = require('os');
     const possiblePaths = [
       '/usr/bin/chromium',                                              // Linux Chromium
-      '/usr/bin/chromium-browser',                                      // Alternative Linux
+      '/usr/bin/chromium-browser',                                      // Alternative Linux (Raspberry Pi common)
       '/snap/bin/chromium',                                             // Snap Chromium
       '/usr/bin/google-chrome',                                         // Linux Chrome
       '/usr/bin/google-chrome-stable',                                  // Linux Chrome stable
@@ -26,22 +27,67 @@ class WhatsAppBot {
       }
     }
     
+    // Detect if running on Raspberry Pi
+    const isRaspberryPi = os.arch() === 'arm' || os.arch() === 'arm64';
+    
+    // Enhanced args for Raspberry Pi and low-resource devices
+    const browserArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process",
+      "--disable-gpu",
+    ];
+    
+    // Additional args for Raspberry Pi
+    if (isRaspberryPi) {
+      browserArgs.push(
+        "--disable-software-rasterizer",
+        "--disable-dev-tools",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-translate",
+        "--disable-features=TranslateUI",
+        "--disable-features=BlinkGenPropertyTrees",
+        "--disable-ipc-flooding-protection",
+        "--disable-renderer-backgrounding",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-client-side-phishing-detection",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-default-apps",
+        "--disable-hang-monitor",
+        "--disable-popup-blocking",
+        "--disable-prompt-on-repost",
+        "--metrics-recording-only",
+        "--mute-audio",
+        "--no-default-browser-check",
+        "--no-pings",
+        "--password-store=basic",
+        "--use-mock-keychain",
+        "--disable-blink-features=AutomationControlled"
+      );
+      console.log('🍓 Raspberry Pi detected - using optimized settings');
+    }
+    
     this.client = new Client({
       authStrategy: new LocalAuth(),
       puppeteer: {
         headless: true,
-        executablePath: executablePath, // Use detected browser or Puppeteer's default
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--single-process",
-          "--disable-gpu",
-        ],
+        executablePath: executablePath,
+        args: browserArgs,
+        // Raspberry Pi specific timeouts
+        timeout: isRaspberryPi ? 120000 : 60000, // 2 minutes for RPi, 1 minute for others
+        protocolTimeout: isRaspberryPi ? 180000 : 120000, // 3 minutes for RPi
       },
+      // WhatsApp Web.js specific options for stability
+      authTimeoutMs: isRaspberryPi ? 120000 : 60000,
+      qrTimeoutMs: isRaspberryPi ? 60000 : 40000,
+      restartOnAuthFail: true,
+      qrMaxRetries: 5,
     });
     
     if (executablePath) {
@@ -274,12 +320,51 @@ class WhatsAppBot {
     }, (Math.random() * 15 + 15) * 60000);
   }
 
-  async start() {
+  async start(retryCount = 0, maxRetries = 3) {
     try {
       console.log("🚀 Starting Eden - Your Sarcastic WhatsApp Companion...");
+      
+      if (retryCount > 0) {
+        console.log(`🔄 Retry attempt ${retryCount}/${maxRetries}...`);
+        // Wait before retry (progressive backoff)
+        await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+      }
+      
       await this.client.initialize();
     } catch (error) {
-      console.error("❌ Failed to start Eden:", error);
+      console.error("❌ Failed to start Eden:", error.message);
+      
+      // Check if it's a session/protocol error (common on Raspberry Pi)
+      const isSessionError = error.message.includes('Session closed') || 
+                            error.message.includes('Protocol error') ||
+                            error.message.includes('Target closed');
+      
+      if (isSessionError && retryCount < maxRetries) {
+        console.log("⚠️  Session error detected - this is common on Raspberry Pi");
+        console.log("💡 Tip: Make sure Chromium is installed: sudo apt-get install chromium-browser");
+        console.log(`🔄 Retrying in ${(retryCount + 1) * 5} seconds...`);
+        
+        // Cleanup before retry
+        try {
+          await this.client.destroy();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        
+        return this.start(retryCount + 1, maxRetries);
+      } else if (retryCount >= maxRetries) {
+        console.error("\n❌ Failed to start after multiple attempts.");
+        console.error("🔧 Troubleshooting steps:");
+        console.error("   1. Install Chromium: sudo apt-get install chromium-browser");
+        console.error("   2. Increase swap space: sudo dphys-swapfile swapoff && sudo nano /etc/dphys-swapfile");
+        console.error("      Set CONF_SWAPSIZE=1024 or higher");
+        console.error("   3. Free up RAM: sudo systemctl stop unnecessary-service");
+        console.error("   4. Try running with: NODE_OPTIONS='--max-old-space-size=512' npm start");
+        console.error("   5. Reboot your Raspberry Pi: sudo reboot");
+        process.exit(1);
+      } else {
+        throw error;
+      }
     }
   }
 }
