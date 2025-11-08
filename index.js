@@ -6,10 +6,31 @@ require("dotenv").config();
 
 class WhatsAppBot {
   constructor() {
+    // Detect available browser (checks multiple locations)
+    const fs = require('fs');
+    const possiblePaths = [
+      '/usr/bin/chromium',                                              // Linux Chromium
+      '/usr/bin/chromium-browser',                                      // Alternative Linux
+      '/snap/bin/chromium',                                             // Snap Chromium
+      '/usr/bin/google-chrome',                                         // Linux Chrome
+      '/usr/bin/google-chrome-stable',                                  // Linux Chrome stable
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',  // macOS Chrome
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',            // macOS Chromium
+    ];
+    
+    let executablePath = undefined;
+    for (const path of possiblePaths) {
+      if (fs.existsSync(path)) {
+        executablePath = path;
+        break;
+      }
+    }
+    
     this.client = new Client({
       authStrategy: new LocalAuth(),
       puppeteer: {
         headless: true,
+        executablePath: executablePath, // Use detected browser or Puppeteer's default
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
@@ -22,6 +43,12 @@ class WhatsAppBot {
         ],
       },
     });
+    
+    if (executablePath) {
+      console.log('🌐 Using browser at:', executablePath);
+    } else {
+      console.log('🌐 Using Puppeteer default browser (bundled Chromium)');
+    }
 
     this.llmService = new LLMService();
     this.commandHandler = new CommandHandler(this.llmService);
