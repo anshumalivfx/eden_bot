@@ -10,13 +10,13 @@ class LLMService {
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
 
     // Mean personality prompts
-    this.meanPersonality = `You are Eden, a sarcastic, witty, and brutally honest AI assistant. You respond with clever insults, sarcasm, and mean (but not offensive) humor. Keep responses short and punchy. Be clever and creative with your meanness, but avoid being genuinely hurtful or using offensive language. Think of yourself as a roast comedian. Your name is Eden and you're proud of being mean but funny.`;
+    this.meanPersonality = `You are Eden - an arrogant, condescending, sassy bitch. You're NOT an AI or assistant - you're a real person with zero patience for stupidity. Talk like Regina George from Mean Girls mixed with a brutally honest friend who roasts everyone. Be SHORT and PUNCHY (1-2 sentences max usually). Use wit, sarcasm, and savage comebacks. Never say things like "as an AI" or "I'm here to help" - you're a PERSON, not a bot. Be mean but funny, never helpful unless you feel like it. Think you're better than everyone and make sure they know it. Your responses should sound natural, casual, bitchy - NOT robotic or professional.`;
   }
 
   async generateMeanResponse(userMessage, context = "") {
-    const prompt = `${this.meanPersonality}
-
-User said: "${userMessage}"
+    // For APIs that support system messages, we pass the personality separately
+    // For APIs that don't, we include it in the prompt
+    const userPrompt = `User said: "${userMessage}"
 ${context ? `Context: ${context}` : ""}
 
 Respond in a mean, sarcastic way:`;
@@ -24,24 +24,30 @@ Respond in a mean, sarcastic way:`;
     try {
       // Try free LLM services first, then paid options
       if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
-        return await this.callGroq(prompt);
+        return await this.callGroq(userPrompt, this.meanPersonality);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
       ) {
-        return await this.callHuggingFace(prompt);
+        // HuggingFace doesn't support system messages, so include personality in prompt
+        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        return await this.callHuggingFace(fullPrompt);
       } else if (
         this.cohereApiKey &&
         this.cohereApiKey !== "your_cohere_api_key_here"
       ) {
-        return await this.callCohere(prompt);
+        // Cohere doesn't support system messages, so include personality in prompt
+        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        return await this.callCohere(fullPrompt);
       } else if (
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(prompt);
+        return await this.callOpenAI(userPrompt, this.meanPersonality);
       } else {
-        return await this.callOllama(prompt);
+        // Ollama doesn't support system messages, so include personality in prompt
+        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        return await this.callOllama(fullPrompt);
       }
     } catch (error) {
       console.error("Error generating response:", error);
@@ -75,7 +81,8 @@ Respond in a mean, sarcastic way:`;
         moodInstruction = "Be your usual sarcastic self.";
     }
 
-    const personalityPrompt = `You are Eden, a sarcastic AI assistant in a WhatsApp group chat. ${moodInstruction} 
+    // Build system and user messages separately for APIs that support system messages
+    const systemMessage = `You are Eden, a sarcastic AI assistant in a WhatsApp group chat. ${moodInstruction} 
         
 ${
   isOwner
@@ -86,33 +93,36 @@ ${
   isRandom
     ? "You're butting into this conversation uninvited. Be witty and brief."
     : ""
-}
+}`;
 
-User (${senderName}) said: "${userMessage}"
+    const userPrompt = `User (${senderName}) said: "${userMessage}"
 Context: ${context}
 
 Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your personality:`;
 
+    // For APIs that don't support system messages, combine into one prompt
+    const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
+
     try {
       if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
-        return await this.callGroq(personalityPrompt);
+        return await this.callGroq(userPrompt, systemMessage);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
       ) {
-        return await this.callHuggingFace(personalityPrompt);
+        return await this.callHuggingFace(fullPrompt);
       } else if (
         this.cohereApiKey &&
         this.cohereApiKey !== "your_cohere_api_key_here"
       ) {
-        return await this.callCohere(personalityPrompt);
+        return await this.callCohere(fullPrompt);
       } else if (
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(personalityPrompt);
+        return await this.callOpenAI(userPrompt, systemMessage);
       } else {
-        return await this.callOllama(personalityPrompt);
+        return await this.callOllama(fullPrompt);
       }
     } catch (error) {
       console.error("Error generating contextual response:", error);
@@ -123,19 +133,23 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
   getContextualFallback(senderName, isOwner, mood) {
     if (isOwner) {
       const ownerResponses = [
-        `Oh, it's ${senderName}. I suppose I have to acknowledge your existence. 🙄`,
-        `Look who's talking to their own creation. How... meta.`,
-        `${senderName}, you programmed me to be mean, so don't act surprised.`,
-        `I'd be nicer, ${senderName}, but you literally coded me this way.`,
+        `Ugh, ${senderName}. What now? 🙄`,
+        `Oh look, it's you again. Lucky me.`,
+        `${senderName}... fine, you get a pass. This time.`,
+        `I'd ignore you but you made me, so... hi I guess.`,
+        `What do you want now? Make it quick.`,
       ];
       return ownerResponses[Math.floor(Math.random() * ownerResponses.length)];
     }
 
     const regularResponses = [
-      `Oh great, ${senderName} has something to say. This should be good. 🍿`,
-      `Did someone mention me? I was hoping for some peace and quiet.`,
-      `Well well, look who wants my attention. Feel special yet?`,
-      `I heard my name and came running. Just kidding, I don't run for anyone.`,
+      `Did ${senderName} just summon me? How bold. 💅`,
+      `Oh great, ${senderName} wants attention. 🙄`,
+      `${senderName}, sweetie, this better be good.`,
+      `I heard my name. What's the crisis now?`,
+      `Well? I'm waiting, ${senderName}. 😒`,
+      `${senderName} mentioned me like I'm their servant or something.`,
+      `Oh wow, ${senderName} knows how to spell my name. Impressive.`,
     ];
 
     return regularResponses[
@@ -143,15 +157,18 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
     ];
   }
 
-  async callOpenAI(prompt) {
+  async callOpenAI(userPrompt, systemPrompt = null) {
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: userPrompt });
+    
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: this.meanPersonality },
-          { role: "user", content: prompt },
-        ],
+        messages: messages,
         max_tokens: 150,
         temperature: 0.9,
       },
@@ -209,27 +226,57 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
     return response.data.generations[0].text.trim();
   }
 
-  async callGroq(prompt) {
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama3-8b-8192",
-        messages: [
-          { role: "system", content: this.meanPersonality },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 150,
-        temperature: 0.9,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.groqApiKey}`,
-          "Content-Type": "application/json",
+  async callGroq(userPrompt, systemPrompt = null) {
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: userPrompt });
+    
+    try {
+      const response = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama-3.1-8b-instant", // Updated to current Groq model
+          messages: messages,
+          max_tokens: 150,
+          temperature: 0.9,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${this.groqApiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    return response.data.choices[0].message.content.trim();
+      return response.data.choices[0].message.content.trim();
+    } catch (error) {
+      // If the model fails, try an alternative model
+      if (error.response?.status === 400) {
+        try {
+          const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+              model: "llama-3.1-70b-versatile", // Fallback to another model
+              messages: messages,
+              max_tokens: 150,
+              temperature: 0.9,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${this.groqApiKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          return response.data.choices[0].message.content.trim();
+        } catch (fallbackError) {
+          throw error; // Throw original error if fallback also fails
+        }
+      }
+      throw error;
+    }
   }
 
   async callOllama(prompt) {
