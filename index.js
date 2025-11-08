@@ -3,6 +3,8 @@ const qrcode = require("qrcode-terminal");
 const LLMService = require("./services/llmService");
 const CommandHandler = require("./handlers/commandHandler");
 const puppeteer = require("puppeteer");
+const os = require("os");
+const fs = require("fs");
 require("dotenv").config();
 
 // Initialize services
@@ -18,22 +20,82 @@ const RESPONSE_PROBABILITY = 0.8; // 80% chance to respond when mentioned
 // Store bot's own ID
 let botId = null;
 
+// Detect Raspberry Pi
+const isRaspberryPi = os.arch() === "arm" || os.arch() === "arm64";
+
+// Raspberry Pi Chromium paths to try
+const rpiChromiumPaths = [
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+  "/snap/bin/chromium",
+];
+
+// Find Chromium on Raspberry Pi
+function findChromiumPath() {
+  if (!isRaspberryPi) {
+    return puppeteer.executablePath();
+  }
+
+  console.log("🍓 Raspberry Pi detected! Looking for system Chromium...");
+
+  for (const path of rpiChromiumPaths) {
+    if (fs.existsSync(path)) {
+      console.log(`✅ Found Chromium at: ${path}`);
+      return path;
+    }
+  }
+
+  console.log("⚠️  System Chromium not found. Using bundled version (may fail)...");
+  console.log("💡 Install Chromium: sudo apt-get install chromium-browser");
+  return puppeteer.executablePath();
+}
+
+// Configure Puppeteer for Raspberry Pi
+const chromiumPath = findChromiumPath();
+
+const puppeteerConfig = {
+  headless: true,
+  executablePath: chromiumPath,
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-accelerated-2d-canvas",
+    "--no-first-run",
+    "--no-zygote",
+    "--disable-gpu",
+  ],
+};
+
+// Add extra args for Raspberry Pi
+if (isRaspberryPi) {
+  console.log("🍓 Applying Raspberry Pi optimizations...");
+  puppeteerConfig.args.push(
+    "--disable-software-rasterizer",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-breakpad",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-features=TranslateUI",
+    "--disable-ipc-flooding-protection",
+    "--disable-renderer-backgrounding",
+    "--force-color-profile=srgb",
+    "--metrics-recording-only",
+    "--mute-audio",
+    "--no-default-browser-check",
+    "--no-pings",
+    "--password-store=basic",
+    "--use-gl=swiftshader",
+    "--use-mock-keychain"
+  );
+}
+
 // Initialize the WhatsApp client
 const client = new Client({
   authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    executablePath: puppeteer.executablePath(),
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--disable-gpu",
-    ],
-  },
+  puppeteer: puppeteerConfig,
 });
 
 // Generate QR code for authentication
