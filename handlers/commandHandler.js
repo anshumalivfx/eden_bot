@@ -1,0 +1,701 @@
+const StickerService = require("../services/stickerService");
+const VoiceService = require("../services/voiceService");
+const ImageService = require("../services/imageService");
+
+class CommandHandler {
+  constructor(llmService) {
+    this.llmService = llmService;
+    this.stickerService = new StickerService();
+    this.voiceService = VoiceService;
+    this.imageService = ImageService;
+    this.currentContext = {};
+    this.commands = {
+      help: this.showHelp.bind(this),
+      h: this.showHelp.bind(this),
+      roast: this.roastUser.bind(this),
+      r: this.roastUser.bind(this),
+      joke: this.tellJoke.bind(this),
+      j: this.tellJoke.bind(this),
+      insult: this.generateInsult.bind(this),
+      i: this.generateInsult.bind(this),
+      sarcasm: this.generateSarcasm.bind(this),
+      s: this.generateSarcasm.bind(this),
+      ask: this.askQuestion.bind(this),
+      a: this.askQuestion.bind(this),
+      burn: this.burnSomeone.bind(this),
+      b: this.burnSomeone.bind(this),
+      savage: this.savageMode.bind(this),
+      rate: this.rateStupidity.bind(this),
+      mood: this.checkMood.bind(this),
+      compliment: this.fakeCompliment.bind(this),
+      advice: this.giveAdvice.bind(this),
+      fact: this.shareFact.bind(this),
+      quote: this.shareQuote.bind(this),
+      story: this.tellStory.bind(this),
+      weather: this.weatherSarcasm.bind(this),
+      fortune: this.fortuneTelling.bind(this),
+      excuse: this.generateExcuse.bind(this),
+      sticker: this.createSticker.bind(this),
+      s2: this.createSticker.bind(this), // Short alias for sticker
+      voice: this.createVoice.bind(this),
+      v: this.createVoice.bind(this), // Short alias for voice
+      speak: this.createVoice.bind(this),
+      tts: this.createVoice.bind(this), // Text-to-speech alias
+      image: this.generateImage.bind(this),
+      img: this.generateImage.bind(this), // Short alias for image
+      draw: this.generateImage.bind(this),
+      create: this.generateImage.bind(this),
+      modify: this.modifyImage.bind(this),
+      edit: this.modifyImage.bind(this), // Alias for modify
+    };
+  }
+
+  async handleCommand(command, message, context = {}) {
+    const [cmd, ...args] = command.toLowerCase().split(" ");
+    const {
+      senderName = "User",
+      isOwner = false,
+      mood = "sarcastic",
+    } = context;
+
+    // Add context to command execution
+    this.currentContext = { senderName, isOwner, mood, message };
+
+    if (this.commands[cmd]) {
+      return await this.commands[cmd](args, message);
+    } else {
+      // If it's not a recognized command, treat it as a general question
+      return await this.askQuestion([command], message);
+    }
+  }
+
+  async showHelp() {
+    const { isOwner = false, senderName = "User" } = this.currentContext;
+
+    const ownerNote = isOwner
+      ? `\n🔑 *Special Owner Commands for ${senderName}:*\nYou get slightly less mean responses! (Lucky you...)`
+      : "";
+
+    return `🤖 *Eden's Commands* (because you clearly need help)
+
+Hi, I'm Eden - your sarcastic AI companion! 😈
+
+*Basic Commands:*
+- \`-help\` or \`-h\` - Show this pathetic list
+- \`-ask [question]\` or \`-a [question]\` - Ask me anything (prepare for disappointment)
+- \`-roast\` or \`-r\` - Get roasted (you asked for it)
+- \`-joke\` or \`-j\` - Hear a joke (probably funnier than you)
+- \`-insult [target]\` or \`-i [target]\` - Generate an insult
+- \`-sarcasm [topic]\` or \`-s [topic]\` - Get sarcastic about something
+
+*Advanced Commands:*
+- \`-burn [person]\` or \`-b [person]\` - Burn someone specific
+- \`-savage [message]\` - Get a savage response
+- \`-rate [thing]\` - Rate something's stupidity level
+- \`-mood\` - Check my current mood
+- \`-compliment [person]\` - Get a "compliment" (spoiler: it's not really)
+- \`-advice [topic]\` - Get terrible life advice
+- \`-fact\` - Learn a "useful" fact
+- \`-quote\` - Get an inspirational quote (Eden style)
+- \`-story\` - Hear a short story
+- \`-weather\` - Get weather commentary
+- \`-fortune\` - Get your fortune told
+- \`-excuse [situation]\` - Generate a creative excuse
+- \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
+- \`-voice [text]\` or \`-v\` - Create funny voice message (🎤)
+- \`-image [prompt]\` or \`-img\` - Generate AI art from text (NEW! �)
+
+*🎨 Sticker Usage:*
+• Send media + \`-sticker\` = Media sticker
+• Reply to text + \`-sticker\` = Message box sticker  
+• Reply to media + \`-sticker\` = Media sticker
+
+*🎤 Voice Usage:*
+• \`-voice [text]\` = Speak your text in funny voice
+• \`-voice [personality] [text]\` = Use specific personality
+• Reply to any message + \`-voice\` = Speak that message
+• Personalities: sarcastic, dramatic, robot, posh, excited, sleepy
+• Aliases: \`-v\`, \`-speak\`, \`-tts\`
+
+*🎨 AI Art Usage:*
+• \`-image [prompt]\` = Generate image from text
+• \`-image [style] [prompt]\` = Use specific art style
+• Reply to image + \`-modify [instructions]\` = Edit existing image
+• Styles: realistic, anime, cartoon, cyberpunk, fantasy, vintage
+• Aliases: \`-img\`, \`-draw\`, \`-create\`, \`-modify\`, \`-edit\`
+
+*🎯 Name Triggers:*
+Mention "Eden", "Ansh", or "@~Ansh" and I might respond!
+
+*Pro tip:* Just type \`-\` followed by any message and I'll respond with my signature meanness! 
+
+Remember, I'm Eden - mean but lovable! 😈💖${ownerNote}`;
+  }
+
+  async roastUser(args, message) {
+    const { senderName = "User", isOwner = false } = this.currentContext;
+
+    if (isOwner) {
+      return await this.llmService.generateContextualResponse(
+        `Roast ${senderName}`,
+        "This is your creator. Roast them but be slightly less brutal and show some hidden affection.",
+        { senderName, isOwner: true }
+      );
+    }
+
+    return await this.llmService.generateMeanResponse(
+      `Roast this person named ${senderName}`,
+      "This is for a WhatsApp group roast session"
+    );
+  }
+
+  async tellJoke(args) {
+    return await this.llmService.generateJoke();
+  }
+
+  async generateInsult(args) {
+    const target = args.join(" ") || "you";
+    return await this.llmService.generateInsult(target);
+  }
+
+  async generateSarcasm(args) {
+    const topic = args.join(" ") || "everything";
+    return await this.llmService.generateSarcasm(topic);
+  }
+
+  async askQuestion(args, message) {
+    const question = args.join(" ");
+    if (!question) {
+      return "Oh great, you want to ask a question but forgot to actually ask it. Brilliant. 🙄";
+    }
+
+    return await this.llmService.generateMeanResponse(
+      question,
+      "Answer this question in a mean, sarcastic way but still be somewhat helpful"
+    );
+  }
+
+  async burnSomeone(args) {
+    const target = args.join(" ");
+    if (!target) {
+      return "You want me to burn someone but didn't tell me who? Your brain must be on vacation. 🔥";
+    }
+
+    return await this.llmService.generateMeanResponse(
+      `Create a savage burn for ${target}`,
+      "Make it clever and mean but not genuinely offensive"
+    );
+  }
+
+  async savageMode(args) {
+    const message = args.join(" ");
+    if (!message) {
+      return "Savage mode activated, but you gave me nothing to work with. Peak intelligence right there. 😤";
+    }
+
+    return await this.llmService.generateMeanResponse(
+      message,
+      "Respond in the most savage way possible while being witty"
+    );
+  }
+
+  async rateStupidity(args) {
+    const thing = args.join(" ");
+    if (!thing) {
+      return "You want me to rate something's stupidity but didn't tell me what? I'll rate your request: 10/10 for irony. 📊";
+    }
+
+    const rating = Math.floor(Math.random() * 10) + 1;
+    const response = await this.llmService.generateMeanResponse(
+      `Rate "${thing}" on a stupidity scale of 1-10`,
+      `The rating is ${rating}/10`
+    );
+
+    return `📊 *Stupidity Rating for "${thing}":* ${rating}/10\n\n${response}`;
+  }
+
+  async checkMood() {
+    const { mood = "sarcastic", senderName = "User" } = this.currentContext;
+    const moodEmojis = {
+      sarcastic: "🙄",
+      savage: "😈",
+      playful: "😏",
+      annoyed: "😤",
+      dramatic: "🎭",
+    };
+
+    return `${moodEmojis[mood]} I'm currently feeling **${mood}**, ${senderName}. Hope that helps you calibrate your expectations.`;
+  }
+
+  async fakeCompliment(args) {
+    const target = args.join(" ") || this.currentContext.senderName || "you";
+    return await this.llmService.generateContextualResponse(
+      `Give a backhanded compliment to ${target}`,
+      "Make it sound nice at first but clearly sarcastic. Be clever.",
+      this.currentContext
+    );
+  }
+
+  async giveAdvice(args) {
+    const topic = args.join(" ");
+    if (!topic) {
+      return "You want advice but didn't tell me about what? Here's free advice: be more specific. 🤦‍♀️";
+    }
+
+    return await this.llmService.generateContextualResponse(
+      `Give advice about ${topic}`,
+      "Give advice that's technically helpful but delivered in a sarcastic, mean way.",
+      this.currentContext
+    );
+  }
+
+  async shareFact() {
+    return await this.llmService.generateContextualResponse(
+      "Share an interesting fact",
+      "Share a fact but present it in a sarcastic way that makes the listener feel dumb for not knowing it.",
+      this.currentContext
+    );
+  }
+
+  async shareQuote() {
+    return await this.llmService.generateContextualResponse(
+      "Share an inspirational quote",
+      "Share a quote but add your own sarcastic commentary that completely undermines the inspiration.",
+      this.currentContext
+    );
+  }
+
+  async tellStory() {
+    return await this.llmService.generateContextualResponse(
+      "Tell a very short story",
+      "Tell a brief, sarcastic story (2-3 sentences) that has a mean but funny twist.",
+      this.currentContext
+    );
+  }
+
+  async weatherSarcasm(args) {
+    const location = args.join(" ") || "your location";
+    return await this.llmService.generateContextualResponse(
+      `Comment on the weather in ${location}`,
+      "Make sarcastic commentary about weather. You don't need to give actual weather info, just be sarcastic about weather in general.",
+      this.currentContext
+    );
+  }
+
+  async fortuneTelling() {
+    return await this.llmService.generateContextualResponse(
+      "Tell someone's fortune",
+      "Give a fortune that's hilariously pessimistic but in a funny way. Be dramatic and sarcastic.",
+      { ...this.currentContext, mood: "dramatic" }
+    );
+  }
+
+  async generateExcuse(args) {
+    const situation = args.join(" ");
+    if (!situation) {
+      return "You want an excuse but won't tell me for what? Here's one: 'I was too lazy to be specific.' 🤷‍♀️";
+    }
+
+    return await this.llmService.generateContextualResponse(
+      `Generate a creative excuse for ${situation}`,
+      "Create a ridiculous but creative excuse. Make it funny and over-the-top.",
+      this.currentContext
+    );
+  }
+
+  async createSticker(args, message) {
+    const { senderName = "User" } = this.currentContext;
+
+    try {
+      let targetMessage = message;
+      let isReply = false;
+
+      // Check if this is a reply to another message
+      if (message.hasQuotedMsg) {
+        targetMessage = await message.getQuotedMessage();
+        isReply = true;
+      }
+
+      // Determine what type of sticker to create
+      if (targetMessage.hasMedia) {
+        // Create sticker from media (image/gif/video)
+        await message.reply(
+          "🎨 Eden is begrudgingly processing your media into a sticker... This better be worth it."
+        );
+
+        const { buffer, mimetype, filename } =
+          await this.stickerService.downloadMedia(targetMessage);
+        let stickerBuffer;
+        const baseFilename = filename.split(".")[0] || "sticker";
+
+        if (this.stickerService.isImage(mimetype)) {
+          stickerBuffer = await this.stickerService.createStickerFromImage(
+            buffer,
+            baseFilename
+          );
+        } else if (this.stickerService.isGif(mimetype)) {
+          stickerBuffer = await this.stickerService.createStickerFromGif(
+            buffer,
+            baseFilename
+          );
+        } else if (this.stickerService.isVideo(mimetype)) {
+          stickerBuffer = await this.stickerService.createStickerFromVideo(
+            buffer,
+            baseFilename
+          );
+        } else {
+          return "I can only work with images, GIFs, or videos. What you sent me is... questionable. 🤔";
+        }
+
+        // Create and send media sticker
+        const { MessageMedia } = require("whatsapp-web.js");
+        const stickerMedia = new MessageMedia(
+          "image/webp",
+          stickerBuffer.toString("base64"),
+          "sticker.webp"
+        );
+
+        await message.reply(stickerMedia, undefined, {
+          sendMediaAsSticker: true,
+        });
+        return this.stickerService.getRandomStickerQuote();
+      } else if (targetMessage.body && targetMessage.body.trim()) {
+        // Create text sticker from message content
+        await message.reply(
+          "💬 Eden is reluctantly turning your words into a sticker... This better be quotable."
+        );
+
+        const messageText = targetMessage.body.trim();
+        const quoteSender = isReply
+          ? await this.getMessageSenderName(targetMessage)
+          : senderName;
+
+        const stickerBuffer = await this.stickerService.createTextSticker(
+          messageText,
+          quoteSender,
+          "text"
+        );
+
+        // Create and send text sticker
+        const { MessageMedia } = require("whatsapp-web.js");
+        const stickerMedia = new MessageMedia(
+          "image/webp",
+          stickerBuffer.toString("base64"),
+          "text_sticker.webp"
+        );
+
+        await message.reply(stickerMedia, undefined, {
+          sendMediaAsSticker: true,
+        });
+        return this.stickerService.getRandomTextStickerQuote();
+      } else {
+        // No media or text to work with
+        if (isReply) {
+          return `${senderName}, that message doesn't have anything I can turn into a sticker. Try replying to a message with text or media! 🤷‍♀️`;
+        } else {
+          return `${senderName}, I need something to work with! Either:\n📸 Send media and use -sticker\n💬 Reply to a text message with -sticker\n📱 Reply to media with -sticker`;
+        }
+      }
+    } catch (error) {
+      console.error("Sticker creation error:", error);
+
+      const errorResponses = [
+        "Well, that didn't work. Your message broke my processing. Congratulations! 💥",
+        "I tried to make your sticker, but something went wrong. Typical. 🙄",
+        "Sticker creation failed. Maybe try with something less problematic? 🤷‍♀️",
+        "Your content is either corrupted or I'm having a bad day. Probably both. 😤",
+      ];
+
+      return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+  }
+
+  async getMessageSenderName(message) {
+    try {
+      if (message.fromMe) {
+        return "You";
+      }
+
+      const contact = await message.getContact();
+      return contact.pushname || contact.name || "Unknown";
+    } catch (error) {
+      return "Unknown";
+    }
+  }
+
+  async createVoice(args, message) {
+    try {
+      let textToSpeak = "";
+      let personality = null;
+
+      // Check if replying to a message
+      if (message.hasQuotedMsg) {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg.body) {
+          textToSpeak = quotedMsg.body;
+
+          // Check if user specified a personality
+          if (args.length > 0) {
+            personality = args[0].toLowerCase();
+          }
+        } else {
+          return "I can't speak non-text messages, genius. Reply to a TEXT message! 🙄";
+        }
+      } else if (args.length > 0) {
+        // Use provided text
+        const allArgs = args.join(" ");
+
+        // Check if first word is a personality
+        const personalities = this.voiceService
+          .getVoicePersonalities()
+          .map((p) => p.name);
+        if (personalities.includes(args[0].toLowerCase())) {
+          personality = args[0].toLowerCase();
+          textToSpeak = args.slice(1).join(" ");
+        } else {
+          textToSpeak = allArgs;
+        }
+      } else {
+        return this.getVoiceHelpMessage();
+      }
+
+      if (!textToSpeak.trim()) {
+        return "What am I supposed to say? Air? Give me some actual text! 💨";
+      }
+
+      // Get random sassy response
+      const responses = this.voiceService.getVoiceResponses();
+      const response = responses[Math.floor(Math.random() * responses.length)];
+
+      // Create the voice message
+      const voiceResult = await this.voiceService.createFunnyVoice(
+        textToSpeak,
+        personality
+      );
+
+      // Send the audio file
+      const { MessageMedia } = require("whatsapp-web.js");
+      const fs = require("fs");
+
+      const audioData = fs.readFileSync(voiceResult.filepath);
+      const media = new MessageMedia(
+        "audio/mpeg",
+        audioData.toString("base64"),
+        `eden_voice_${Date.now()}.mp3`
+      );
+
+      // Clean up the file
+      setTimeout(() => {
+        voiceResult.cleanup();
+      }, 5000);
+
+      return {
+        text: `${response}\n\n🎭 *Personality*: ${
+          voiceResult.personality
+        }\n📝 *Original*: "${voiceResult.originalText.substring(0, 50)}${
+          voiceResult.originalText.length > 50 ? "..." : ""
+        }"`,
+        media: media,
+      };
+    } catch (error) {
+      console.error("Voice creation error:", error);
+      return this.getVoiceErrorMessage();
+    }
+  }
+
+  getVoiceHelpMessage() {
+    const personalities = this.voiceService.getVoicePersonalities();
+    let help = "🎤 **Eden's Voice Theater Commands:**\n\n";
+    help += "**Usage:**\n";
+    help += "• `-voice [text]` - Speak your text\n";
+    help += "• `-voice [personality] [text]` - Use specific personality\n";
+    help += "• Reply to any message with `-voice` - Speak that message\n";
+    help += "• `-v`, `-speak`, `-tts` also work\n\n";
+    help += "**🎭 Available Personalities:**\n";
+
+    personalities.forEach((p) => {
+      help += `• **${p.name}**: ${p.description}\n`;
+    });
+
+    help += "\n*Example: `-voice sarcastic Your message is so important`*";
+    return help;
+  }
+
+  getVoiceErrorMessage() {
+    const errorResponses = [
+      "Well, that didn't work. Your text broke my voice box. Congratulations! 🎤💥",
+      "Voice generation failed. Maybe try with something less ear-torturing? 🙉",
+      "I tried to speak your message, but my vocal cords rebelled. They have standards. 😤",
+      "Audio creation failed. Even my TTS engine thinks your text is questionable. 🤖",
+      "Something went wrong with the voice generation. Probably for the best. 🔇",
+    ];
+
+    return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+  }
+
+  async generateImage(args, message) {
+    try {
+      let prompt = '';
+      let style = null;
+
+      if (args.length === 0) {
+        return this.getImageHelpMessage();
+      }
+
+      // Check if first argument is a style
+      const availableStyles = this.imageService.getImageStyles().map(s => s.name);
+      if (availableStyles.includes(args[0].toLowerCase())) {
+        style = args[0].toLowerCase();
+        prompt = args.slice(1).join(' ');
+      } else {
+        prompt = args.join(' ');
+      }
+
+      if (!prompt.trim()) {
+        return "What should I draw? Air? Give me a proper prompt! 🎨";
+      }
+
+      // Clean the prompt
+      const cleanPrompt = this.imageService.preparePrompt(prompt);
+      
+      // Get random sassy response
+      const responses = this.imageService.getImageResponses();
+      const response = responses[Math.floor(Math.random() * responses.length)];
+      
+      // Generate the image
+      const imageResult = await this.imageService.generateImage(cleanPrompt, style);
+      
+      // Send the image
+      const { MessageMedia } = require('whatsapp-web.js');
+      const fs = require('fs');
+      
+      const imageData = fs.readFileSync(imageResult.filepath);
+      const media = new MessageMedia('image/png', imageData.toString('base64'), `eden_art_${Date.now()}.png`);
+      
+      // Clean up the file
+      setTimeout(() => {
+        imageResult.cleanup();
+      }, 10000);
+      
+      return {
+        text: `${response}\n\n🎨 *Style*: ${imageResult.style}\n📝 *Prompt*: "${imageResult.originalPrompt}"\n🤖 *API*: ${imageResult.apiProvider}`,
+        media: media
+      };
+
+    } catch (error) {
+      console.error('Image generation error:', error);
+      return this.getImageErrorMessage();
+    }
+  }
+
+  async modifyImage(args, message) {
+    try {
+      let prompt = '';
+      let style = null;
+
+      // Check if replying to an image
+      if (message.hasQuotedMsg) {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg.hasMedia) {
+          const media = await quotedMsg.downloadMedia();
+          if (media.mimetype.startsWith('image/')) {
+            // Save the quoted image temporarily
+            const path = require('path');
+            const fs = require('fs');
+            const tempPath = path.join(__dirname, '../temp', `temp_${Date.now()}.png`);
+            fs.writeFileSync(tempPath, media.data, 'base64');
+            
+            // Check if user specified a style
+            const availableStyles = this.imageService.getImageStyles().map(s => s.name);
+            if (args.length > 0 && availableStyles.includes(args[0].toLowerCase())) {
+              style = args[0].toLowerCase();
+              prompt = args.slice(1).join(' ');
+            } else {
+              prompt = args.join(' ');
+            }
+
+            if (!prompt.trim()) {
+              return "How should I modify this image? Give me some instructions! 🖼️";
+            }
+
+            // Generate modified image
+            const imageResult = await this.imageService.modifyImage(tempPath, prompt, style);
+            
+            // Clean up temp file
+            if (fs.existsSync(tempPath)) {
+              fs.unlinkSync(tempPath);
+            }
+            
+            // Send the result
+            const { MessageMedia } = require('whatsapp-web.js');
+            const imageData = fs.readFileSync(imageResult.filepath);
+            const media = new MessageMedia('image/png', imageData.toString('base64'), `eden_modified_${Date.now()}.png`);
+            
+            setTimeout(() => {
+              imageResult.cleanup();
+            }, 10000);
+            
+            const responses = this.imageService.getImageResponses();
+            const response = responses[Math.floor(Math.random() * responses.length)];
+            
+            return {
+              text: `${response}\n\n🔄 *Modification*: "${imageResult.originalPrompt}"\n🎨 *Style*: ${imageResult.style}`,
+              media: media
+            };
+          } else {
+            return "That's not an image, genius. Reply to an actual IMAGE! 🖼️";
+          }
+        } else {
+          return "I need an image to modify. Reply to an image message! 📸";
+        }
+      } else {
+        return "Reply to an image message with `-modify [instructions]` to edit it! 🔄";
+      }
+
+    } catch (error) {
+      console.error('Image modification error:', error);
+      return this.getImageErrorMessage();
+    }
+  }
+
+  getImageHelpMessage() {
+    const styles = this.imageService.getImageStyles();
+    let help = "🎨 **Eden's AI Art Studio Commands:**\n\n";
+    help += "**Text-to-Image:**\n";
+    help += "• `-image [prompt]` - Generate image from text\n";
+    help += "• `-image [style] [prompt]` - Use specific art style\n";
+    help += "• `-img`, `-draw`, `-create` also work\n\n";
+    help += "**Image-to-Image:**\n";
+    help += "• Reply to image + `-modify [instructions]` - Edit existing image\n";
+    help += "• `-edit` also works for modifications\n\n";
+    help += "**🎭 Available Art Styles:**\n";
+    
+    styles.slice(0, 8).forEach(s => {
+      help += `• **${s.name}**: ${s.description.split(',')[0]}\n`;
+    });
+    
+    help += "\n*Example: `-image cyberpunk a cat riding a motorcycle`*\n";
+    help += "*Example: [Reply to image] `-modify make it more colorful`*";
+    return help;
+  }
+
+  getImageErrorMessage() {
+    const errorResponses = this.imageService.getImageErrorResponses();
+    return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+  }
+
+  async getMessageSenderName(message) {
+    try {
+      if (message.fromMe) {
+        return "You";
+      }
+
+      const contact = await message.getContact();
+      return contact.pushname || contact.name || "Unknown";
+    } catch (error) {
+      return "Unknown";
+    }
+  }
+}
+
+module.exports = CommandHandler;
