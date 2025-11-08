@@ -1,13 +1,13 @@
 const StickerService = require("../services/stickerService");
 const VoiceService = require("../services/voiceService");
-const ImageService = require("../services/imageService");
+const YouTubeService = require("../services/youtubeService");
 
 class CommandHandler {
   constructor(llmService) {
     this.llmService = llmService;
     this.stickerService = new StickerService();
     this.voiceService = VoiceService;
-    this.imageService = ImageService;
+    this.youtubeService = new YouTubeService();
     this.currentContext = {};
     this.commands = {
       help: this.showHelp.bind(this),
@@ -41,15 +41,12 @@ class CommandHandler {
       v: this.createVoice.bind(this), // Short alias for voice
       speak: this.createVoice.bind(this),
       tts: this.createVoice.bind(this), // Text-to-speech alias
+      play: this.playMusic.bind(this),
+      song: this.playMusic.bind(this), // Alias for play
+      music: this.playMusic.bind(this), // Alias for play
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
-      image: this.generateImage.bind(this),
-      img: this.generateImage.bind(this), // Short alias for image
-      draw: this.generateImage.bind(this),
-      create: this.generateImage.bind(this),
-      modify: this.modifyImage.bind(this),
-      edit: this.modifyImage.bind(this), // Alias for modify
     };
   }
 
@@ -106,7 +103,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-excuse [situation]\` - Generate a creative excuse
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create funny voice message (🎤)
-- \`-image [prompt]\` or \`-img\` - Generate AI art from text (NEW! 🎨)
+- \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
 
@@ -122,36 +119,50 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • Personalities: sarcastic, dramatic, robot, posh, excited, sleepy
 • Aliases: \`-v\`, \`-speak\`, \`-tts\`
 
-*🎨 AI Art Usage:*
-• \`-image [prompt]\` = Generate image from text
-• \`-image [style] [prompt]\` = Use specific art style
-• Reply to image + \`-modify [instructions]\` = Edit existing image
-• Styles: realistic, anime, cartoon, cyberpunk, fantasy, vintage
-• Aliases: \`-img\`, \`-draw\`, \`-create\`, \`-modify\`, \`-edit\`
+*🎵 Music Download:*
+• \`-play [song name]\` = Search & download from YouTube
+• \`-song [query]\` or \`-music [query]\` = Same thing
+• Example: \`-play Tera hone laga hoon\`
+• Returns: MP3 audio file ready to jam 🎧
 
-*🎯 Name Triggers:*
-Mention "Eden", "Ansh", or "@~Ansh" and I might respond!
+*🎯 Mention Me:*
+Say "Eden" or "@Eden" and I'll grace you with my presence. Maybe.
 
-*Pro tip:* Just type \`-\` followed by any message and I'll respond with my signature meanness! 
+*Pro tip:* Just type \`-\` followed by anything and I'll roast your existence! 
 
-Remember, I'm Eden - mean but lovable! 😈💖${ownerNote}`;
+I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async roastUser(args, message) {
-    const { senderName = "User", isOwner = false } = this.currentContext;
+    try {
+      const { senderName = "User", isOwner = false } = this.currentContext;
 
-    if (isOwner) {
-      return await this.llmService.generateContextualResponse(
-        `Roast ${senderName}`,
-        "This is your creator. Roast them but be slightly less brutal and show some hidden affection.",
-        { senderName, isOwner: true }
+      if (isOwner) {
+        return await this.llmService.generateContextualResponse(
+          `Roast ${senderName} in a witty and clever way`,
+          "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever.",
+          { senderName, isOwner: true }
+        );
+      }
+
+      // For regular users, use a more specific roast prompt
+      return await this.llmService.generateMeanResponse(
+        `Roast this person named ${senderName} in a witty, clever, and funny way. Make it a proper roast - clever insults and sarcastic humor.`,
+        "This is for a WhatsApp group roast session. Be creative and funny with your roasts."
       );
+    } catch (error) {
+      console.error("Roast command error:", error);
+      // Return a fallback roast response
+      const { senderName = "User" } = this.currentContext;
+      const fallbackRoasts = [
+        `I'd roast ${senderName}, but I'm afraid they might combust from the heat. 🔥`,
+        `${senderName}, you're like a fine wine - except you're not fine, and you whine a lot. 🍷`,
+        `I'd give ${senderName} a roast, but they're already well-done from all the times they've been burned. 😏`,
+        `${senderName}, you're the reason I have trust issues. Not because you're untrustworthy, but because you trusted me to roast you. 🙄`,
+        `Here's a roast for ${senderName}: They asked for it. That's the roast. They literally asked for this. 🤷‍♀️`,
+      ];
+      return fallbackRoasts[Math.floor(Math.random() * fallbackRoasts.length)];
     }
-
-    return await this.llmService.generateMeanResponse(
-      `Roast this person named ${senderName}`,
-      "This is for a WhatsApp group roast session"
-    );
   }
 
   async tellJoke(args) {
@@ -538,157 +549,6 @@ Remember, I'm Eden - mean but lovable! 😈💖${ownerNote}`;
     return errorResponses[Math.floor(Math.random() * errorResponses.length)];
   }
 
-  async generateImage(args, message) {
-    try {
-      let prompt = '';
-      let style = null;
-
-      if (args.length === 0) {
-        return this.getImageHelpMessage();
-      }
-
-      // Check if first argument is a style
-      const availableStyles = this.imageService.getImageStyles().map(s => s.name);
-      if (availableStyles.includes(args[0].toLowerCase())) {
-        style = args[0].toLowerCase();
-        prompt = args.slice(1).join(' ');
-      } else {
-        prompt = args.join(' ');
-      }
-
-      if (!prompt.trim()) {
-        return "What should I draw? Air? Give me a proper prompt! 🎨";
-      }
-
-      // Clean the prompt
-      const cleanPrompt = this.imageService.preparePrompt(prompt);
-      
-      // Get random sassy response
-      const responses = this.imageService.getImageResponses();
-      const response = responses[Math.floor(Math.random() * responses.length)];
-      
-      // Generate the image
-      const imageResult = await this.imageService.generateImage(cleanPrompt, style);
-      
-      // Send the image
-      const { MessageMedia } = require('whatsapp-web.js');
-      const fs = require('fs');
-      
-      const imageData = fs.readFileSync(imageResult.filepath);
-      const media = new MessageMedia('image/png', imageData.toString('base64'), `eden_art_${Date.now()}.png`);
-      
-      // Clean up the file
-      setTimeout(() => {
-        imageResult.cleanup();
-      }, 10000);
-      
-      return {
-        text: `${response}\n\n🎨 *Style*: ${imageResult.style}\n📝 *Prompt*: "${imageResult.originalPrompt}"\n🤖 *API*: ${imageResult.apiProvider}`,
-        media: media
-      };
-
-    } catch (error) {
-      console.error('Image generation error:', error);
-      return this.getImageErrorMessage();
-    }
-  }
-
-  async modifyImage(args, message) {
-    try {
-      let prompt = '';
-      let style = null;
-
-      // Check if replying to an image
-      if (message.hasQuotedMsg) {
-        const quotedMsg = await message.getQuotedMessage();
-        if (quotedMsg.hasMedia) {
-          const media = await quotedMsg.downloadMedia();
-          if (media.mimetype.startsWith('image/')) {
-            // Save the quoted image temporarily
-            const path = require('path');
-            const fs = require('fs');
-            const tempPath = path.join(__dirname, '../temp', `temp_${Date.now()}.png`);
-            fs.writeFileSync(tempPath, media.data, 'base64');
-            
-            // Check if user specified a style
-            const availableStyles = this.imageService.getImageStyles().map(s => s.name);
-            if (args.length > 0 && availableStyles.includes(args[0].toLowerCase())) {
-              style = args[0].toLowerCase();
-              prompt = args.slice(1).join(' ');
-            } else {
-              prompt = args.join(' ');
-            }
-
-            if (!prompt.trim()) {
-              return "How should I modify this image? Give me some instructions! 🖼️";
-            }
-
-            // Generate modified image
-            const imageResult = await this.imageService.modifyImage(tempPath, prompt, style);
-            
-            // Clean up temp file
-            if (fs.existsSync(tempPath)) {
-              fs.unlinkSync(tempPath);
-            }
-            
-            // Send the result
-            const { MessageMedia } = require('whatsapp-web.js');
-            const imageData = fs.readFileSync(imageResult.filepath);
-            const media = new MessageMedia('image/png', imageData.toString('base64'), `eden_modified_${Date.now()}.png`);
-            
-            setTimeout(() => {
-              imageResult.cleanup();
-            }, 10000);
-            
-            const responses = this.imageService.getImageResponses();
-            const response = responses[Math.floor(Math.random() * responses.length)];
-            
-            return {
-              text: `${response}\n\n🔄 *Modification*: "${imageResult.originalPrompt}"\n🎨 *Style*: ${imageResult.style}`,
-              media: media
-            };
-          } else {
-            return "That's not an image, genius. Reply to an actual IMAGE! 🖼️";
-          }
-        } else {
-          return "I need an image to modify. Reply to an image message! 📸";
-        }
-      } else {
-        return "Reply to an image message with `-modify [instructions]` to edit it! 🔄";
-      }
-
-    } catch (error) {
-      console.error('Image modification error:', error);
-      return this.getImageErrorMessage();
-    }
-  }
-
-  getImageHelpMessage() {
-    const styles = this.imageService.getImageStyles();
-    let help = "🎨 **Eden's AI Art Studio Commands:**\n\n";
-    help += "**Text-to-Image:**\n";
-    help += "• `-image [prompt]` - Generate image from text\n";
-    help += "• `-image [style] [prompt]` - Use specific art style\n";
-    help += "• `-img`, `-draw`, `-create` also work\n\n";
-    help += "**Image-to-Image:**\n";
-    help += "• Reply to image + `-modify [instructions]` - Edit existing image\n";
-    help += "• `-edit` also works for modifications\n\n";
-    help += "**🎭 Available Art Styles:**\n";
-    
-    styles.slice(0, 8).forEach(s => {
-      help += `• **${s.name}**: ${s.description.split(',')[0]}\n`;
-    });
-    
-    help += "\n*Example: `-image cyberpunk a cat riding a motorcycle`*\n";
-    help += "*Example: [Reply to image] `-modify make it more colorful`*";
-    return help;
-  }
-
-  getImageErrorMessage() {
-    const errorResponses = this.imageService.getImageErrorResponses();
-    return errorResponses[Math.floor(Math.random() * errorResponses.length)];
-  }
-
   async getMessageSenderName(message) {
     try {
       if (message.fromMe) {
@@ -750,6 +610,101 @@ Remember, I'm Eden - mean but lovable! 😈💖${ownerNote}`;
     ];
     
     return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  async playMusic(args, message) {
+    try {
+      const query = args.join(" ");
+      
+      if (!query || query.trim().length === 0) {
+        return "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
+      }
+
+      const { senderName = "User" } = this.currentContext;
+
+      // Send initial response
+      await message.reply(
+        `🔍 Fine, searching for "${query}"... This better be worth my time.`
+      );
+
+      // Search and download
+      const result = await this.youtubeService.searchAndDownload(query);
+
+      // Create media message
+      const { MessageMedia } = require("whatsapp-web.js");
+      const fs = require("fs");
+
+      const audioData = fs.readFileSync(result.filepath);
+      const audioMedia = new MessageMedia(
+        "audio/mpeg",
+        audioData.toString("base64"),
+        `${result.title}.mp3`
+      );
+
+      const sassyQuote = this.youtubeService.getRandomYouTubeQuote();
+      
+      // Send thumbnail if available
+      if (result.thumbnail && result.thumbnail.filepath) {
+        try {
+          const thumbnailData = fs.readFileSync(result.thumbnail.filepath);
+          const thumbnailMedia = new MessageMedia(
+            "image/jpeg",
+            thumbnailData.toString("base64"),
+            "thumbnail.jpg"
+          );
+
+          // Send thumbnail with caption
+          await message.reply(thumbnailMedia, undefined, {
+            caption: `🎵 *${result.title}*\n\n${sassyQuote}`,
+          });
+
+          // Clean up thumbnail after a delay
+          setTimeout(() => {
+            result.thumbnail.cleanup();
+          }, 3000);
+        } catch (thumbError) {
+          console.error("Error sending thumbnail:", thumbError);
+          // Send text without thumbnail if thumbnail fails
+          await message.reply(`🎵 *${result.title}*\n\n${sassyQuote}`);
+        }
+      } else {
+        // No thumbnail available, send text only
+        await message.reply(`🎵 *${result.title}*\n\n${sassyQuote}`);
+      }
+
+      // Clean up audio file after a delay
+      setTimeout(() => {
+        result.cleanup();
+      }, 5000);
+
+      // Return the audio media (caption/text already sent above)
+      return {
+        media: audioMedia,
+      };
+    } catch (error) {
+      console.error("Play music error:", error);
+
+      if (error.message.includes("yt-dlp not installed")) {
+        return "Ugh, I can't download music without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
+      }
+
+      if (error.message.includes("ffmpeg not found") || error.message.includes("ffprobe")) {
+        return "I need ffmpeg to convert videos to MP3, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
+      }
+
+      if (error.message.includes("Could not find video")) {
+        return `Couldn't find "${args.join(" ")}" on YouTube. Maybe try spelling it correctly? 🤔`;
+      }
+
+      const errorResponses = [
+        "Well that didn't work. YouTube's probably judging your music taste too. 🙄",
+        "Download failed. Even the internet doesn't want you to have this song. 💀",
+        "Something went wrong. Maybe pick a song that actually exists? 🤷‍♀️",
+        "Error downloading. Try again or get better taste in music. 😒",
+      ];
+
+      return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
   }
 }
 

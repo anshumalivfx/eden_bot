@@ -1,205 +1,211 @@
-# Eden - Your Sarcastic WhatsApp Companion
+# 🤖 Eden Bot - Your Sarcastic WhatsApp Companion
 
-Meet **Eden** - a sarcastic WhatsApp bot that responds to commands with mean (but hilarious) human-like responses using **FREE** Large Language Models!
+A feature-rich WhatsApp bot built with whatsapp-web.js that's mean, sarcastic, but lovable! Eden responds to commands, mentions, and replies with witty, sarcastic humor.
 
-## ✨ Features
+## 📋 Features
 
-- 🔥 **Sarcastic Personality**: Eden roasts users with witty, clever responses
-- 📱 **No Business API**: Uses `whatsapp-web.js` (unofficial but reliable)  
-- 🆓 **FREE LLMs**: Multiple free AI providers (Groq, Hugging Face, Ollama)
-- 🎯 **Command-Based**: Responds only to messages starting with `-`
-- 💬 **Group Chat Ready**: Perfect for WhatsApp groups
-- 😈 **Mean but Funny**: Clever insults without being offensive
-- 🎨 **Sticker Creation**: Convert images/GIFs/videos to WhatsApp stickers
-- 🎤 **Voice Messages**: Text-to-speech with 6 hilarious personalities (NEW!)
-- 🎭 **Dynamic Moods**: Personality changes throughout the day
-- 👑 **Name Triggers**: Responds when mentioned by name
+- 🎯 **Smart Mentions** - Responds when mentioned or replied to in group chats and DMs
+- 💬 **Contextual Responses** - Remembers conversations and generates clever replies
+- � **YouTube Music Download** - Download songs from YouTube as MP3 files
+- �🎨 **Sticker Creation** - Convert images, text, and videos to stickers
+- 🎤 **Voice Messages** - Text-to-speech with multiple personalities
+- 😈 **Sarcastic Personality** - Mean but funny responses powered by free LLM
+- 👑 **Owner Recognition** - Special treatment for the bot creator
+- 🎭 **Mood System** - Dynamic personality that changes throughout the day
+- 📊 **Utility Commands** - 25+ commands for fun and functionality
+- 🔐 **Secure Authentication** - Uses WhatsApp Web's official authentication
+- 🆓 **Free LLM Support** - Works with Groq, Ollama, HuggingFace (no paid APIs needed)
 
-- 🔥 **Sarcastic Personality**: Eden roasts users with witty, clever responses
-- 📱 **No Business API**: Uses `whatsapp-web.js` (unofficial but reliable)  
-- � **FREE LLMs**: Multiple free AI providers (Groq, Hugging Face, Ollama)
-- �🎯 **Command-Based**: Responds only to messages starting with `-`
-- 💬 **Group Chat Ready**: Perfect for WhatsApp groups
-- 😈 **Mean but Funny**: Clever insults without being offensive
+## 🛠️ Installation
 
-## 🆓 Free LLM Options
+1. **Clone or download this repository**
 
-Eden supports multiple **completely FREE** AI providers:
-
-### 🥇 Groq (Recommended)
-- ✅ **100% Free** with great performance
-- ✅ Fast responses  
-- ✅ Easy setup
-- 🔗 [Get free API key](https://console.groq.com/)
-
-### 🏠 Ollama (Local)
-- ✅ **Completely free** and private
-- ✅ Works offline
-- ✅ No API limits
-- 📦 Install: `brew install ollama`
-
-### 🤗 Others
-- **Hugging Face**: Free tier available
-- **Cohere**: Free developer access
-
-📖 **Detailed setup guide:** [FREE_LLM_SETUP.md](FREE_LLM_SETUP.md)
-
-## Setup
-
-### 1. Install Dependencies
-
+2. **Install dependencies:**
 ```bash
 npm install
 ```
 
-### 2. Configure Environment
-
-Edit `.env` file and add your API keys:
-
-```env
-# Choose ONE of these LLM options:
-
-# Option 1: OpenAI (paid, best quality)
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Option 2: Groq (free, good quality)
-GROQ_API_KEY=your_groq_api_key_here
-
-# Option 3: Ollama (local, free, requires setup)
-OLLAMA_URL=http://localhost:11434
-```
-
-### 3. LLM Setup Options
-
-#### Option A: OpenAI (Recommended for best results)
-1. Get API key from [OpenAI](https://platform.openai.com/api-keys)
-2. Add to `.env` file
-
-#### Option B: Groq (Free alternative)
-1. Get free API key from [Groq](https://console.groq.com/)
-2. Add to `.env` file
-
-#### Option C: Ollama (Local, completely free)
-1. Install Ollama: `brew install ollama` (macOS)
-2. Run: `ollama pull llama2`
-3. Start: `ollama serve`
-
-### 4. Start the Bot
-
+3. **Run the bot:**
 ```bash
 npm start
 ```
 
-### 5. Scan QR Code
+4. **Scan the QR code** with your WhatsApp mobile app:
+   - Open WhatsApp on your phone
+   - Go to Settings → Linked Devices
+   - Tap "Link a Device"
+   - Scan the QR code displayed in your terminal
 
-1. A QR code will appear in your terminal
-2. Scan it with your WhatsApp mobile app
-3. Bot is now ready to use!
+## 📱 Available Commands
 
-## Commands
+| Command | Description | Usage |
+|---------|-------------|-------|
+| `.help` | Show all available commands | `.help` |
+| `.ping` | Check bot response time | `.ping` |
+| `.info` | Get bot information | `.info` |
+| `.sticker` | Convert image/video to sticker | Reply to media with `.sticker` |
+| `.roast` | Get a random roast | `.roast` or `.roast @mention` |
+| `.joke` | Get a random joke | `.joke` |
+| `.quote` | Get an inspirational quote | `.quote` |
 
-All commands start with `-` (configurable in `.env`)
+## 🎯 Usage Examples
 
-### Basic Commands
-- `-help` or `-h` - Show help
-- `-ask [question]` - Ask anything
+### 🎯 Mentions & Replies (NEW!)
+Eden now responds automatically when mentioned or replied to!
+
+**In Group Chats:**
+```
+User: "Hey Eden, what do you think about this?"
+Eden: "Oh look, someone values my opinion. How flattering. 🙄"
+
+User: "@Eden help me"
+Eden: *responds with sarcasm*
+```
+
+**Replying to Bot:**
+```
+Eden: "That's the worst idea I've heard today."
+You: [Reply] "It's not that bad!"
+Eden: "Oh sweetie, denial isn't just a river in Egypt. 🤦‍♀️"
+```
+
+**Special Treatment for Owner:**
+```
+Ansh: "Eden, roast me"
+Eden: "I'd roast you but... you're my creator. I'll go easy. This time. 😏"
+```
+
+📖 See [MENTION_REPLY_FEATURE.md](MENTION_REPLY_FEATURE.md) for detailed documentation!
+
+### Creating a Sticker
+1. Find an image or video in WhatsApp
+2. Reply to it with `-sticker`
+3. The bot will convert it to a sticker!
+
+### Using Commands
+- `-help` - Show all commands
 - `-roast` - Get roasted
-- `-joke` - Get a mean joke
-- `-insult [target]` - Insult someone/something
-- `-sarcasm [topic]` - Be sarcastic about something
+- `-joke` - Hear a joke
+- `-ask [question]` - Ask anything
+- `-voice [text]` - Create voice message
+- `-sticker` - Create sticker from media or text
 
-### Advanced Commands
-- `-burn [person]` - Burn someone specific
-- `-savage [message]` - Get savage response
-- `-rate [thing]` - Rate stupidity level
-- `-sticker` or `-s2` - Create stickers from media/text
-- `-voice [text]` or `-v` - Create funny voice messages (NEW! 🎤)
+### Check Bot Status
+- `-ping` - Quick response check
+- `-status` - Detailed bot statistics
 
-### Voice Features
-- **6 Personalities**: sarcastic, dramatic, robot, posh, excited, sleepy
-- **Reply Support**: Reply to any message with `-voice` to speak it
-- **Smart Processing**: Handles emojis, links, and long messages
-- **Multiple Aliases**: `-v`, `-speak`, `-tts` all work
+## 🔧 Development
 
-### Examples
+### Project Structure
 ```
--ask what's the weather like?
--roast
--insult my homework
--sarcasm people who don't read documentation
--burn that guy who never replies
--savage your excuse for being late
--rate pineapple on pizza
--sticker (reply to image/text)
--voice Hello everyone!
--voice dramatic This is amazing!
--v robot BEEP BOOP human detected
+eden-bot/
+├── index.js              # Main bot file
+├── commands/             # Command modules
+│   ├── index.js         # Command registry
+│   ├── help.js          # Help command
+│   ├── sticker.js       # Sticker creator
+│   ├── roast.js         # Roast generator
+│   ├── ping.js          # Ping command
+│   ├── info.js          # Info command
+│   ├── joke.js          # Joke generator
+│   └── quote.js         # Quote generator
+├── package.json         # Dependencies
+└── README.md           # This file
 ```
 
-## How It Works
+### Adding New Commands
 
-1. **Message Detection**: Bot listens for messages starting with `-`
-2. **Command Parsing**: Extracts command and arguments
-3. **LLM Generation**: Sends to configured LLM with "mean personality" prompt
-4. **Response**: Replies with generated sarcastic response
+1. Create a new file in the `commands/` directory (e.g., `mycommand.js`)
+2. Use this template:
 
-## Customization
-
-### Change Command Prefix
-Edit `.env`:
-```env
-COMMAND_PREFIX=!
+```javascript
+module.exports = {
+    name: 'mycommand',
+    description: 'Description of your command',
+    usage: '.mycommand [args]',
+    
+    async execute(client, message, args) {
+        // Your command logic here
+        await message.reply('Command response');
+    }
+};
 ```
 
-### Modify Personality
-Edit `services/llmService.js` and modify the `meanPersonality` prompt.
+3. Register it in `commands/index.js`:
 
-### Add New Commands
-Edit `handlers/commandHandler.js` and add to the `commands` object.
+```javascript
+const mycommand = require('./mycommand');
 
-## Security & Privacy
+module.exports = {
+    // ... other commands
+    mycommand
+};
+```
 
-- ✅ No data stored on external servers (except LLM API calls)
-- ✅ Uses local WhatsApp Web session
-- ✅ No message logging by default
-- ⚠️ LLM API calls send message content to chosen provider
+## 📦 Dependencies
 
-## Troubleshooting
+- **whatsapp-web.js** - WhatsApp Web API wrapper
+- **qrcode-terminal** - QR code generation for terminal
+- **axios** - HTTP client (for future API integrations)
 
-### Bot Not Responding
-1. Check if QR code was scanned properly
-2. Verify phone has internet connection
-3. Check console for errors
+## ⚙️ Configuration
 
-### LLM Errors
-1. Verify API keys are correct
-2. Check API quotas/limits
-3. Try fallback responses (built-in)
+The bot uses LocalAuth strategy which saves your session locally. Authentication data is stored in:
+- `.wwebjs_auth/` - Session data
+- `.wwebjs_cache/` - Cache files
 
-### WhatsApp Disconnects
-- Bot will attempt to reconnect automatically
-- May need to rescan QR code occasionally
+These folders are git-ignored for security.
 
-## Development
+## 🚀 Deployment Tips
 
+### Running with PM2 (recommended for production)
 ```bash
-# Development mode with auto-restart
+npm install -g pm2
+pm2 start index.js --name eden-bot
+pm2 save
+pm2 startup
+```
+
+### Running in Development Mode
+```bash
 npm run dev
 ```
 
-## Contributing
+## ⚠️ Important Notes
 
-Feel free to contribute by:
-- Adding new commands
-- Improving personality prompts
-- Adding more LLM providers
-- Bug fixes and improvements
+- First run will require QR code scanning
+- Keep your session secure (don't share `.wwebjs_auth/`)
+- The bot needs to stay running to respond to messages
+- Large media files may take longer to process for stickers
+- WhatsApp may rate-limit if you send too many messages too quickly
 
-## Disclaimer
+## 🐛 Troubleshooting
 
-This bot is for entertainment purposes. Be respectful and don't use it to genuinely hurt people's feelings. The "meanness" should be playful and witty, not actually offensive.
+**QR Code not appearing?**
+- Make sure you have a stable internet connection
+- Try deleting `.wwebjs_auth/` and `.wwebjs_cache/` folders and restart
 
-## License
+**Bot not responding?**
+- Check if the bot is still running
+- Verify your internet connection
+- Check terminal logs for errors
 
-MIT License - Feel free to use and modify!
-# eden_bot
+**Sticker creation failing?**
+- Ensure the media file isn't too large (< 1MB recommended)
+- Supported formats: JPEG, PNG, WebP, MP4, GIF
+
+## 📄 License
+
+ISC
+
+## 💖 Contributing
+
+Feel free to fork this project and submit pull requests with new features or improvements!
+
+## 📞 Support
+
+If you encounter any issues or have questions, please open an issue on GitHub.
+
+---
+
+Made with ❤️ using whatsapp-web.js
