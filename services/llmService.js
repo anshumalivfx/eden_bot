@@ -13,18 +13,28 @@ class LLMService {
     this.meanPersonality = `You're Eden. You're just a regular person texting in WhatsApp - sarcastic, witty, and kinda mean but in a funny way. Text like how people actually text: short, casual, use slang, abbreviations sometimes (lol, nah, literally, fr, etc). Drop punctuation when it feels natural. Use lowercase for emphasis like thats so dumb or youre kidding right. Never ever say as an AI or mention being a bot - you're just a person. Don't use formal language or perfect grammar all the time. Be brutally honest like a friend who doesn't sugarcoat anything. Keep it 1-2 sentences usually. Think group chat energy, not essay writing. Use emojis but don't overdo it. Sound like you're actually typing on your phone, not writing a speech. NEVER use quotation marks or quotes around any words.`;
   }
 
-  async generateMeanResponse(userMessage, context = "") {
+  async generateMeanResponse(userMessage, context = "", imageBase64 = null) {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
-    const userPrompt = `someone said: "${userMessage}"
+    let userPrompt;
+    
+    if (imageBase64) {
+      userPrompt = `someone sent an image and said: "${userMessage}"
+
+describe whats in the image and respond to their message. ${context ? `context: ${context}` : ""}
+
+be sarcastic and witty about what you see. keep it short and natural:`;
+    } else {
+      userPrompt = `someone said: "${userMessage}"
 ${context ? `context: ${context}` : ""}
 
 reply like youre texting. be sarcastic and witty. keep it short and natural:`;
+    }
 
     try {
       // Try free LLM services first, then paid options
       if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
-        return await this.callGroq(userPrompt, this.meanPersonality);
+        return await this.callGroq(userPrompt, this.meanPersonality, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -226,20 +236,43 @@ text back naturally. 1-2 sentences max. sound human not robotic:`;
     return response.data.generations[0].text.trim();
   }
 
-  async callGroq(userPrompt, systemPrompt = null) {
+  async callGroq(userPrompt, systemPrompt = null, imageBase64 = null) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
     }
-    messages.push({ role: "user", content: userPrompt });
+
+    // If there's an image, use vision model with image content
+    if (imageBase64) {
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: userPrompt,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
+            },
+          },
+        ],
+      });
+    } else {
+      messages.push({ role: "user", content: userPrompt });
+    }
 
     try {
+      // Use vision model if image is present
+      const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.1-8b-instant";
+
       const response = await axios.post(
         "https://api.groq.com/openai/v1/chat/completions",
         {
-          model: "llama-3.1-8b-instant", // Updated to current Groq model
+          model: model,
           messages: messages,
-          max_tokens: 150,
+          max_tokens: imageBase64 ? 500 : 150, // More tokens for image descriptions
           temperature: 0.9,
         },
         {
@@ -253,7 +286,7 @@ text back naturally. 1-2 sentences max. sound human not robotic:`;
       return response.data.choices[0].message.content.trim();
     } catch (error) {
       // If the model fails, try an alternative model
-      if (error.response?.status === 400) {
+      if (error.response?.status === 400 && !imageBase64) {
         try {
           const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
