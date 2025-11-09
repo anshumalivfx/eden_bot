@@ -135,7 +135,9 @@ console.log("=".repeat(50));
 console.log("📊 Test Summary:");
 console.log(`   ✅ Passed: ${passed}/${testCases.length}`);
 console.log(`   ❌ Failed: ${failed}/${testCases.length}`);
-console.log(`   📈 Success Rate: ${((passed / testCases.length) * 100).toFixed(1)}%`);
+console.log(
+  `   📈 Success Rate: ${((passed / testCases.length) * 100).toFixed(1)}%`
+);
 console.log("=".repeat(50));
 
 if (failed === 0) {

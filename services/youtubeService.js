@@ -24,20 +24,23 @@ class YouTubeService {
     try {
       // Using YouTube's search without API (scraping approach)
       // Note: This is a simplified version. For production, use YouTube Data API
-      const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-      
+      const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+        query
+      )}`;
+
       const response = await axios.get(searchUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
       });
 
       const html = response.data;
-      
+
       // Extract video ID from the HTML
       const videoIdMatch = html.match(/"videoId":"([^"]+)"/);
       const titleMatch = html.match(/"title":{"runs":\[{"text":"([^"]+)"/);
-      
+
       if (!videoIdMatch || !titleMatch) {
         throw new Error("Could not find video");
       }
@@ -66,18 +69,36 @@ class YouTubeService {
    */
   async downloadAsMP3(videoUrl, outputName = "audio") {
     try {
-      // Check if yt-dlp is installed
+      // Check if yt-dlp is installed - try common locations
+      let ytdlpPath = "yt-dlp";
       try {
-        await execAsync("which yt-dlp");
+        await execAsync("yt-dlp --version");
       } catch (error) {
-        throw new Error(
-          "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp"
-        );
+        // Try common installation paths
+        const commonPaths = [
+          "/opt/homebrew/bin/yt-dlp",
+          "/usr/local/bin/yt-dlp",
+          "/usr/bin/yt-dlp",
+        ];
+        let found = false;
+        for (const p of commonPaths) {
+          try {
+            await execAsync(`${p} --version`);
+            ytdlpPath = p;
+            found = true;
+            break;
+          } catch {}
+        }
+        if (!found) {
+          throw new Error(
+            "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp"
+          );
+        }
       }
 
       // Check if ffmpeg is installed
       try {
-        await execAsync("which ffmpeg");
+        await execAsync("ffmpeg -version");
       } catch (error) {
         throw new Error(
           "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)"
@@ -85,15 +106,20 @@ class YouTubeService {
       }
 
       const timestamp = Date.now();
-      const safeOutputName = outputName.replace(/[^a-z0-9]/gi, "_").substring(0, 50);
-      const outputPath = path.join(this.tempDir, `${safeOutputName}_${timestamp}`);
+      const safeOutputName = outputName
+        .replace(/[^a-z0-9]/gi, "_")
+        .substring(0, 50);
+      const outputPath = path.join(
+        this.tempDir,
+        `${safeOutputName}_${timestamp}`
+      );
       const finalPath = `${outputPath}.mp3`;
 
       console.log(`📥 Downloading: ${videoUrl}`);
 
       // Download using yt-dlp
-      const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${outputPath}.%(ext)s" "${videoUrl}"`;
-      
+      const command = `${ytdlpPath} -x --audio-format mp3 --audio-quality 0 -o "${outputPath}.%(ext)s" "${videoUrl}"`;
+
       await execAsync(command, {
         timeout: 120000, // 2 minute timeout
       });
@@ -131,19 +157,26 @@ class YouTubeService {
     try {
       const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
       const fallbackUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      
+
       const timestamp = Date.now();
-      const thumbnailPath = path.join(this.tempDir, `thumb_${videoId}_${timestamp}.jpg`);
+      const thumbnailPath = path.join(
+        this.tempDir,
+        `thumb_${videoId}_${timestamp}.jpg`
+      );
 
       console.log(`📸 Downloading thumbnail...`);
 
       // Try maxresdefault first, fallback to hqdefault
       let response;
       try {
-        response = await axios.get(thumbnailUrl, { responseType: 'arraybuffer' });
+        response = await axios.get(thumbnailUrl, {
+          responseType: "arraybuffer",
+        });
       } catch (error) {
         console.log(`⚠️  Max quality not available, using HQ...`);
-        response = await axios.get(fallbackUrl, { responseType: 'arraybuffer' });
+        response = await axios.get(fallbackUrl, {
+          responseType: "arraybuffer",
+        });
       }
 
       fs.writeFileSync(thumbnailPath, response.data);
@@ -172,7 +205,7 @@ class YouTubeService {
   async searchAndDownload(query) {
     try {
       console.log(`🔍 Searching YouTube for: "${query}"`);
-      
+
       // Search for the video
       const video = await this.searchYouTube(query);
       console.log(`🎵 Found: ${video.title}`);

@@ -3,7 +3,6 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
 const fs = require("fs").promises;
 const path = require("path");
-const { MessageMedia } = require("whatsapp-web.js");
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
