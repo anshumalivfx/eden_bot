@@ -102,7 +102,16 @@ class StickerService {
         throw new Error("No media found in message");
       }
 
-      // Convert base64 to buffer
+      // Check if media is already in buffer format (Baileys)
+      if (media.buffer) {
+        return {
+          buffer: media.buffer,
+          mimetype: media.mimetype,
+          filename: media.filename || "media",
+        };
+      }
+
+      // Otherwise convert base64 to buffer (old format)
       const buffer = Buffer.from(media.data, "base64");
 
       return {

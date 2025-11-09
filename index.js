@@ -326,20 +326,55 @@ async function connectToWhatsApp() {
             const messageAdapter = {
               body: messageText,
               from: chatJid,
-              hasQuotedMsg: message.message?.extendedTextMessage?.contextInfo
-                ?.quotedMessage
-                ? true
-                : false,
+              hasQuotedMsg: !!(message.message?.extendedTextMessage?.contextInfo?.quotedMessage),
               getQuotedMessage: async () => {
-                const contextInfo =
-                  message.message?.extendedTextMessage?.contextInfo;
+                const contextInfo = message.message?.extendedTextMessage?.contextInfo;
                 if (contextInfo?.quotedMessage) {
+                  const quotedMsg = contextInfo.quotedMessage;
+                  
+                  // Create a message-like object for the quoted message
                   return {
-                    body:
-                      contextInfo.quotedMessage.conversation ||
-                      contextInfo.quotedMessage.extendedTextMessage?.text ||
-                      "",
+                    body: quotedMsg.conversation || 
+                          quotedMsg.extendedTextMessage?.text || 
+                          quotedMsg.imageMessage?.caption ||
+                          quotedMsg.videoMessage?.caption ||
+                          "",
                     fromMe: contextInfo.participant === botId,
+                    hasMedia: !!(quotedMsg.imageMessage || quotedMsg.videoMessage || quotedMsg.stickerMessage),
+                    downloadMedia: async () => {
+                      try {
+                        // Create a pseudo-message object for the quoted message
+                        const quotedMsgObj = {
+                          key: {
+                            remoteJid: chatJid,
+                            fromMe: contextInfo.participant === botId,
+                            id: contextInfo.stanzaId
+                          },
+                          message: quotedMsg
+                        };
+                        
+                        const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+                        const buffer = await downloadMediaMessage(quotedMsgObj, "buffer", {});
+                        
+                        let mimetype = "application/octet-stream";
+                        if (quotedMsg.imageMessage) {
+                          mimetype = quotedMsg.imageMessage.mimetype || "image/jpeg";
+                        } else if (quotedMsg.videoMessage) {
+                          mimetype = quotedMsg.videoMessage.mimetype || "video/mp4";
+                        } else if (quotedMsg.stickerMessage) {
+                          mimetype = "image/webp";
+                        }
+                        
+                        return {
+                          buffer: buffer,
+                          mimetype: mimetype,
+                          filename: `quoted_media_${Date.now()}`
+                        };
+                      } catch (error) {
+                        console.error("Error downloading quoted media:", error);
+                        return null;
+                      }
+                    }
                   };
                 }
                 return null;
@@ -501,8 +536,29 @@ async function connectToWhatsApp() {
                 message.message?.stickerMessage
               ),
               downloadMedia: async () => {
-                // This is a simplified version - you may need to implement full media download
-                return null;
+                try {
+                  const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+                  const buffer = await downloadMediaMessage(message, "buffer", {});
+                  
+                  // Determine mimetype
+                  let mimetype = "application/octet-stream";
+                  if (message.message?.imageMessage) {
+                    mimetype = message.message.imageMessage.mimetype || "image/jpeg";
+                  } else if (message.message?.videoMessage) {
+                    mimetype = message.message.videoMessage.mimetype || "video/mp4";
+                  } else if (message.message?.stickerMessage) {
+                    mimetype = "image/webp";
+                  }
+                  
+                  return {
+                    buffer: buffer,
+                    mimetype: mimetype,
+                    filename: `media_${Date.now()}`
+                  };
+                } catch (error) {
+                  console.error("Error downloading media:", error);
+                  return null;
+                }
               },
               reply: async (content) => {
                 const quotedMsg = {
@@ -523,6 +579,15 @@ async function connectToWhatsApp() {
                     {
                       image: content.image,
                       caption: content.caption || "",
+                    },
+                    { quoted: quotedMsg }
+                  );
+                } else if (content?.sticker) {
+                  // Handle sticker
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      sticker: content.sticker,
                     },
                     { quoted: quotedMsg }
                   );
