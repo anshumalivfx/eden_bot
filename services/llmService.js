@@ -163,7 +163,7 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
       messages.push({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: userPrompt });
-    
+
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -232,7 +232,7 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
       messages.push({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: userPrompt });
-    
+
     try {
       const response = await axios.post(
         "https://api.groq.com/openai/v1/chat/completions",
