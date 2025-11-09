@@ -363,16 +363,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           return "I can only work with images, GIFs, or videos. What you sent me is... questionable. 🤔";
         }
 
-        // Create and send media sticker
-        const { MessageMedia } = require("whatsapp-web.js");
-        const stickerMedia = new MessageMedia(
-          "image/webp",
-          stickerBuffer.toString("base64"),
-          "sticker.webp"
-        );
-
-        await message.reply(stickerMedia, undefined, {
-          sendMediaAsSticker: true,
+        // Send sticker with Baileys
+        await message.reply({
+          sticker: stickerBuffer,
         });
         return this.stickerService.getRandomStickerQuote();
       } else if (targetMessage.body && targetMessage.body.trim()) {
@@ -392,16 +385,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           "text"
         );
 
-        // Create and send text sticker
-        const { MessageMedia } = require("whatsapp-web.js");
-        const stickerMedia = new MessageMedia(
-          "image/webp",
-          stickerBuffer.toString("base64"),
-          "text_sticker.webp"
-        );
-
-        await message.reply(stickerMedia, undefined, {
-          sendMediaAsSticker: true,
+        // Send text sticker with Baileys
+        await message.reply({
+          sticker: stickerBuffer,
         });
         return this.stickerService.getRandomTextStickerQuote();
       } else {
@@ -489,16 +475,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         personality
       );
 
-      // Send the audio file
-      const { MessageMedia } = require("whatsapp-web.js");
+      // Send the audio file with Baileys
       const fs = require("fs");
-
       const audioData = fs.readFileSync(voiceResult.filepath);
-      const media = new MessageMedia(
-        "audio/mpeg",
-        audioData.toString("base64"),
-        `eden_voice_${Date.now()}.mp3`
-      );
 
       // Clean up the file
       setTimeout(() => {
@@ -511,7 +490,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         }\n📝 *Original*: "${voiceResult.originalText.substring(0, 50)}${
           voiceResult.originalText.length > 50 ? "..." : ""
         }"`,
-        media: media,
+        media: {
+          audio: audioData,
+          mimetype: "audio/mpeg",
+          ptt: true, // Send as voice note
+        },
       };
     } catch (error) {
       console.error("Voice creation error:", error);
@@ -566,7 +549,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       // Get bot instance from global (we'll set this up)
       const bot = global.edenBot;
-      
+
       if (!bot) {
         return "📊 *Eden Status*\n\n✅ Bot is active and responding!\n🤖 All systems operational";
       }
@@ -582,13 +565,21 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       status += `📨 *Messages Received:* ${bot.messageCount}\n`;
       status += `🎯 *Commands Executed:* ${bot.commandCount}\n`;
       status += `😈 *Current Mood:* ${bot.currentMood}\n`;
-      status += `🧠 *LLM Provider:* ${process.env.GROQ_API_KEY ? 'Groq (Free)' : 'Fallback'}\n`;
+      status += `🧠 *LLM Provider:* ${
+        process.env.GROQ_API_KEY ? "Groq (Free)" : "Fallback"
+      }\n`;
       status += `💬 *Command Prefix:* -\n`;
       status += `🎭 *Features:*\n`;
-      status += `   • Name Triggers: ${bot.triggerNames.join(', ')}\n`;
-      status += `   • Mood System: ${bot.enableMoodSystem ? 'Active' : 'Disabled'}\n`;
-      status += `   • Random Messages: ${bot.enableRandomMessages ? 'Active' : 'Disabled'}\n`;
-      status += `   • Smart Context: ${bot.enableSmartContext ? 'Active' : 'Disabled'}\n`;
+      status += `   • Name Triggers: ${bot.triggerNames.join(", ")}\n`;
+      status += `   • Mood System: ${
+        bot.enableMoodSystem ? "Active" : "Disabled"
+      }\n`;
+      status += `   • Random Messages: ${
+        bot.enableRandomMessages ? "Active" : "Disabled"
+      }\n`;
+      status += `   • Smart Context: ${
+        bot.enableSmartContext ? "Active" : "Disabled"
+      }\n`;
       status += `\n💡 *Tip:* Use \`-help\` to see all commands`;
 
       return status;
@@ -608,14 +599,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       "😈 Present and accounted for! What do you want?",
       "🔥 Alive, active, and ready to burn!",
     ];
-    
+
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
   async playMusic(args, message) {
     try {
       const query = args.join(" ");
-      
+
       if (!query || query.trim().length === 0) {
         return "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
       }
@@ -630,33 +621,30 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Search and download
       const result = await this.youtubeService.searchAndDownload(query);
 
-      // Create media message
-      const { MessageMedia } = require("whatsapp-web.js");
+      // Prepare media with Baileys
       const fs = require("fs");
-
       const audioData = fs.readFileSync(result.filepath);
-      const audioMedia = new MessageMedia(
-        "audio/mpeg",
-        audioData.toString("base64"),
-        `${result.title}.mp3`
-      );
-
       const sassyQuote = this.youtubeService.getRandomYouTubeQuote();
-      
+
       // Send thumbnail if available
+      console.log("📸 Thumbnail check:", {
+        hasThumbnail: !!result.thumbnail,
+        hasFilepath: result.thumbnail?.filepath,
+      });
+
       if (result.thumbnail && result.thumbnail.filepath) {
         try {
+          console.log("📸 Reading thumbnail from:", result.thumbnail.filepath);
           const thumbnailData = fs.readFileSync(result.thumbnail.filepath);
-          const thumbnailMedia = new MessageMedia(
-            "image/jpeg",
-            thumbnailData.toString("base64"),
-            "thumbnail.jpg"
-          );
+          console.log("📸 Thumbnail size:", thumbnailData.length, "bytes");
 
-          // Send thumbnail with caption
-          await message.reply(thumbnailMedia, undefined, {
+          // Send thumbnail with caption using Baileys
+          console.log("📸 Sending thumbnail...");
+          await message.reply({
+            image: thumbnailData,
             caption: `🎵 *${result.title}*\n\n${sassyQuote}`,
           });
+          console.log("✅ Thumbnail sent successfully");
 
           // Clean up thumbnail after a delay
           setTimeout(() => {
@@ -679,7 +667,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Return the audio media (caption/text already sent above)
       return {
-        media: audioMedia,
+        media: {
+          audio: audioData,
+          mimetype: "audio/mpeg",
+        },
       };
     } catch (error) {
       console.error("Play music error:", error);
@@ -688,12 +679,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         return "Ugh, I can't download music without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
       }
 
-      if (error.message.includes("ffmpeg not found") || error.message.includes("ffprobe")) {
+      if (
+        error.message.includes("ffmpeg not found") ||
+        error.message.includes("ffprobe")
+      ) {
         return "I need ffmpeg to convert videos to MP3, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
       }
 
       if (error.message.includes("Could not find video")) {
-        return `Couldn't find "${args.join(" ")}" on YouTube. Maybe try spelling it correctly? 🤔`;
+        return `Couldn't find "${args.join(
+          " "
+        )}" on YouTube. Maybe try spelling it correctly? 🤔`;
       }
 
       const errorResponses = [
