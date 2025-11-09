@@ -113,18 +113,50 @@ function isGroupChat(jid) {
   return jid?.endsWith("@g.us");
 }
 
-// Filter console logs to hide verbose Baileys session messages
+// Filter ALL console outputs to hide verbose Baileys session messages
+const shouldFilterMessage = (args) => {
+  const message = args.map(arg => {
+    if (typeof arg === 'string') return arg;
+    if (typeof arg === 'object') return JSON.stringify(arg);
+    return String(arg);
+  }).join(' ');
+  
+  return message.includes('Closing stale open session') || 
+         message.includes('SessionEntry') ||
+         message.includes('Closing session:') ||
+         message.includes('pendingPreKey') ||
+         message.includes('_chains') ||
+         message.includes('registrationId') ||
+         message.includes('currentRatchet') ||
+         message.includes('ephemeralKeyPair') ||
+         message.includes('baseKey') ||
+         message.includes('remoteIdentityKey');
+};
+
+// Override all console methods
 const originalConsoleLog = console.log;
+const originalConsoleInfo = console.info;
+const originalConsoleDebug = console.debug;
+const originalConsoleWarn = console.warn;
+
 console.log = function(...args) {
-  const message = args.join(' ');
-  // Hide "Closing stale open session" messages - they're just noise
-  if (message.includes('Closing stale open session') || 
-      message.includes('SessionEntry') ||
-      message.includes('pendingPreKey') ||
-      message.includes('registrationId')) {
-    return;
-  }
+  if (shouldFilterMessage(args)) return;
   originalConsoleLog.apply(console, args);
+};
+
+console.info = function(...args) {
+  if (shouldFilterMessage(args)) return;
+  originalConsoleInfo.apply(console, args);
+};
+
+console.debug = function(...args) {
+  if (shouldFilterMessage(args)) return;
+  originalConsoleDebug.apply(console, args);
+};
+
+console.warn = function(...args) {
+  if (shouldFilterMessage(args)) return;
+  originalConsoleWarn.apply(console, args);
 };
 
 // Connect to WhatsApp
