@@ -83,13 +83,13 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 *Basic Commands:*
 - \`-help\` or \`-h\` - Show this pathetic list
 - \`-ask [question]\` or \`-a [question]\` - Ask me anything (prepare for disappointment)
-- \`-roast\` or \`-r\` - Get roasted (you asked for it)
+- \`-roast [@person]\` or \`-r [@person]\` - Roast yourself or mention someone
 - \`-joke\` or \`-j\` - Hear a joke (probably funnier than you)
-- \`-insult [target]\` or \`-i [target]\` - Generate an insult
+- \`-insult [@person/name]\` or \`-i [@person/name]\` - Insult someone by name or @mention
 - \`-sarcasm [topic]\` or \`-s [topic]\` - Get sarcastic about something
 
 *Advanced Commands:*
-- \`-burn [person]\` or \`-b [person]\` - Burn someone specific
+- \`-burn [@person/name]\` or \`-b [@person/name]\` - Burn someone by name or @mention
 - \`-savage [message]\` - Get a savage response
 - \`-rate [thing]\` - Rate something's stupidity level
 - \`-mood\` - Check my current mood
@@ -136,18 +136,45 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   async roastUser(args, message) {
     try {
       const { senderName = "User", isOwner = false } = this.currentContext;
+      
+      // Check if a specific person is mentioned to roast
+      let targetName = senderName;
+      let targetIsOwner = isOwner;
+      
+      // Check if there are mentions in the message or args
+      if (args.length > 0) {
+        let target = args.join(" ");
+        try {
+          const mentions = await message.getMentions();
+          if (mentions && mentions.length > 0) {
+            // Get the first mentioned person's name
+            const mention = mentions[0];
+            targetName = mention.pushname || mention.name || mention.number || "someone";
+            // Check if the mentioned person is the owner
+            targetIsOwner = targetName.toLowerCase().includes("ansh");
+          } else if (target) {
+            // Use the provided name/text
+            targetName = target;
+            targetIsOwner = targetName.toLowerCase().includes("ansh");
+          }
+        } catch (error) {
+          console.error("Error processing mentions in roast:", error);
+          // Use provided text if mention processing fails
+          targetName = target || senderName;
+        }
+      }
 
-      if (isOwner) {
+      if (targetIsOwner) {
         return await this.llmService.generateContextualResponse(
-          `Roast ${senderName} in a witty and clever way`,
+          `Roast ${targetName} in a witty and clever way`,
           "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever.",
-          { senderName, isOwner: true }
+          { senderName: targetName, isOwner: true }
         );
       }
 
       // For regular users, use a more specific roast prompt
       return await this.llmService.generateMeanResponse(
-        `Roast this person named ${senderName} in a witty, clever, and funny way. Make it a proper roast - clever insults and sarcastic humor.`,
+        `Roast this person named ${targetName} in a witty, clever, and funny way. Make it a proper roast - clever insults and sarcastic humor.`,
         "This is for a WhatsApp group roast session. Be creative and funny with your roasts."
       );
     } catch (error) {
@@ -169,8 +196,25 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     return await this.llmService.generateJoke();
   }
 
-  async generateInsult(args) {
-    const target = args.join(" ") || "you";
+  async generateInsult(args, message) {
+    let target = args.join(" ") || "you";
+    
+    // Check if there are mentions in the message
+    try {
+      const mentions = await message.getMentions();
+      if (mentions && mentions.length > 0) {
+        // Replace the mention IDs with actual names
+        for (const mention of mentions) {
+          const name = mention.pushname || mention.name || mention.number || "someone";
+          // Replace the @ID format with the actual name
+          const mentionId = `@${mention.id.user}`;
+          target = target.replace(mentionId, name);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing mentions in insult:", error);
+    }
+    
     return await this.llmService.generateInsult(target);
   }
 
@@ -191,10 +235,26 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     );
   }
 
-  async burnSomeone(args) {
-    const target = args.join(" ");
+  async burnSomeone(args, message) {
+    let target = args.join(" ");
     if (!target) {
       return "You want me to burn someone but didn't tell me who? Your brain must be on vacation. 🔥";
+    }
+
+    // Check if there are mentions in the message
+    try {
+      const mentions = await message.getMentions();
+      if (mentions && mentions.length > 0) {
+        // Replace the mention IDs with actual names
+        for (const mention of mentions) {
+          const name = mention.pushname || mention.name || mention.number || "someone";
+          // Replace the @ID format with the actual name
+          const mentionId = `@${mention.id.user}`;
+          target = target.replace(mentionId, name);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing mentions in burn:", error);
     }
 
     return await this.llmService.generateMeanResponse(
