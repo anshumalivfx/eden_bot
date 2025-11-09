@@ -27,6 +27,10 @@ const RESPONSE_PROBABILITY = 0.8; // 80% chance to respond when mentioned
 // Store bot's own ID
 let botId = null;
 
+// Contact name cache for mentions
+// Maps JID -> display name from pushName or message text
+const contactNameCache = new Map();
+
 // Helper function to check if bot is mentioned
 function isBotMentioned(message) {
   try {
@@ -192,6 +196,26 @@ async function connectToWhatsApp() {
     // Handle credentials update
     sock.ev.on("creds.update", saveCreds);
 
+    // Handle contact updates - Baileys emits this when it receives contact info
+    sock.ev.on("contacts.update", (updates) => {
+      for (const update of updates) {
+        if (update.notify || update.name) {
+          const displayName = update.notify || update.name;
+          // Cache using all possible ID formats
+          if (update.id) {
+            contactNameCache.set(update.id, displayName);
+          }
+          if (update.lid) {
+            contactNameCache.set(update.lid, displayName);
+          }
+          if (update.phoneNumber) {
+            contactNameCache.set(update.phoneNumber, displayName);
+          }
+          console.log(`📇 Contact updated: ${displayName} (${update.id || update.lid})`);
+        }
+      }
+    });
+
     // Handle incoming messages
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
       try {
@@ -211,6 +235,27 @@ async function connectToWhatsApp() {
           const isGroup = isGroupChat(chatJid);
           const senderName = getSenderName(message);
           const owner = isOwner(senderName);
+          
+          // Cache the pushName for this user for future mentions
+          if (message.pushName) {
+            const senderJid = message.key.participant || message.key.remoteJid;
+            contactNameCache.set(senderJid, message.pushName);
+            console.log(`💾 Cached name: ${message.pushName} for ${senderJid}`);
+            
+            // Also cache using the phone number JID if this is a LID
+            if (senderJid.endsWith("@lid") && isGroup) {
+              try {
+                const groupMetadata = await sock.groupMetadata(chatJid);
+                const participant = groupMetadata.participants.find(p => p.lid === senderJid);
+                if (participant && participant.id) {
+                  contactNameCache.set(participant.id, message.pushName);
+                  console.log(`💾 Also cached for phone JID: ${participant.id}`);
+                }
+              } catch (e) {
+                // Ignore errors
+              }
+            }
+          }
 
           // Check if this is a command
           if (messageText.startsWith(COMMAND_PREFIX)) {
@@ -243,6 +288,147 @@ async function connectToWhatsApp() {
                 }
                 return null;
               },
+              getMentions: async () => {
+                // Get mentioned JIDs from the message
+                const mentionedJids =
+                  message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                
+                // Get the actual message text to extract names
+                const messageText = getMessageText(message) || "";
+                
+                console.log(`📱 Processing mentions:`, {
+                  jids: mentionedJids,
+                  messageText: messageText.substring(0, 100),
+                });
+                
+                // Convert to contact objects
+                const mentions = [];
+                
+                // Extract names from message text - this is the most reliable method
+                // Format: @Name or @919876543210 or @22217882616014 (LID)
+                const namesInText = [];
+                const atRegex = /@([^\s]+)/g;
+                let match;
+                while ((match = atRegex.exec(messageText)) !== null) {
+                  namesInText.push(match[1]);
+                }
+                
+                console.log(`📝 Names from text:`, namesInText);
+                
+                // Try to get group metadata to map LIDs to phone numbers and names
+                let groupParticipants = [];
+                if (isGroupChat(chatJid)) {
+                  try {
+                    const groupMetadata = await sock.groupMetadata(chatJid);
+                    groupParticipants = groupMetadata.participants || [];
+                    console.log(`👥 Group has ${groupParticipants.length} participants`);
+                  } catch (e) {
+                    console.error("Error fetching group metadata:", e.message);
+                  }
+                }
+                
+                for (let i = 0; i < mentionedJids.length; i++) {
+                  const jid = mentionedJids[i];
+                  try {
+                    let displayName = null;
+                    let phoneNumber = jid.split("@")[0];
+                    const isLid = jid.endsWith("@lid");
+                    
+                    // For LID mentions, try to find the corresponding phone number and name
+                    if (isLid && groupParticipants.length > 0) {
+                      // Find participant with matching LID
+                      const participant = groupParticipants.find(p => p.lid === jid);
+                      if (participant) {
+                        // Get the phone number if available
+                        if (participant.phoneNumber) {
+                          phoneNumber = participant.phoneNumber.split("@")[0];
+                        } else if (participant.id) {
+                          phoneNumber = participant.id.split("@")[0];
+                        }
+                        
+                        console.log(`🔍 LID mapped to:`, {
+                          lid: jid,
+                          phoneNumber,
+                          participantId: participant.id,
+                        });
+                        
+                        // Check cache using the phone number JID
+                        if (participant.id && contactNameCache.has(participant.id)) {
+                          displayName = contactNameCache.get(participant.id);
+                        }
+                        
+                        // Try to fetch their status/profile to get name
+                        if (!displayName && participant.id) {
+                          try {
+                            const profilePic = await sock.profilePictureUrl(participant.id, 'preview').catch(() => null);
+                            // Even if we can't get pic, we tried
+                            // Unfortunately Baileys doesn't have a direct way to get profile name
+                            // We can only get it from messages they send
+                          } catch (e) {
+                            // Ignore
+                          }
+                        }
+                      }
+                    }
+                    
+                    // Priority 1: Use the name from message text ONLY if it's not a number
+                    // If user typed "@Name", use it. If they typed "@919876543210", skip it.
+                    if (namesInText[i] && !/^\d+$/.test(namesInText[i])) {
+                      displayName = namesInText[i];
+                      // Cache it for future use
+                      contactNameCache.set(jid, displayName);
+                    }
+                    
+                    // Priority 2: Check our contact name cache
+                    if (!displayName && contactNameCache.has(jid)) {
+                      displayName = contactNameCache.get(jid);
+                    }
+                    
+                    // Priority 3: Use phone number as fallback (clean format)
+                    if (!displayName) {
+                      // For LIDs that look like long numbers, just use last 10 digits or format nicely
+                      if (isLid && phoneNumber.length > 10) {
+                        // Extract last 10 digits for display
+                        displayName = phoneNumber.slice(-10);
+                      } else {
+                        displayName = phoneNumber;
+                      }
+                    }
+                    
+                    console.log(`✅ Mention resolved:`, {
+                      jid,
+                      isLid,
+                      phoneNumber,
+                      displayName,
+                      fromCache: contactNameCache.has(jid),
+                    });
+                    
+                    mentions.push({
+                      id: {
+                        user: phoneNumber,
+                        _serialized: jid,
+                      },
+                      pushname: displayName,
+                      name: displayName,
+                      number: phoneNumber,
+                    });
+                  } catch (error) {
+                    console.error("Error processing mention:", error.message);
+                    const phoneNumber = jid.split("@")[0];
+                    mentions.push({
+                      id: {
+                        user: phoneNumber,
+                        _serialized: jid,
+                      },
+                      pushname: phoneNumber,
+                      name: phoneNumber,
+                      number: phoneNumber,
+                    });
+                  }
+                }
+                
+                return mentions;
+              },
               hasMedia: !!(
                 message.message?.imageMessage ||
                 message.message?.videoMessage ||
@@ -253,14 +439,92 @@ async function connectToWhatsApp() {
                 return null;
               },
               reply: async (content) => {
+                const quotedMsg = {
+                  key: message.key,
+                  message: message.message,
+                };
+
                 if (typeof content === "string") {
-                  await sock.sendMessage(chatJid, { text: content });
-                } else if (content?.media) {
-                  // Handle different media types
-                  if (content.text) {
-                    await sock.sendMessage(chatJid, { text: content.text });
+                  await sock.sendMessage(
+                    chatJid,
+                    { text: content },
+                    { quoted: quotedMsg }
+                  );
+                } else if (content?.image) {
+                  // Handle image (like thumbnail)
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      image: content.image,
+                      caption: content.caption || "",
+                    },
+                    { quoted: quotedMsg }
+                  );
+                } else if (content?.audio) {
+                  // Handle audio
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      audio: content.audio,
+                      mimetype: content.mimetype || "audio/mpeg",
+                    },
+                    { quoted: quotedMsg }
+                  );
+                } else if (content?.text && content?.media) {
+                  // Handle interaction with text and media (like GIF)
+                  // Only send ONE message with the media and caption
+                  if (content.media.video) {
+                    const videoMsg = {
+                      video: content.media.video,
+                      caption: content.text,
+                      gifPlayback: content.media.gifPlayback !== false,
+                    };
+                    
+                    // Add mimetype if provided
+                    if (content.media.mimetype) {
+                      videoMsg.mimetype = content.media.mimetype;
+                    }
+                    
+                    console.log(`📤 Sending video message:`, {
+                      hasVideo: !!videoMsg.video,
+                      caption: videoMsg.caption?.substring(0, 30),
+                      gifPlayback: videoMsg.gifPlayback,
+                      mimetype: videoMsg.mimetype,
+                    });
+                    
+                    await sock.sendMessage(chatJid, videoMsg, { quoted: quotedMsg });
+                  } else if (content.media.image) {
+                    await sock.sendMessage(
+                      chatJid,
+                      {
+                        image: content.media.image,
+                        caption: content.text,
+                      },
+                      { quoted: quotedMsg }
+                    );
+                  } else {
+                    // For other media types, send as separate messages
+                    await sock.sendMessage(
+                      chatJid,
+                      { text: content.text },
+                      { quoted: quotedMsg }
+                    );
+                    await sock.sendMessage(chatJid, content.media, {
+                      quoted: quotedMsg,
+                    });
                   }
-                  await sock.sendMessage(chatJid, content.media);
+                } else if (content?.media) {
+                  // Handle other media types
+                  if (content.text) {
+                    await sock.sendMessage(
+                      chatJid,
+                      { text: content.text },
+                      { quoted: quotedMsg }
+                    );
+                  }
+                  await sock.sendMessage(chatJid, content.media, {
+                    quoted: quotedMsg,
+                  });
                 }
               },
               getChat: async () => ({
@@ -275,6 +539,24 @@ async function connectToWhatsApp() {
               }),
             };
 
+            // Sometimes react to the command first
+            if (Math.random() > 0.6) {
+              const commandReactions = ["👀", "🙄", "😏", "💀", "🤔", "😒"];
+              const randomReaction =
+                commandReactions[Math.floor(Math.random() * commandReactions.length)];
+              try {
+                await sock.sendMessage(chatJid, {
+                  react: {
+                    text: randomReaction,
+                    key: message.key,
+                  },
+                });
+                console.log(`😊 Reacted to command with ${randomReaction}`);
+              } catch (error) {
+                console.error("Error reacting to command:", error);
+              }
+            }
+
             const response = await commandHandler.handleCommand(
               command,
               messageAdapter,
@@ -286,22 +568,40 @@ async function connectToWhatsApp() {
             );
 
             if (response) {
+              const quotedMsg = {
+                key: message.key,
+                message: message.message,
+              };
+
               if (typeof response === "object" && response.media) {
                 if (response.text) {
-                  await sock.sendMessage(chatJid, {
-                    text: response.text,
-                    quoted: message,
-                  });
+                  // Remove quotes from text
+                  const cleanText = response.text.replace(/["""'']/g, "");
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      text: cleanText,
+                    },
+                    { quoted: quotedMsg }
+                  );
                 }
-                await sock.sendMessage(chatJid, {
-                  ...response.media,
-                  quoted: message,
-                });
+                await sock.sendMessage(
+                  chatJid,
+                  {
+                    ...response.media,
+                  },
+                  { quoted: quotedMsg }
+                );
               } else {
-                await sock.sendMessage(chatJid, {
-                  text: response,
-                  quoted: message,
-                });
+                // Remove quotes from response
+                const cleanResponse = response.replace(/["""'']/g, "");
+                await sock.sendMessage(
+                  chatJid,
+                  {
+                    text: cleanResponse,
+                  },
+                  { quoted: quotedMsg }
+                );
               }
             }
             continue;
@@ -315,6 +615,23 @@ async function connectToWhatsApp() {
             // Decide whether to respond (probability check)
             if (Math.random() > RESPONSE_PROBABILITY) {
               console.log(`🎲 Skipping response (probability check)`);
+              // Sometimes just react with an emoji instead of responding
+              if (Math.random() > 0.5) {
+                const reactions = ["💀", "🙄", "😒", "💅", "🤡", "👀", "😤"];
+                const randomReaction =
+                  reactions[Math.floor(Math.random() * reactions.length)];
+                try {
+                  await sock.sendMessage(chatJid, {
+                    react: {
+                      text: randomReaction,
+                      key: message.key,
+                    },
+                  });
+                  console.log(`😊 Reacted with ${randomReaction}\n`);
+                } catch (error) {
+                  console.error("Error reacting to message:", error);
+                }
+              }
               continue;
             }
 
@@ -324,6 +641,24 @@ async function connectToWhatsApp() {
             console.log(
               `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}`
             );
+
+            // Sometimes react to the message first
+            if (Math.random() > 0.7) {
+              const reactions = ["💀", "🙄", "😏", "💅", "👀"];
+              const randomReaction =
+                reactions[Math.floor(Math.random() * reactions.length)];
+              try {
+                await sock.sendMessage(chatJid, {
+                  react: {
+                    text: randomReaction,
+                    key: message.key,
+                  },
+                });
+                console.log(`😊 Reacted with ${randomReaction}`);
+              } catch (error) {
+                console.error("Error reacting to message:", error);
+              }
+            }
 
             let response;
 
@@ -335,12 +670,12 @@ async function connectToWhatsApp() {
 
               // Generate response based on reply
               const context = owner
-                ? `${senderName} replied to you. He's your creator so be a bit nicer but still a brat about it. Like a tsundere - act annoyed but clearly care. Don't mention being AI or a bot. Talk like a real arrogant person.`
-                : `${senderName} replied to your message saying: "${messageText}". You said before: "${quotedText}". Reply like an arrogant, sassy bitch. Be witty and condescending. ${
+                ? `${senderName} replied to your text. hes your creator so be less harsh but still annoying. like youre rolling your eyes but lowkey care. text casually like a real person. NEVER use quotation marks or quotes around words`
+                : `${senderName} replied to you saying: ${messageText}. you said before: ${quotedText}. text back sarcastic and witty. ${
                     isGroup
-                      ? "Show off in front of everyone in this group."
-                      : "Roast them privately."
-                  } Don't sound like AI - sound like a mean popular girl. Keep it short and punchy.`;
+                      ? "everyones watching in the group"
+                      : "just you two"
+                  }. sound natural not robotic. be short and savage. NEVER use quotation marks or quotes`;
 
               response = await llmService.generateContextualResponse(
                 messageText,
@@ -350,12 +685,12 @@ async function connectToWhatsApp() {
             } else {
               // Generate response based on mention
               const context = owner
-                ? `${senderName} mentioned you. He's your creator so don't be TOO mean but still be bratty and sarcastic. Like you're annoyed he's bothering you but you secretly care. Don't mention being a bot or AI. Act like a real arrogant person who knows him.`
-                : `${senderName} mentioned you saying: "${messageText}". ${
+                ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
+                : `${senderName} mentioned you: ${messageText}. ${
                     isGroup
-                      ? "Everyone in this group is watching."
-                      : "It's just you two."
-                  } Reply like you're the most arrogant, condescending bitch ever. Be witty, sharp, and dismissive. Sound like a real mean person, NOT a robot. Be short and brutal. Think Regina George energy.`;
+                      ? "everyones watching"
+                      : "just you two"
+                  }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
 
               response = await llmService.generateContextualResponse(
                 messageText,
@@ -365,6 +700,9 @@ async function connectToWhatsApp() {
             }
 
             if (response) {
+              // Remove any quotes from the response
+              response = response.replace(/["""'']/g, "");
+              
               await sock.sendMessage(chatJid, { text: response });
               console.log(`✅ Response sent\n`);
             }

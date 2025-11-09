@@ -1,6 +1,7 @@
 const StickerService = require("../services/stickerService");
 const VoiceService = require("../services/voiceService");
 const YouTubeService = require("../services/youtubeService");
+const InteractionService = require("../services/interactionService");
 
 class CommandHandler {
   constructor(llmService) {
@@ -8,6 +9,7 @@ class CommandHandler {
     this.stickerService = new StickerService();
     this.voiceService = VoiceService;
     this.youtubeService = new YouTubeService();
+    this.interactionService = new InteractionService();
     this.currentContext = {};
     this.commands = {
       help: this.showHelp.bind(this),
@@ -47,6 +49,27 @@ class CommandHandler {
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
+      // Interaction commands
+      hug: this.handleInteraction.bind(this),
+      hugs: this.handleInteraction.bind(this),
+      kiss: this.handleInteraction.bind(this),
+      kisses: this.handleInteraction.bind(this),
+      fuck: this.handleInteraction.bind(this),
+      fucks: this.handleInteraction.bind(this),
+      pat: this.handleInteraction.bind(this),
+      pats: this.handleInteraction.bind(this),
+      love: this.handleInteraction.bind(this),
+      loves: this.handleInteraction.bind(this),
+      slap: this.handleInteraction.bind(this),
+      slaps: this.handleInteraction.bind(this),
+      punch: this.handleInteraction.bind(this),
+      punches: this.handleInteraction.bind(this),
+      bite: this.handleInteraction.bind(this),
+      bites: this.handleInteraction.bind(this),
+      poke: this.handleInteraction.bind(this),
+      pokes: this.handleInteraction.bind(this),
+      cuddle: this.handleInteraction.bind(this),
+      cuddles: this.handleInteraction.bind(this),
     };
   }
 
@@ -59,7 +82,7 @@ class CommandHandler {
     } = context;
 
     // Add context to command execution
-    this.currentContext = { senderName, isOwner, mood, message };
+    this.currentContext = { senderName, isOwner, mood, message, originalCommand: cmd };
 
     if (this.commands[cmd]) {
       return await this.commands[cmd](args, message);
@@ -124,6 +147,19 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-song [query]\` or \`-music [query]\` = Same thing
 • Example: \`-play Tera hone laga hoon\`
 • Returns: MP3 audio file ready to jam 🎧
+
+*💫 Interactions (with GIFs):*
+• \`-hug @person\` - Give someone a hug
+• \`-kiss @person\` - Kiss someone
+• \`-pat @person\` - Pat someone's head
+• \`-love @person\` - Show love to someone
+• \`-cuddle @person\` - Cuddle with someone
+• \`-slap @person\` - Slap someone
+• \`-punch @person\` - Punch someone
+• \`-bite @person\` - Bite someone
+• \`-poke @person\` - Poke someone
+• \`-fuck @person\` - Flip someone off
+• Example: \`-hug @Ansh\` sends a hug GIF!
 
 *🎯 Mention Me:*
 Say "Eden" or "@Eden" and I'll grace you with my presence. Maybe.
@@ -700,6 +736,128 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       ];
 
       return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+  }
+
+  async handleInteraction(args, message) {
+    try {
+      const { senderName = "User" } = this.currentContext;
+      const axios = require("axios");
+      
+      // Get command name (hug, kiss, etc.) - remove the 's' if present (hugs -> hug)
+      const cmd = this.currentContext.originalCommand || "hug";
+      const interaction = cmd.endsWith("s") && cmd.length > 4 ? cmd.slice(0, -1) : cmd;
+      
+      // Get the full message body to extract @ mentions
+      const fullMessage = message.body || "";
+      console.log(`📨 Full message:`, fullMessage);
+      
+      let target = "themselves";
+      let targetName = "themselves";
+      
+      // PRIORITY 1: Try to get mention from getMentions() - this has the proper name resolved
+      try {
+        const mentions = await message.getMentions();
+        if (mentions && mentions.length > 0) {
+          const mention = mentions[0];
+          // Use the resolved name (pushname or name) - this is the actual display name
+          targetName = mention.pushname || mention.name || mention.number || "someone";
+          target = `@${targetName}`;
+          
+          console.log(`📝 Using resolved mention:`, {
+            pushname: mention.pushname,
+            name: mention.name,
+            number: mention.number,
+            using: targetName
+          });
+        }
+      } catch (error) {
+        console.error("Error processing mentions in interaction:", error);
+      }
+      
+      // PRIORITY 2: If getMentions didn't work, try extracting from text
+      if (targetName === "themselves") {
+        const mentionMatch = fullMessage.match(/@([^\s]+)/);
+        
+        if (mentionMatch) {
+          // Found @mention in text - but only use if it's NOT just numbers (LID/phone)
+          const textName = mentionMatch[1];
+          if (!/^\d+$/.test(textName)) {
+            // It's a name, not a number
+            targetName = textName;
+            target = `@${targetName}`;
+            
+            console.log(`📝 Using name from text:`, {
+              fullMatch: mentionMatch[0],
+              name: targetName,
+              target: target,
+            });
+          } else {
+            console.log(`📝 Skipped number from text (${textName}), waiting for resolved name`);
+          }
+        } else if (args.length > 0) {
+          // No @ mention, but has args - use as target
+          target = args.join(" ");
+          targetName = target;
+          
+          console.log(`📝 Using args as target:`, { target, targetName });
+        }
+      }
+      
+      // Get interaction text
+      const interactionText = this.interactionService.getRandomTemplate(
+        interaction,
+        senderName,
+        target
+      );
+      
+      console.log(`💫 ${interaction} interaction: ${senderName} -> ${targetName}`);
+      
+      // Search for GIF
+      const gifResult = await this.interactionService.searchGif(interaction);
+      
+      if (gifResult && gifResult.url) {
+        try {
+          console.log(`🎬 Downloading GIF from: ${gifResult.url}`);
+          
+          // Download the GIF
+          const response = await axios.get(gifResult.url, {
+            responseType: "arraybuffer",
+            timeout: 10000,
+          });
+          
+          const gifBuffer = Buffer.from(response.data);
+          console.log(`✅ GIF downloaded, size: ${gifBuffer.length} bytes`);
+          
+          // Determine mimetype based on URL
+          const isMp4 = gifResult.url.toLowerCase().includes('.mp4') || 
+                        gifResult.url.toLowerCase().includes('mp4');
+          const mimetype = isMp4 ? 'video/mp4' : 'image/gif';
+          
+          console.log(`📹 Sending as:`, { mimetype, gifPlayback: true });
+          
+          // Return only media with caption (no separate text)
+          return {
+            media: {
+              video: gifBuffer,
+              gifPlayback: true,
+              mimetype: mimetype,
+            },
+            text: interactionText, // This will be used as caption
+          };
+        } catch (gifError) {
+          console.error("Error downloading GIF:", gifError.message);
+          // If GIF download fails, just return text
+          return interactionText;
+        }
+      } else {
+        console.log("⚠️ No GIF found, sending text only");
+        return interactionText;
+      }
+    } catch (error) {
+      console.error("Interaction error:", error);
+      const { senderName = "User" } = this.currentContext;
+      return `${senderName} tried to do something but failed miserably 🤡`;
     }
   }
 }
