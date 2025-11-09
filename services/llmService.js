@@ -65,7 +65,7 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
     }
   }
 
-  async generateContextualResponse(userMessage, context, metadata = {}) {
+  async generateContextualResponse(userMessage, context, metadata = {}, imageBase64 = null) {
     const {
       senderName = "User",
       mood = "sarcastic",
@@ -102,7 +102,12 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
     : ""
 }`;
 
-    const userPrompt = `${senderName} said: "${userMessage}"
+    const userPrompt = imageBase64
+      ? `${senderName} sent an image and said: "${userMessage}"
+${context}
+
+describe whats in the image and respond. be witty and sarcastic. 2-3 sentences max:`
+      : `${senderName} said: "${userMessage}"
 ${context}
 
 text back naturally. 1-2 sentences max. sound human not robotic:`;
@@ -112,7 +117,7 @@ text back naturally. 1-2 sentences max. sound human not robotic:`;
 
     try {
       if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
-        return await this.callGroq(userPrompt, systemMessage);
+        return await this.callGroq(userPrompt, systemMessage, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"

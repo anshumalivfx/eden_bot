@@ -730,6 +730,21 @@ async function connectToWhatsApp() {
 
             try {
               let response;
+              let imageBase64 = null;
+
+              // Check if message has an image
+              const hasImage = message.message?.imageMessage;
+              if (hasImage) {
+                try {
+                  console.log("📸 Detected image with mention, downloading...");
+                  const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+                  const buffer = await downloadMediaMessage(message, "buffer", {});
+                  imageBase64 = buffer.toString("base64");
+                  console.log("✅ Image downloaded and converted to base64");
+                } catch (imgError) {
+                  console.error("Error downloading image:", imgError);
+                }
+              }
 
               if (repliedTo) {
                 // Get the quoted message for context
@@ -747,24 +762,34 @@ async function connectToWhatsApp() {
                     }. sound natural not robotic. be short and savage. NEVER use quotation marks or quotes`;
 
                 response = await llmService.generateContextualResponse(
-                  messageText,
+                  messageText || "what do you think about this image",
                   context,
-                  { senderName, isOwner: owner, mood: "sarcastic" }
+                  { senderName, isOwner: owner, mood: "sarcastic" },
+                  imageBase64
                 );
               } else {
-                // Generate response based on mention
-                const context = owner
-                  ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
-                  : `${senderName} mentioned you: ${messageText}. ${
-                      isGroup
-                        ? "everyones watching"
-                        : "just you two"
-                    }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
+                // Generate response based on mention (with or without image)
+                const prompt = imageBase64 
+                  ? (messageText || "whats in this image") 
+                  : messageText;
+                  
+                const context = imageBase64
+                  ? (owner 
+                      ? `${senderName} sent you an image. hes your creator so be less harsh but still bratty. describe what you see and roast it. be casual. NEVER use quotation marks`
+                      : `${senderName} sent you an image. describe what you see and roast it savagely. be witty and brutal. ${isGroup ? "everyones watching" : "just you two"}. NEVER use quotation marks`)
+                  : (owner
+                      ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
+                      : `${senderName} mentioned you: ${messageText}. ${
+                          isGroup
+                            ? "everyones watching"
+                            : "just you two"
+                        }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`);
 
                 response = await llmService.generateContextualResponse(
-                  messageText,
+                  prompt,
                   context,
-                  { senderName, isOwner: owner, mood: "sarcastic" }
+                  { senderName, isOwner: owner, mood: "sarcastic" },
+                  imageBase64
                 );
               }
 
