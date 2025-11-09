@@ -49,6 +49,7 @@ class CommandHandler {
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
+      sys: this.systemInfo.bind(this), // System information
       // Interaction commands
       hug: this.handleInteraction.bind(this),
       hugs: this.handleInteraction.bind(this),
@@ -135,6 +136,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
+- \`-sys\` - Show system information (🖥️)
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -744,6 +746,28 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     ];
 
     return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  async systemInfo(args, message) {
+    const os = require('os');
+    
+    const platform = os.platform();
+    const arch = os.arch();
+    const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+    const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+    const usedMemGB = (totalMemGB - freeMemGB).toFixed(1);
+    const cpuCores = os.cpus().length;
+    const nodeVersion = process.version;
+    const uptimeHours = Math.floor(os.uptime() / 3600);
+    const uptimeMins = Math.floor((os.uptime() % 3600) / 60);
+    
+    return `🖥️ *System Info*
+
+💻 OS: ${platform} (${arch})
+⚙️ CPU: ${cpuCores} cores
+💾 RAM: ${usedMemGB}GB / ${totalMemGB}GB used
+⏱️ Uptime: ${uptimeHours}h ${uptimeMins}m
+🟢 Node: ${nodeVersion}`;
   }
 
   async playMusic(args, message) {
