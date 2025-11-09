@@ -751,23 +751,84 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   async systemInfo(args, message) {
     const os = require('os');
     
+    // System details
+    const hostname = os.hostname();
     const platform = os.platform();
     const arch = os.arch();
-    const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
-    const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(1);
-    const usedMemGB = (totalMemGB - freeMemGB).toFixed(1);
-    const cpuCores = os.cpus().length;
-    const nodeVersion = process.version;
-    const uptimeHours = Math.floor(os.uptime() / 3600);
-    const uptimeMins = Math.floor((os.uptime() % 3600) / 60);
+    const osType = os.type();
+    const osRelease = os.release();
     
-    return `🖥️ *System Info*
+    // Memory
+    const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(2);
+    const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(2);
+    const usedMemGB = (totalMemGB - freeMemGB).toFixed(2);
+    const memPercent = ((usedMemGB / totalMemGB) * 100).toFixed(1);
+    
+    // CPU
+    const cpus = os.cpus();
+    const cpuModel = cpus[0].model.trim();
+    const cpuCores = cpus.length;
+    const cpuSpeed = cpus[0].speed;
+    
+    // Uptime
+    const uptimeSeconds = os.uptime();
+    const uptimeDays = Math.floor(uptimeSeconds / 86400);
+    const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const uptimeMins = Math.floor((uptimeSeconds % 3600) / 60);
+    
+    // Process info
+    const nodeVersion = process.version;
+    const processUptime = Math.floor(process.uptime() / 60);
+    const processMem = (process.memoryUsage().heapUsed / (1024 ** 2)).toFixed(2);
+    
+    // Network interfaces count
+    const networkInterfaces = Object.keys(os.networkInterfaces()).length;
+    
+    // Savage intros
+    const intros = [
+      "Oh, you wanna know what's running this masterpiece? Fine. 🙄",
+      "Curious about my specs? Here's what makes me better than you:",
+      "Let me flex my hardware real quick... 💪",
+      "Checking my guts so you can be jealous? Alright:",
+      "You really think your potato can compare? Look at this:",
+      "Fine, I'll show you what real power looks like. Prepare to be humbled:",
+    ];
+    
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+    
+    // Memory status emoji
+    const memEmoji = memPercent > 80 ? "🔴" : memPercent > 60 ? "🟡" : "🟢";
+    
+    return `${intro}
 
-💻 OS: ${platform} (${arch})
-⚙️ CPU: ${cpuCores} cores
-💾 RAM: ${usedMemGB}GB / ${totalMemGB}GB used
-⏱️ Uptime: ${uptimeHours}h ${uptimeMins}m
-🟢 Node: ${nodeVersion}`;
+🖥️ *SYSTEM SPECS* (Yeah, I'm that good)
+━━━━━━━━━━━━━━━━━━━━
+
+📱 *Device:* ${hostname}
+💻 *OS:* ${osType} ${osRelease}
+🔧 *Platform:* ${platform} (${arch})
+
+⚙️ *CPU:* 
+└─ ${cpuModel}
+└─ ${cpuCores} cores @ ${cpuSpeed} MHz
+└─ (Probably better than yours 😏)
+
+💾 *Memory:*
+└─ Total: ${totalMemGB} GB
+└─ Used: ${usedMemGB} GB (${memPercent}%) ${memEmoji}
+└─ Free: ${freeMemGB} GB
+└─ Process: ${processMem} MB
+
+⏱️ *Uptime:*
+└─ System: ${uptimeDays}d ${uptimeHours}h ${uptimeMins}m
+└─ Bot: ${processUptime} minutes
+└─ (Been roasting people all day 🔥)
+
+🌐 *Network:* ${networkInterfaces} interface${networkInterfaces !== 1 ? 's' : ''}
+🟢 *Runtime:* Node.js ${nodeVersion}
+
+━━━━━━━━━━━━━━━━━━━━
+*Satisfied? Now go touch grass.* 🌱`;
   }
 
   async playMusic(args, message) {
