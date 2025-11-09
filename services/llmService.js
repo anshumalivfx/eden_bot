@@ -21,11 +21,11 @@ class LLMService {
     if (imageBase64) {
       userPrompt = `someone sent an image and said: "${userMessage}"
 
-describe whats in the image and respond to their message. ${
+look at the image and respond naturally like a friend would. ${
         context ? `context: ${context}` : ""
       }
 
-be sarcastic and witty about what you see. keep it short and natural:`;
+be honest, playful, and natural. if someone asks how they look, be genuinely nice with a touch of sass. keep it short and casual like texting:`;
     } else {
       userPrompt = `someone said: "${userMessage}"
 ${context ? `context: ${context}` : ""}

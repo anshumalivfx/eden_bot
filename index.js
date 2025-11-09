@@ -783,7 +783,15 @@ async function connectToWhatsApp() {
                     ?.quotedMessage?.conversation || "[Media/Sticker]";
 
                 // Generate response based on reply
-                const context = owner
+                const context = imageBase64
+                  ? owner
+                    ? `${senderName} replied to you with an image. hes your creator so be nice and friendly. look at the image and respond naturally like a friend would. be honest and kind. NEVER use quotation marks`
+                    : `${senderName} replied to you with an image. look at it and respond like a real person. be playful and genuine, not harsh. if its personal (like selfie), be encouraging. sound natural. ${
+                        isGroup
+                          ? "everyones watching in the group"
+                          : "just you two"
+                      }. NEVER use quotation marks`
+                  : owner
                   ? `${senderName} replied to your text. hes your creator so be less harsh but still annoying. like youre rolling your eyes but lowkey care. text casually like a real person. NEVER use quotation marks or quotes around words`
                   : `${senderName} replied to you saying: ${messageText}. you said before: ${quotedText}. text back sarcastic and witty. ${
                       isGroup
@@ -805,8 +813,8 @@ async function connectToWhatsApp() {
 
                 const context = imageBase64
                   ? owner
-                    ? `${senderName} sent you an image. hes your creator so be less harsh but still bratty. describe what you see and roast it. be casual. NEVER use quotation marks`
-                    : `${senderName} sent you an image. describe what you see and roast it savagely. be witty and brutal. ${
+                    ? `${senderName} sent you an image. hes your creator so be nice but still sassy. look at the image and respond like a real friend would - be honest but kind. if they ask how they look, be genuinely nice with a playful twist. respond naturally like texting a friend. NEVER use quotation marks`
+                    : `${senderName} sent you an image. look at it and respond like a real person texting. be playful and witty but not mean. if someone asks how they look, be nice and encouraging with some sass. if its a selfie, compliment them genuinely. keep it natural and friendly. ${
                         isGroup ? "everyones watching" : "just you two"
                       }. NEVER use quotation marks`
                   : owner
@@ -827,7 +835,12 @@ async function connectToWhatsApp() {
                 // Remove any quotes from the response
                 response = response.replace(/["""'']/g, "");
 
-                await sock.sendMessage(chatJid, { text: response });
+                // Quote the original message when replying
+                await sock.sendMessage(
+                  chatJid,
+                  { text: response },
+                  { quoted: message }
+                );
                 console.log(`✅ Mention/Reply response sent\n`);
               } else {
                 console.log(`⚠️ LLM returned no response\n`);
