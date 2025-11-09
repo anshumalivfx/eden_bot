@@ -113,6 +113,20 @@ function isGroupChat(jid) {
   return jid?.endsWith("@g.us");
 }
 
+// Filter console logs to hide verbose Baileys session messages
+const originalConsoleLog = console.log;
+console.log = function(...args) {
+  const message = args.join(' ');
+  // Hide "Closing stale open session" messages - they're just noise
+  if (message.includes('Closing stale open session') || 
+      message.includes('SessionEntry') ||
+      message.includes('pendingPreKey') ||
+      message.includes('registrationId')) {
+    return;
+  }
+  originalConsoleLog.apply(console, args);
+};
+
 // Connect to WhatsApp
 async function connectToWhatsApp() {
   try {
@@ -557,51 +571,73 @@ async function connectToWhatsApp() {
               }
             }
 
-            const response = await commandHandler.handleCommand(
-              command,
-              messageAdapter,
-              {
-                senderName,
-                isOwner: owner,
-                mood: "sarcastic",
-              }
-            );
+            try {
+              const response = await commandHandler.handleCommand(
+                command,
+                messageAdapter,
+                {
+                  senderName,
+                  isOwner: owner,
+                  mood: "sarcastic",
+                }
+              );
 
-            if (response) {
-              const quotedMsg = {
-                key: message.key,
-                message: message.message,
-              };
+              if (response) {
+                const quotedMsg = {
+                  key: message.key,
+                  message: message.message,
+                };
 
-              if (typeof response === "object" && response.media) {
-                if (response.text) {
-                  // Remove quotes from text
-                  const cleanText = response.text.replace(/["""'']/g, "");
+                if (typeof response === "object" && response.media) {
+                  if (response.text) {
+                    // Remove quotes from text
+                    const cleanText = response.text.replace(/["""'']/g, "");
+                    await sock.sendMessage(
+                      chatJid,
+                      {
+                        text: cleanText,
+                      },
+                      { quoted: quotedMsg }
+                    );
+                  }
                   await sock.sendMessage(
                     chatJid,
                     {
-                      text: cleanText,
+                      ...response.media,
+                    },
+                    { quoted: quotedMsg }
+                  );
+                } else {
+                  // Remove quotes from response
+                  const cleanResponse = response.replace(/["""'']/g, "");
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      text: cleanResponse,
                     },
                     { quoted: quotedMsg }
                   );
                 }
-                await sock.sendMessage(
-                  chatJid,
-                  {
-                    ...response.media,
-                  },
-                  { quoted: quotedMsg }
-                );
+                console.log(`✅ Command response sent\n`);
               } else {
-                // Remove quotes from response
-                const cleanResponse = response.replace(/["""'']/g, "");
+                console.log(`⚠️ Command handler returned no response\n`);
+              }
+            } catch (cmdError) {
+              console.error("❌ Error executing command:", cmdError);
+              console.error("   Command:", command);
+              console.error("   Error message:", cmdError.message);
+              
+              // Send error message to user
+              try {
                 await sock.sendMessage(
                   chatJid,
                   {
-                    text: cleanResponse,
+                    text: "Ugh, something went wrong. Even I can't mess up this badly. Try again later. 🙄",
                   },
-                  { quoted: quotedMsg }
+                  { quoted: { key: message.key, message: message.message } }
                 );
+              } catch (sendError) {
+                console.error("❌ Failed to send error message:", sendError);
               }
             }
             continue;
@@ -660,51 +696,68 @@ async function connectToWhatsApp() {
               }
             }
 
-            let response;
+            try {
+              let response;
 
-            if (repliedTo) {
-              // Get the quoted message for context
-              const quotedText =
-                message.message?.extendedTextMessage?.contextInfo?.quotedMessage
-                  ?.conversation || "[Media/Sticker]";
+              if (repliedTo) {
+                // Get the quoted message for context
+                const quotedText =
+                  message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+                    ?.conversation || "[Media/Sticker]";
 
-              // Generate response based on reply
-              const context = owner
-                ? `${senderName} replied to your text. hes your creator so be less harsh but still annoying. like youre rolling your eyes but lowkey care. text casually like a real person. NEVER use quotation marks or quotes around words`
-                : `${senderName} replied to you saying: ${messageText}. you said before: ${quotedText}. text back sarcastic and witty. ${
-                    isGroup
-                      ? "everyones watching in the group"
-                      : "just you two"
-                  }. sound natural not robotic. be short and savage. NEVER use quotation marks or quotes`;
+                // Generate response based on reply
+                const context = owner
+                  ? `${senderName} replied to your text. hes your creator so be less harsh but still annoying. like youre rolling your eyes but lowkey care. text casually like a real person. NEVER use quotation marks or quotes around words`
+                  : `${senderName} replied to you saying: ${messageText}. you said before: ${quotedText}. text back sarcastic and witty. ${
+                      isGroup
+                        ? "everyones watching in the group"
+                        : "just you two"
+                    }. sound natural not robotic. be short and savage. NEVER use quotation marks or quotes`;
 
-              response = await llmService.generateContextualResponse(
-                messageText,
-                context,
-                { senderName, isOwner: owner, mood: "sarcastic" }
-              );
-            } else {
-              // Generate response based on mention
-              const context = owner
-                ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
-                : `${senderName} mentioned you: ${messageText}. ${
-                    isGroup
-                      ? "everyones watching"
-                      : "just you two"
-                  }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
+                response = await llmService.generateContextualResponse(
+                  messageText,
+                  context,
+                  { senderName, isOwner: owner, mood: "sarcastic" }
+                );
+              } else {
+                // Generate response based on mention
+                const context = owner
+                  ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
+                  : `${senderName} mentioned you: ${messageText}. ${
+                      isGroup
+                        ? "everyones watching"
+                        : "just you two"
+                    }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
 
-              response = await llmService.generateContextualResponse(
-                messageText,
-                context,
-                { senderName, isOwner: owner, mood: "sarcastic" }
-              );
-            }
+                response = await llmService.generateContextualResponse(
+                  messageText,
+                  context,
+                  { senderName, isOwner: owner, mood: "sarcastic" }
+                );
+              }
 
-            if (response) {
-              // Remove any quotes from the response
-              response = response.replace(/["""'']/g, "");
+              if (response) {
+                // Remove any quotes from the response
+                response = response.replace(/["""'']/g, "");
+                
+                await sock.sendMessage(chatJid, { text: response });
+                console.log(`✅ Mention/Reply response sent\n`);
+              } else {
+                console.log(`⚠️ LLM returned no response\n`);
+              }
+            } catch (llmError) {
+              console.error("❌ Error generating LLM response:", llmError);
+              console.error("   Message:", messageText);
+              console.error("   Error message:", llmError.message);
               
-              await sock.sendMessage(chatJid, { text: response });
-              console.log(`✅ Response sent\n`);
+              // Send error message to user
+              try {
+                await sock.sendMessage(chatJid, {
+                  text: "My brain crashed. Even sarcasm has limits apparently. Try again? 🤷",
+                });
+              } catch (sendError) {
+                console.error("❌ Failed to send error message:", sendError);
+              }
             }
           }
         }
