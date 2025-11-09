@@ -49,8 +49,6 @@ class CommandHandler {
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
-      sysinfo: this.showSystemInfo.bind(this), // System information
-      sys: this.showSystemInfo.bind(this), // Alias for sysinfo
       // Interaction commands
       hug: this.handleInteraction.bind(this),
       hugs: this.handleInteraction.bind(this),
@@ -137,7 +135,6 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
-- \`-sysinfo\` or \`-sys\` - Show system & device information (🖥️)
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -747,67 +744,6 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     ];
 
     return responses[Math.floor(Math.random() * responses.length)];
-  }
-
-  async showSystemInfo(args, message) {
-    const os = require("os");
-
-    // Get system information
-    const hostname = os.hostname();
-    const platform = os.platform();
-    const arch = os.arch();
-    const totalRam = (os.totalmem() / 1024 ** 3).toFixed(2); // GB
-    const freeRam = (os.freemem() / 1024 ** 3).toFixed(2); // GB
-    const usedRam = (totalRam - freeRam).toFixed(2);
-    const ramUsagePercent = ((usedRam / totalRam) * 100).toFixed(1);
-    const cpuModel = os.cpus()[0].model;
-    const cpuCores = os.cpus().length;
-    const uptime = Math.floor(os.uptime() / 3600); // Hours
-    const nodeVersion = process.version;
-    const osType = os.type();
-    const osRelease = os.release();
-
-    // Process info
-    const processUptime = Math.floor(process.uptime() / 60); // Minutes
-    const processMemory = (process.memoryUsage().heapUsed / 1024 ** 2).toFixed(
-      2
-    ); // MB
-
-    // Sarcastic intro
-    const intros = [
-      "Fine, here's what's powering this genius bot:",
-      "Oh wow, you actually care about my hardware? Here:",
-      "Let me bore you with technical details:",
-      "Since you asked so nicely, here's my setup:",
-      "Checking my insides... here you go:",
-    ];
-
-    const intro = intros[Math.floor(Math.random() * intros.length)];
-
-    return `${intro}
-
-🖥️ *System Information:*
-━━━━━━━━━━━━━━━━━━━━
-
-🔧 *OS:* ${osType} ${osRelease}
-💻 *Platform:* ${platform} (${arch})
-
-⚙️ *Processor:*
-└─ ${cpuModel}
-└─ ${cpuCores} cores
-
-💾 *RAM Usage:*
-└─ Used: ${usedRam} GB / ${totalRam} GB (${ramUsagePercent}%)
-└─ Free: ${freeRam} GB
-
-📊 *Runtime Info:*
-└─ System Uptime: ${uptime} hours
-└─ Bot Uptime: ${processUptime} minutes
-└─ Bot Memory: ${processMemory} MB
-└─ Node.js: ${nodeVersion}
-
-━━━━━━━━━━━━━━━━━━━━
-*Happy now? 🙄*`;
   }
 
   async playMusic(args, message) {
