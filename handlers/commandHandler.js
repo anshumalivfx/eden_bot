@@ -1,6 +1,7 @@
 const StickerService = require("../services/stickerService");
 const VoiceService = require("../services/voiceService");
 const YouTubeService = require("../services/youtubeService");
+const InteractionService = require("../services/interactionService");
 
 class CommandHandler {
   constructor(llmService) {
@@ -8,6 +9,7 @@ class CommandHandler {
     this.stickerService = new StickerService();
     this.voiceService = VoiceService;
     this.youtubeService = new YouTubeService();
+    this.interactionService = new InteractionService();
     this.currentContext = {};
     this.commands = {
       help: this.showHelp.bind(this),
@@ -47,6 +49,29 @@ class CommandHandler {
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
+      sysinfo: this.showSystemInfo.bind(this), // System information
+      sys: this.showSystemInfo.bind(this), // Alias for sysinfo
+      // Interaction commands
+      hug: this.handleInteraction.bind(this),
+      hugs: this.handleInteraction.bind(this),
+      kiss: this.handleInteraction.bind(this),
+      kisses: this.handleInteraction.bind(this),
+      fuck: this.handleInteraction.bind(this),
+      fucks: this.handleInteraction.bind(this),
+      pat: this.handleInteraction.bind(this),
+      pats: this.handleInteraction.bind(this),
+      love: this.handleInteraction.bind(this),
+      loves: this.handleInteraction.bind(this),
+      slap: this.handleInteraction.bind(this),
+      slaps: this.handleInteraction.bind(this),
+      punch: this.handleInteraction.bind(this),
+      punches: this.handleInteraction.bind(this),
+      bite: this.handleInteraction.bind(this),
+      bites: this.handleInteraction.bind(this),
+      poke: this.handleInteraction.bind(this),
+      pokes: this.handleInteraction.bind(this),
+      cuddle: this.handleInteraction.bind(this),
+      cuddles: this.handleInteraction.bind(this),
     };
   }
 
@@ -59,7 +84,13 @@ class CommandHandler {
     } = context;
 
     // Add context to command execution
-    this.currentContext = { senderName, isOwner, mood, message };
+    this.currentContext = {
+      senderName,
+      isOwner,
+      mood,
+      message,
+      originalCommand: cmd,
+    };
 
     if (this.commands[cmd]) {
       return await this.commands[cmd](args, message);
@@ -106,6 +137,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
+- \`-sysinfo\` or \`-sys\` - Show system & device information (🖥️)
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -124,6 +156,19 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-song [query]\` or \`-music [query]\` = Same thing
 • Example: \`-play Tera hone laga hoon\`
 • Returns: MP3 audio file ready to jam 🎧
+
+*💫 Interactions (with GIFs):*
+• \`-hug @person\` - Give someone a hug
+• \`-kiss @person\` - Kiss someone
+• \`-pat @person\` - Pat someone's head
+• \`-love @person\` - Show love to someone
+• \`-cuddle @person\` - Cuddle with someone
+• \`-slap @person\` - Slap someone
+• \`-punch @person\` - Punch someone
+• \`-bite @person\` - Bite someone
+• \`-poke @person\` - Poke someone
+• \`-fuck @person\` - Flip someone off
+• Example: \`-hug @Ansh\` sends a hug GIF!
 
 *🎯 Mention Me:*
 Say "Eden" or "@Eden" and I'll grace you with my presence. Maybe.
@@ -225,13 +270,54 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
   async askQuestion(args, message) {
     const question = args.join(" ");
-    if (!question) {
+    let imageBase64 = null;
+
+    // Check if message has an image
+    if (message.hasMedia) {
+      try {
+        console.log("📸 Detected image in message, downloading...");
+        const media = await message.downloadMedia();
+
+        if (media && media.data) {
+          imageBase64 = media.data;
+          console.log("✅ Image downloaded successfully");
+        }
+      } catch (error) {
+        console.error("Error downloading image:", error);
+      }
+    }
+
+    // Check if this is a reply to a message with an image
+    if (!imageBase64 && message.hasQuotedMsg) {
+      try {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg && quotedMsg.hasMedia) {
+          console.log("📸 Detected image in quoted message, downloading...");
+          const media = await quotedMsg.downloadMedia();
+
+          if (media && media.data) {
+            imageBase64 = media.data;
+            console.log("✅ Quoted image downloaded successfully");
+          }
+        }
+      } catch (error) {
+        console.error("Error downloading quoted image:", error);
+      }
+    }
+
+    if (!question && !imageBase64) {
       return "Oh great, you want to ask a question but forgot to actually ask it. Brilliant. 🙄";
     }
 
+    const prompt = question || "whats in this image";
+    const context = imageBase64
+      ? "Look at the image and respond. describe what you see and be sarcastic about it"
+      : "Answer this question in a mean, sarcastic way but still be somewhat helpful";
+
     return await this.llmService.generateMeanResponse(
-      question,
-      "Answer this question in a mean, sarcastic way but still be somewhat helpful"
+      prompt,
+      context,
+      imageBase64
     );
   }
 
@@ -423,16 +509,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           return "I can only work with images, GIFs, or videos. What you sent me is... questionable. 🤔";
         }
 
-        // Create and send media sticker
-        const { MessageMedia } = require("whatsapp-web.js");
-        const stickerMedia = new MessageMedia(
-          "image/webp",
-          stickerBuffer.toString("base64"),
-          "sticker.webp"
-        );
-
-        await message.reply(stickerMedia, undefined, {
-          sendMediaAsSticker: true,
+        // Send sticker with Baileys
+        await message.reply({
+          sticker: stickerBuffer,
         });
         return this.stickerService.getRandomStickerQuote();
       } else if (targetMessage.body && targetMessage.body.trim()) {
@@ -452,16 +531,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           "text"
         );
 
-        // Create and send text sticker
-        const { MessageMedia } = require("whatsapp-web.js");
-        const stickerMedia = new MessageMedia(
-          "image/webp",
-          stickerBuffer.toString("base64"),
-          "text_sticker.webp"
-        );
-
-        await message.reply(stickerMedia, undefined, {
-          sendMediaAsSticker: true,
+        // Send text sticker with Baileys
+        await message.reply({
+          sticker: stickerBuffer,
         });
         return this.stickerService.getRandomTextStickerQuote();
       } else {
@@ -549,16 +621,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         personality
       );
 
-      // Send the audio file
-      const { MessageMedia } = require("whatsapp-web.js");
+      // Send the audio file with Baileys
       const fs = require("fs");
-
       const audioData = fs.readFileSync(voiceResult.filepath);
-      const media = new MessageMedia(
-        "audio/mpeg",
-        audioData.toString("base64"),
-        `eden_voice_${Date.now()}.mp3`
-      );
 
       // Clean up the file
       setTimeout(() => {
@@ -571,7 +636,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         }\n📝 *Original*: "${voiceResult.originalText.substring(0, 50)}${
           voiceResult.originalText.length > 50 ? "..." : ""
         }"`,
-        media: media,
+        media: {
+          audio: audioData,
+          mimetype: "audio/mpeg",
+          ptt: true, // Send as voice note
+        },
       };
     } catch (error) {
       console.error("Voice creation error:", error);
@@ -626,7 +695,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       // Get bot instance from global (we'll set this up)
       const bot = global.edenBot;
-      
+
       if (!bot) {
         return "📊 *Eden Status*\n\n✅ Bot is active and responding!\n🤖 All systems operational";
       }
@@ -642,13 +711,21 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       status += `📨 *Messages Received:* ${bot.messageCount}\n`;
       status += `🎯 *Commands Executed:* ${bot.commandCount}\n`;
       status += `😈 *Current Mood:* ${bot.currentMood}\n`;
-      status += `🧠 *LLM Provider:* ${process.env.GROQ_API_KEY ? 'Groq (Free)' : 'Fallback'}\n`;
+      status += `🧠 *LLM Provider:* ${
+        process.env.GROQ_API_KEY ? "Groq (Free)" : "Fallback"
+      }\n`;
       status += `💬 *Command Prefix:* -\n`;
       status += `🎭 *Features:*\n`;
-      status += `   • Name Triggers: ${bot.triggerNames.join(', ')}\n`;
-      status += `   • Mood System: ${bot.enableMoodSystem ? 'Active' : 'Disabled'}\n`;
-      status += `   • Random Messages: ${bot.enableRandomMessages ? 'Active' : 'Disabled'}\n`;
-      status += `   • Smart Context: ${bot.enableSmartContext ? 'Active' : 'Disabled'}\n`;
+      status += `   • Name Triggers: ${bot.triggerNames.join(", ")}\n`;
+      status += `   • Mood System: ${
+        bot.enableMoodSystem ? "Active" : "Disabled"
+      }\n`;
+      status += `   • Random Messages: ${
+        bot.enableRandomMessages ? "Active" : "Disabled"
+      }\n`;
+      status += `   • Smart Context: ${
+        bot.enableSmartContext ? "Active" : "Disabled"
+      }\n`;
       status += `\n💡 *Tip:* Use \`-help\` to see all commands`;
 
       return status;
@@ -668,14 +745,75 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       "😈 Present and accounted for! What do you want?",
       "🔥 Alive, active, and ready to burn!",
     ];
-    
+
     return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  async showSystemInfo(args, message) {
+    const os = require("os");
+
+    // Get system information
+    const hostname = os.hostname();
+    const platform = os.platform();
+    const arch = os.arch();
+    const totalRam = (os.totalmem() / 1024 ** 3).toFixed(2); // GB
+    const freeRam = (os.freemem() / 1024 ** 3).toFixed(2); // GB
+    const usedRam = (totalRam - freeRam).toFixed(2);
+    const ramUsagePercent = ((usedRam / totalRam) * 100).toFixed(1);
+    const cpuModel = os.cpus()[0].model;
+    const cpuCores = os.cpus().length;
+    const uptime = Math.floor(os.uptime() / 3600); // Hours
+    const nodeVersion = process.version;
+    const osType = os.type();
+    const osRelease = os.release();
+
+    // Process info
+    const processUptime = Math.floor(process.uptime() / 60); // Minutes
+    const processMemory = (process.memoryUsage().heapUsed / 1024 ** 2).toFixed(
+      2
+    ); // MB
+
+    // Sarcastic intro
+    const intros = [
+      "Fine, here's what's powering this genius bot:",
+      "Oh wow, you actually care about my hardware? Here:",
+      "Let me bore you with technical details:",
+      "Since you asked so nicely, here's my setup:",
+      "Checking my insides... here you go:",
+    ];
+
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+
+    return `${intro}
+
+🖥️ *System Information:*
+━━━━━━━━━━━━━━━━━━━━
+
+🔧 *OS:* ${osType} ${osRelease}
+💻 *Platform:* ${platform} (${arch})
+
+⚙️ *Processor:*
+└─ ${cpuModel}
+└─ ${cpuCores} cores
+
+💾 *RAM Usage:*
+└─ Used: ${usedRam} GB / ${totalRam} GB (${ramUsagePercent}%)
+└─ Free: ${freeRam} GB
+
+📊 *Runtime Info:*
+└─ System Uptime: ${uptime} hours
+└─ Bot Uptime: ${processUptime} minutes
+└─ Bot Memory: ${processMemory} MB
+└─ Node.js: ${nodeVersion}
+
+━━━━━━━━━━━━━━━━━━━━
+*Happy now? 🙄*`;
   }
 
   async playMusic(args, message) {
     try {
       const query = args.join(" ");
-      
+
       if (!query || query.trim().length === 0) {
         return "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
       }
@@ -690,33 +828,30 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Search and download
       const result = await this.youtubeService.searchAndDownload(query);
 
-      // Create media message
-      const { MessageMedia } = require("whatsapp-web.js");
+      // Prepare media with Baileys
       const fs = require("fs");
-
       const audioData = fs.readFileSync(result.filepath);
-      const audioMedia = new MessageMedia(
-        "audio/mpeg",
-        audioData.toString("base64"),
-        `${result.title}.mp3`
-      );
-
       const sassyQuote = this.youtubeService.getRandomYouTubeQuote();
-      
+
       // Send thumbnail if available
+      console.log("📸 Thumbnail check:", {
+        hasThumbnail: !!result.thumbnail,
+        hasFilepath: result.thumbnail?.filepath,
+      });
+
       if (result.thumbnail && result.thumbnail.filepath) {
         try {
+          console.log("📸 Reading thumbnail from:", result.thumbnail.filepath);
           const thumbnailData = fs.readFileSync(result.thumbnail.filepath);
-          const thumbnailMedia = new MessageMedia(
-            "image/jpeg",
-            thumbnailData.toString("base64"),
-            "thumbnail.jpg"
-          );
+          console.log("📸 Thumbnail size:", thumbnailData.length, "bytes");
 
-          // Send thumbnail with caption
-          await message.reply(thumbnailMedia, undefined, {
+          // Send thumbnail with caption using Baileys
+          console.log("📸 Sending thumbnail...");
+          await message.reply({
+            image: thumbnailData,
             caption: `🎵 *${result.title}*\n\n${sassyQuote}`,
           });
+          console.log("✅ Thumbnail sent successfully");
 
           // Clean up thumbnail after a delay
           setTimeout(() => {
@@ -739,7 +874,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Return the audio media (caption/text already sent above)
       return {
-        media: audioMedia,
+        media: {
+          audio: audioData,
+          mimetype: "audio/mpeg",
+        },
       };
     } catch (error) {
       console.error("Play music error:", error);
@@ -748,12 +886,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         return "Ugh, I can't download music without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
       }
 
-      if (error.message.includes("ffmpeg not found") || error.message.includes("ffprobe")) {
+      if (
+        error.message.includes("ffmpeg not found") ||
+        error.message.includes("ffprobe")
+      ) {
         return "I need ffmpeg to convert videos to MP3, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
       }
 
       if (error.message.includes("Could not find video")) {
-        return `Couldn't find "${args.join(" ")}" on YouTube. Maybe try spelling it correctly? 🤔`;
+        return `Couldn't find "${args.join(
+          " "
+        )}" on YouTube. Maybe try spelling it correctly? 🤔`;
       }
 
       const errorResponses = [
@@ -764,6 +907,135 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       ];
 
       return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+  }
+
+  async handleInteraction(args, message) {
+    try {
+      const { senderName = "User" } = this.currentContext;
+      const axios = require("axios");
+
+      // Get command name (hug, kiss, etc.) - remove the 's' if present (hugs -> hug)
+      const cmd = this.currentContext.originalCommand || "hug";
+      const interaction =
+        cmd.endsWith("s") && cmd.length > 4 ? cmd.slice(0, -1) : cmd;
+
+      // Get the full message body to extract @ mentions
+      const fullMessage = message.body || "";
+      console.log(`📨 Full message:`, fullMessage);
+
+      let target = "themselves";
+      let targetName = "themselves";
+
+      // PRIORITY 1: Try to get mention from getMentions() - this has the proper name resolved
+      try {
+        const mentions = await message.getMentions();
+        if (mentions && mentions.length > 0) {
+          const mention = mentions[0];
+          // Use the resolved name (pushname or name) - this is the actual display name
+          targetName =
+            mention.pushname || mention.name || mention.number || "someone";
+          target = `@${targetName}`;
+
+          console.log(`📝 Using resolved mention:`, {
+            pushname: mention.pushname,
+            name: mention.name,
+            number: mention.number,
+            using: targetName,
+          });
+        }
+      } catch (error) {
+        console.error("Error processing mentions in interaction:", error);
+      }
+
+      // PRIORITY 2: If getMentions didn't work, try extracting from text
+      if (targetName === "themselves") {
+        const mentionMatch = fullMessage.match(/@([^\s]+)/);
+
+        if (mentionMatch) {
+          // Found @mention in text - but only use if it's NOT just numbers (LID/phone)
+          const textName = mentionMatch[1];
+          if (!/^\d+$/.test(textName)) {
+            // It's a name, not a number
+            targetName = textName;
+            target = `@${targetName}`;
+
+            console.log(`📝 Using name from text:`, {
+              fullMatch: mentionMatch[0],
+              name: targetName,
+              target: target,
+            });
+          } else {
+            console.log(
+              `📝 Skipped number from text (${textName}), waiting for resolved name`
+            );
+          }
+        } else if (args.length > 0) {
+          // No @ mention, but has args - use as target
+          target = args.join(" ");
+          targetName = target;
+
+          console.log(`📝 Using args as target:`, { target, targetName });
+        }
+      }
+
+      // Get interaction text
+      const interactionText = this.interactionService.getRandomTemplate(
+        interaction,
+        senderName,
+        target
+      );
+
+      console.log(
+        `💫 ${interaction} interaction: ${senderName} -> ${targetName}`
+      );
+
+      // Search for GIF
+      const gifResult = await this.interactionService.searchGif(interaction);
+
+      if (gifResult && gifResult.url) {
+        try {
+          console.log(`🎬 Downloading GIF from: ${gifResult.url}`);
+
+          // Download the GIF
+          const response = await axios.get(gifResult.url, {
+            responseType: "arraybuffer",
+            timeout: 10000,
+          });
+
+          const gifBuffer = Buffer.from(response.data);
+          console.log(`✅ GIF downloaded, size: ${gifBuffer.length} bytes`);
+
+          // Determine mimetype based on URL
+          const isMp4 =
+            gifResult.url.toLowerCase().includes(".mp4") ||
+            gifResult.url.toLowerCase().includes("mp4");
+          const mimetype = isMp4 ? "video/mp4" : "image/gif";
+
+          console.log(`📹 Sending as:`, { mimetype, gifPlayback: true });
+
+          // Return only media with caption (no separate text)
+          return {
+            media: {
+              video: gifBuffer,
+              gifPlayback: true,
+              mimetype: mimetype,
+            },
+            text: interactionText, // This will be used as caption
+          };
+        } catch (gifError) {
+          console.error("Error downloading GIF:", gifError.message);
+          // If GIF download fails, just return text
+          return interactionText;
+        }
+      } else {
+        console.log("⚠️ No GIF found, sending text only");
+        return interactionText;
+      }
+    } catch (error) {
+      console.error("Interaction error:", error);
+      const { senderName = "User" } = this.currentContext;
+      return `${senderName} tried to do something but failed miserably 🤡`;
     }
   }
 }
