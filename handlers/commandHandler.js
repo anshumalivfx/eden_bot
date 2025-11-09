@@ -756,7 +756,6 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     const platform = os.platform();
     const arch = os.arch();
     const osType = os.type();
-    const osRelease = os.release();
     
     // Memory
     const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(2);
@@ -768,7 +767,6 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     const cpus = os.cpus();
     const cpuModel = cpus[0].model.trim();
     const cpuCores = cpus.length;
-    const cpuSpeed = cpus[0].speed;
     
     // Uptime
     const uptimeSeconds = os.uptime();
@@ -781,17 +779,23 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     const processUptime = Math.floor(process.uptime() / 60);
     const processMem = (process.memoryUsage().heapUsed / (1024 ** 2)).toFixed(2);
     
-    // Network interfaces count
-    const networkInterfaces = Object.keys(os.networkInterfaces()).length;
+    // Detect if Raspberry Pi
+    const isRaspberryPi = cpuModel.toLowerCase().includes('arm') || 
+                          platform === 'linux' && arch.includes('arm');
     
-    // Savage intros
-    const intros = [
+    // Self-deprecating intros for Pi, savage for others
+    const intros = isRaspberryPi ? [
+      "Yeah yeah, I'm running on a Raspberry Pi. Don't judge me. 🍓",
+      "Look, I know I'm on a tiny computer. Still smarter than you though. 🤷",
+      "Running on a Pi and STILL more capable than you. Sad. 😏",
+      "My hardware is literally the size of a credit card. Your excuses? �",
+      "Yes, this is a Raspberry Pi. No, I'm not impressed by your gaming PC. 🙄",
+      "Potato PC? More like I'm running on an actual fruit and still winning. 🍓",
+    ] : [
       "Oh, you wanna know what's running this masterpiece? Fine. 🙄",
-      "Curious about my specs? Here's what makes me better than you:",
-      "Let me flex my hardware real quick... 💪",
-      "Checking my guts so you can be jealous? Alright:",
-      "You really think your potato can compare? Look at this:",
-      "Fine, I'll show you what real power looks like. Prepare to be humbled:",
+      "Curious about my specs? Here's what I'm working with:",
+      "Let me show you what I'm running on... 💻",
+      "Checking my guts? Alright, here you go:",
     ];
     
     const intro = intros[Math.floor(Math.random() * intros.length)];
@@ -799,36 +803,47 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     // Memory status emoji
     const memEmoji = memPercent > 80 ? "🔴" : memPercent > 60 ? "🟡" : "🟢";
     
+    // Savage ending based on hardware
+    const endings = isRaspberryPi ? [
+      "*Look, I might be smol but I'm mighty. Don't @ me.* 💪",
+      "*Tiny hardware, MASSIVE attitude. Deal with it.* 😤",
+      "*Yeah I'm pocket-sized. Your brain is too.* 🧠",
+      "*Small but deadly. Like a chihuahua. 🐕*",
+    ] : [
+      "*Satisfied? Now go touch grass.* 🌱",
+      "*There you go. Happy now?* 🙄",
+      "*Impressed? You should be.* 💅",
+    ];
+    
+    const ending = endings[Math.floor(Math.random() * endings.length)];
+    
     return `${intro}
 
-🖥️ *SYSTEM SPECS* (Yeah, I'm that good)
+🖥️ *SYSTEM INFO*
 ━━━━━━━━━━━━━━━━━━━━
 
 📱 *Device:* ${hostname}
-💻 *OS:* ${osType} ${osRelease}
-🔧 *Platform:* ${platform} (${arch})
+💻 *OS:* ${osType} ${platform}
+🔧 *Architecture:* ${arch}
 
 ⚙️ *CPU:* 
 └─ ${cpuModel}
-└─ ${cpuCores} cores @ ${cpuSpeed} MHz
-└─ (Probably better than yours 😏)
+└─ ${cpuCores} core${cpuCores > 1 ? 's' : ''}
 
 💾 *Memory:*
 └─ Total: ${totalMemGB} GB
 └─ Used: ${usedMemGB} GB (${memPercent}%) ${memEmoji}
 └─ Free: ${freeMemGB} GB
-└─ Process: ${processMem} MB
+└─ Bot: ${processMem} MB
 
 ⏱️ *Uptime:*
 └─ System: ${uptimeDays}d ${uptimeHours}h ${uptimeMins}m
-└─ Bot: ${processUptime} minutes
-└─ (Been roasting people all day 🔥)
+└─ Bot: ${processUptime} min
 
-🌐 *Network:* ${networkInterfaces} interface${networkInterfaces !== 1 ? 's' : ''}
 🟢 *Runtime:* Node.js ${nodeVersion}
 
 ━━━━━━━━━━━━━━━━━━━━
-*Satisfied? Now go touch grass.* 🌱`;
+${ending}`;
   }
 
   async playMusic(args, message) {
