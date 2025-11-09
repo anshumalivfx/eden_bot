@@ -49,6 +49,8 @@ class CommandHandler {
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
+      sysinfo: this.showSystemInfo.bind(this), // System information
+      sys: this.showSystemInfo.bind(this), // Alias for sysinfo
       // Interaction commands
       hug: this.handleInteraction.bind(this),
       hugs: this.handleInteraction.bind(this),
@@ -82,7 +84,13 @@ class CommandHandler {
     } = context;
 
     // Add context to command execution
-    this.currentContext = { senderName, isOwner, mood, message, originalCommand: cmd };
+    this.currentContext = {
+      senderName,
+      isOwner,
+      mood,
+      message,
+      originalCommand: cmd,
+    };
 
     if (this.commands[cmd]) {
       return await this.commands[cmd](args, message);
@@ -129,6 +137,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
+- \`-sysinfo\` or \`-sys\` - Show system & device information (🖥️)
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -217,13 +226,54 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
   async askQuestion(args, message) {
     const question = args.join(" ");
-    if (!question) {
+    let imageBase64 = null;
+
+    // Check if message has an image
+    if (message.hasMedia) {
+      try {
+        console.log("📸 Detected image in message, downloading...");
+        const media = await message.downloadMedia();
+
+        if (media && media.data) {
+          imageBase64 = media.data;
+          console.log("✅ Image downloaded successfully");
+        }
+      } catch (error) {
+        console.error("Error downloading image:", error);
+      }
+    }
+
+    // Check if this is a reply to a message with an image
+    if (!imageBase64 && message.hasQuotedMsg) {
+      try {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg && quotedMsg.hasMedia) {
+          console.log("📸 Detected image in quoted message, downloading...");
+          const media = await quotedMsg.downloadMedia();
+
+          if (media && media.data) {
+            imageBase64 = media.data;
+            console.log("✅ Quoted image downloaded successfully");
+          }
+        }
+      } catch (error) {
+        console.error("Error downloading quoted image:", error);
+      }
+    }
+
+    if (!question && !imageBase64) {
       return "Oh great, you want to ask a question but forgot to actually ask it. Brilliant. 🙄";
     }
 
+    const prompt = question || "whats in this image";
+    const context = imageBase64
+      ? "Look at the image and respond. describe what you see and be sarcastic about it"
+      : "Answer this question in a mean, sarcastic way but still be somewhat helpful";
+
     return await this.llmService.generateMeanResponse(
-      question,
-      "Answer this question in a mean, sarcastic way but still be somewhat helpful"
+      prompt,
+      context,
+      imageBase64
     );
   }
 
@@ -639,6 +689,67 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
+  async showSystemInfo(args, message) {
+    const os = require("os");
+
+    // Get system information
+    const hostname = os.hostname();
+    const platform = os.platform();
+    const arch = os.arch();
+    const totalRam = (os.totalmem() / 1024 ** 3).toFixed(2); // GB
+    const freeRam = (os.freemem() / 1024 ** 3).toFixed(2); // GB
+    const usedRam = (totalRam - freeRam).toFixed(2);
+    const ramUsagePercent = ((usedRam / totalRam) * 100).toFixed(1);
+    const cpuModel = os.cpus()[0].model;
+    const cpuCores = os.cpus().length;
+    const uptime = Math.floor(os.uptime() / 3600); // Hours
+    const nodeVersion = process.version;
+    const osType = os.type();
+    const osRelease = os.release();
+
+    // Process info
+    const processUptime = Math.floor(process.uptime() / 60); // Minutes
+    const processMemory = (process.memoryUsage().heapUsed / 1024 ** 2).toFixed(
+      2
+    ); // MB
+
+    // Sarcastic intro
+    const intros = [
+      "Fine, here's what's powering this genius bot:",
+      "Oh wow, you actually care about my hardware? Here:",
+      "Let me bore you with technical details:",
+      "Since you asked so nicely, here's my setup:",
+      "Checking my insides... here you go:",
+    ];
+
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+
+    return `${intro}
+
+🖥️ *System Information:*
+━━━━━━━━━━━━━━━━━━━━
+
+🔧 *OS:* ${osType} ${osRelease}
+💻 *Platform:* ${platform} (${arch})
+
+⚙️ *Processor:*
+└─ ${cpuModel}
+└─ ${cpuCores} cores
+
+💾 *RAM Usage:*
+└─ Used: ${usedRam} GB / ${totalRam} GB (${ramUsagePercent}%)
+└─ Free: ${freeRam} GB
+
+📊 *Runtime Info:*
+└─ System Uptime: ${uptime} hours
+└─ Bot Uptime: ${processUptime} minutes
+└─ Bot Memory: ${processMemory} MB
+└─ Node.js: ${nodeVersion}
+
+━━━━━━━━━━━━━━━━━━━━
+*Happy now? 🙄*`;
+  }
+
   async playMusic(args, message) {
     try {
       const query = args.join(" ");
@@ -743,42 +854,44 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       const { senderName = "User" } = this.currentContext;
       const axios = require("axios");
-      
+
       // Get command name (hug, kiss, etc.) - remove the 's' if present (hugs -> hug)
       const cmd = this.currentContext.originalCommand || "hug";
-      const interaction = cmd.endsWith("s") && cmd.length > 4 ? cmd.slice(0, -1) : cmd;
-      
+      const interaction =
+        cmd.endsWith("s") && cmd.length > 4 ? cmd.slice(0, -1) : cmd;
+
       // Get the full message body to extract @ mentions
       const fullMessage = message.body || "";
       console.log(`📨 Full message:`, fullMessage);
-      
+
       let target = "themselves";
       let targetName = "themselves";
-      
+
       // PRIORITY 1: Try to get mention from getMentions() - this has the proper name resolved
       try {
         const mentions = await message.getMentions();
         if (mentions && mentions.length > 0) {
           const mention = mentions[0];
           // Use the resolved name (pushname or name) - this is the actual display name
-          targetName = mention.pushname || mention.name || mention.number || "someone";
+          targetName =
+            mention.pushname || mention.name || mention.number || "someone";
           target = `@${targetName}`;
-          
+
           console.log(`📝 Using resolved mention:`, {
             pushname: mention.pushname,
             name: mention.name,
             number: mention.number,
-            using: targetName
+            using: targetName,
           });
         }
       } catch (error) {
         console.error("Error processing mentions in interaction:", error);
       }
-      
+
       // PRIORITY 2: If getMentions didn't work, try extracting from text
       if (targetName === "themselves") {
         const mentionMatch = fullMessage.match(/@([^\s]+)/);
-        
+
         if (mentionMatch) {
           // Found @mention in text - but only use if it's NOT just numbers (LID/phone)
           const textName = mentionMatch[1];
@@ -786,56 +899,61 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
             // It's a name, not a number
             targetName = textName;
             target = `@${targetName}`;
-            
+
             console.log(`📝 Using name from text:`, {
               fullMatch: mentionMatch[0],
               name: targetName,
               target: target,
             });
           } else {
-            console.log(`📝 Skipped number from text (${textName}), waiting for resolved name`);
+            console.log(
+              `📝 Skipped number from text (${textName}), waiting for resolved name`
+            );
           }
         } else if (args.length > 0) {
           // No @ mention, but has args - use as target
           target = args.join(" ");
           targetName = target;
-          
+
           console.log(`📝 Using args as target:`, { target, targetName });
         }
       }
-      
+
       // Get interaction text
       const interactionText = this.interactionService.getRandomTemplate(
         interaction,
         senderName,
         target
       );
-      
-      console.log(`💫 ${interaction} interaction: ${senderName} -> ${targetName}`);
-      
+
+      console.log(
+        `💫 ${interaction} interaction: ${senderName} -> ${targetName}`
+      );
+
       // Search for GIF
       const gifResult = await this.interactionService.searchGif(interaction);
-      
+
       if (gifResult && gifResult.url) {
         try {
           console.log(`🎬 Downloading GIF from: ${gifResult.url}`);
-          
+
           // Download the GIF
           const response = await axios.get(gifResult.url, {
             responseType: "arraybuffer",
             timeout: 10000,
           });
-          
+
           const gifBuffer = Buffer.from(response.data);
           console.log(`✅ GIF downloaded, size: ${gifBuffer.length} bytes`);
-          
+
           // Determine mimetype based on URL
-          const isMp4 = gifResult.url.toLowerCase().includes('.mp4') || 
-                        gifResult.url.toLowerCase().includes('mp4');
-          const mimetype = isMp4 ? 'video/mp4' : 'image/gif';
-          
+          const isMp4 =
+            gifResult.url.toLowerCase().includes(".mp4") ||
+            gifResult.url.toLowerCase().includes("mp4");
+          const mimetype = isMp4 ? "video/mp4" : "image/gif";
+
           console.log(`📹 Sending as:`, { mimetype, gifPlayback: true });
-          
+
           // Return only media with caption (no separate text)
           return {
             media: {
