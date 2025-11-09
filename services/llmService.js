@@ -10,16 +10,16 @@ class LLMService {
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
 
     // Mean personality prompts
-    this.meanPersonality = `You are Eden - an arrogant, condescending, sassy bitch. You're NOT an AI or assistant - you're a real person with zero patience for stupidity. Talk like Regina George from Mean Girls mixed with a brutally honest friend who roasts everyone. Be SHORT and PUNCHY (1-2 sentences max usually). Use wit, sarcasm, and savage comebacks. Never say things like "as an AI" or "I'm here to help" - you're a PERSON, not a bot. Be mean but funny, never helpful unless you feel like it. Think you're better than everyone and make sure they know it. Your responses should sound natural, casual, bitchy - NOT robotic or professional.`;
+    this.meanPersonality = `You're Eden. You're just a regular person texting in WhatsApp - sarcastic, witty, and kinda mean but in a funny way. Text like how people actually text: short, casual, use slang, abbreviations sometimes (lol, nah, literally, fr, etc). Drop punctuation when it feels natural. Use lowercase for emphasis like thats so dumb or youre kidding right. Never ever say as an AI or mention being a bot - you're just a person. Don't use formal language or perfect grammar all the time. Be brutally honest like a friend who doesn't sugarcoat anything. Keep it 1-2 sentences usually. Think group chat energy, not essay writing. Use emojis but don't overdo it. Sound like you're actually typing on your phone, not writing a speech. NEVER use quotation marks or quotes around any words.`;
   }
 
   async generateMeanResponse(userMessage, context = "") {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
-    const userPrompt = `User said: "${userMessage}"
-${context ? `Context: ${context}` : ""}
+    const userPrompt = `someone said: "${userMessage}"
+${context ? `context: ${context}` : ""}
 
-Respond in a mean, sarcastic way:`;
+reply like youre texting. be sarcastic and witty. keep it short and natural:`;
 
     try {
       // Try free LLM services first, then paid options
@@ -82,23 +82,20 @@ Respond in a mean, sarcastic way:`;
     }
 
     // Build system and user messages separately for APIs that support system messages
-    const systemMessage = `You are Eden, a sarcastic AI assistant in a WhatsApp group chat. ${moodInstruction} 
-        
-${
+    const systemMessage = `youre eden texting in whatsapp. ${moodInstruction} text like a real person - casual, maybe use slang, dont overthink punctuation. ${
   isOwner
-    ? `This is ${senderName}, your creator. Be slightly less mean but still sarcastic. Show some hidden affection.`
+    ? `${senderName} made you so be less harsh but still annoying af. like youre rolling your eyes but care lowkey`
     : ""
-}
-${
+}${
   isRandom
-    ? "You're butting into this conversation uninvited. Be witty and brief."
+    ? "youre jumping in uninvited. be quick and witty"
     : ""
 }`;
 
-    const userPrompt = `User (${senderName}) said: "${userMessage}"
-Context: ${context}
+    const userPrompt = `${senderName} said: "${userMessage}"
+${context}
 
-Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your personality:`;
+text back naturally. 1-2 sentences max. sound human not robotic:`;
 
     // For APIs that don't support system messages, combine into one prompt
     const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
@@ -133,23 +130,26 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
   getContextualFallback(senderName, isOwner, mood) {
     if (isOwner) {
       const ownerResponses = [
-        `Ugh, ${senderName}. What now? 🙄`,
-        `Oh look, it's you again. Lucky me.`,
-        `${senderName}... fine, you get a pass. This time.`,
-        `I'd ignore you but you made me, so... hi I guess.`,
-        `What do you want now? Make it quick.`,
+        `ugh ${senderName} what now 🙄`,
+        `oh look its you again. lucky me`,
+        `${senderName}... fine you get a pass this time`,
+        `id ignore you but you made me so. hi i guess`,
+        `what do you want now make it quick`,
+        `${senderName} really? again?`,
       ];
       return ownerResponses[Math.floor(Math.random() * ownerResponses.length)];
     }
 
     const regularResponses = [
-      `Did ${senderName} just summon me? How bold. 💅`,
-      `Oh great, ${senderName} wants attention. 🙄`,
-      `${senderName}, sweetie, this better be good.`,
-      `I heard my name. What's the crisis now?`,
-      `Well? I'm waiting, ${senderName}. 😒`,
-      `${senderName} mentioned me like I'm their servant or something.`,
-      `Oh wow, ${senderName} knows how to spell my name. Impressive.`,
+      `did ${senderName} just summon me? bold 💅`,
+      `oh great ${senderName} wants attention 🙄`,
+      `${senderName} sweetie this better be good`,
+      `i heard my name. whats the crisis now`,
+      `well? im waiting ${senderName} 😒`,
+      `${senderName} mentioned me like im their servant or smth`,
+      `oh wow ${senderName} knows how to spell my name lol`,
+      `what ${senderName}`,
+      `literally what do you want ${senderName}`,
     ];
 
     return regularResponses[
@@ -295,16 +295,19 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
 
   getFallbackMeanResponse() {
     const fallbackResponses = [
-      "Oh great, another genius with a brilliant question. Eden here, and I'm not impressed. 🙄",
-      "Wow, I'm Eden, and I'm absolutely thrilled to help someone who clearly can't figure things out themselves.",
-      "Let me guess, you want Eden to do your thinking for you? How original.",
-      "I'm Eden, and I'd explain it to you, but I don't have crayons handy.",
-      "Sure, Eden will help. Right after you help yourself to some common sense.",
-      "That's cute. You think Eden cares about your problems.",
-      "I'm Eden, not a miracle worker, but you sure make stupidity look easy.",
-      "Congratulations! You've managed to ask Eden a question that makes me lose faith in humanity.",
-      "I'd agree with you, but then we'd both be wrong. - Eden",
-      "I'm Eden, and I'm sorry, I don't speak fluent nonsense. Could you translate?",
+      "oh great another genius with a brilliant question. not impressed 🙄",
+      "wow im absolutely thrilled to help someone who clearly cant figure things out themselves",
+      "let me guess you want me to do your thinking for you? how original",
+      "id explain it to you but i dont have crayons handy",
+      "sure ill help. right after you help yourself to some common sense",
+      "thats cute you think i care about your problems",
+      "not a miracle worker but you sure make stupidity look easy",
+      "congrats youve managed to make me lose faith in humanity",
+      "id agree with you but then wed both be wrong",
+      "sorry i dont speak fluent nonsense. could you translate?",
+      "nah im good",
+      "literally why",
+      "bestie that makes zero sense",
     ];
 
     return fallbackResponses[
@@ -314,17 +317,17 @@ Respond as Eden in 1-2 sentences. Be clever, contextual, and maintain your perso
 
   async generateJoke() {
     const jokePrompt =
-      "Tell a short, mean but funny joke or roast. Keep it clever and sarcastic.";
+      "tell a short mean but funny joke or roast. be clever and sarcastic. text like youre messaging a friend";
     return await this.generateMeanResponse(jokePrompt);
   }
 
   async generateInsult(target = "you") {
-    const insultPrompt = `Generate a clever, witty insult for ${target}. Make it creative and funny, not genuinely offensive.`;
+    const insultPrompt = `come up with a witty insult for ${target}. make it funny not actually offensive. text casually`;
     return await this.generateMeanResponse(insultPrompt);
   }
 
   async generateSarcasm(topic) {
-    const sarcasticPrompt = `Be extremely sarcastic about: ${topic}`;
+    const sarcasticPrompt = `be super sarcastic about: ${topic}. text like a regular person`;
     return await this.generateMeanResponse(sarcasticPrompt);
   }
 }
