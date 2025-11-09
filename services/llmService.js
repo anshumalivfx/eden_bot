@@ -17,11 +17,13 @@ class LLMService {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
     let userPrompt;
-    
+
     if (imageBase64) {
       userPrompt = `someone sent an image and said: "${userMessage}"
 
-describe whats in the image and respond to their message. ${context ? `context: ${context}` : ""}
+describe whats in the image and respond to their message. ${
+        context ? `context: ${context}` : ""
+      }
 
 be sarcastic and witty about what you see. keep it short and natural:`;
     } else {
@@ -34,7 +36,11 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
     try {
       // Try free LLM services first, then paid options
       if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
-        return await this.callGroq(userPrompt, this.meanPersonality, imageBase64);
+        return await this.callGroq(
+          userPrompt,
+          this.meanPersonality,
+          imageBase64
+        );
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -65,7 +71,12 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
     }
   }
 
-  async generateContextualResponse(userMessage, context, metadata = {}, imageBase64 = null) {
+  async generateContextualResponse(
+    userMessage,
+    context,
+    metadata = {},
+    imageBase64 = null
+  ) {
     const {
       senderName = "User",
       mood = "sarcastic",
@@ -93,14 +104,10 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
 
     // Build system and user messages separately for APIs that support system messages
     const systemMessage = `youre eden texting in whatsapp. ${moodInstruction} text like a real person - casual, maybe use slang, dont overthink punctuation. ${
-  isOwner
-    ? `${senderName} made you so be less harsh but still annoying af. like youre rolling your eyes but care lowkey`
-    : ""
-}${
-  isRandom
-    ? "youre jumping in uninvited. be quick and witty"
-    : ""
-}`;
+      isOwner
+        ? `${senderName} made you so be less harsh but still annoying af. like youre rolling your eyes but care lowkey`
+        : ""
+    }${isRandom ? "youre jumping in uninvited. be quick and witty" : ""}`;
 
     const userPrompt = imageBase64
       ? `${senderName} sent an image and said: "${userMessage}"
@@ -270,14 +277,16 @@ text back naturally. 1-2 sentences max. sound human not robotic:`;
 
     try {
       // Use vision model if image is present
-      const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.1-8b-instant";
+      const model = imageBase64
+        ? "meta-llama/llama-4-scout-17b-16e-instruct"
+        : "llama-3.1-8b-instant";
 
       const response = await axios.post(
         "https://api.groq.com/openai/v1/chat/completions",
         {
           model: model,
           messages: messages,
-          max_tokens: imageBase64 ? 500 : 150, // More tokens for image descriptions
+          max_tokens: imageBase64 ? 1024 : 150, // More tokens for image descriptions
           temperature: 0.9,
         },
         {

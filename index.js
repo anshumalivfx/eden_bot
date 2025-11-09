@@ -115,22 +115,26 @@ function isGroupChat(jid) {
 
 // Filter ALL console outputs to hide verbose Baileys session messages
 const shouldFilterMessage = (args) => {
-  const message = args.map(arg => {
-    if (typeof arg === 'string') return arg;
-    if (typeof arg === 'object') return JSON.stringify(arg);
-    return String(arg);
-  }).join(' ');
-  
-  return message.includes('Closing stale open session') || 
-         message.includes('SessionEntry') ||
-         message.includes('Closing session:') ||
-         message.includes('pendingPreKey') ||
-         message.includes('_chains') ||
-         message.includes('registrationId') ||
-         message.includes('currentRatchet') ||
-         message.includes('ephemeralKeyPair') ||
-         message.includes('baseKey') ||
-         message.includes('remoteIdentityKey');
+  const message = args
+    .map((arg) => {
+      if (typeof arg === "string") return arg;
+      if (typeof arg === "object") return JSON.stringify(arg);
+      return String(arg);
+    })
+    .join(" ");
+
+  return (
+    message.includes("Closing stale open session") ||
+    message.includes("SessionEntry") ||
+    message.includes("Closing session:") ||
+    message.includes("pendingPreKey") ||
+    message.includes("_chains") ||
+    message.includes("registrationId") ||
+    message.includes("currentRatchet") ||
+    message.includes("ephemeralKeyPair") ||
+    message.includes("baseKey") ||
+    message.includes("remoteIdentityKey")
+  );
 };
 
 // Override all console methods
@@ -139,22 +143,22 @@ const originalConsoleInfo = console.info;
 const originalConsoleDebug = console.debug;
 const originalConsoleWarn = console.warn;
 
-console.log = function(...args) {
+console.log = function (...args) {
   if (shouldFilterMessage(args)) return;
   originalConsoleLog.apply(console, args);
 };
 
-console.info = function(...args) {
+console.info = function (...args) {
   if (shouldFilterMessage(args)) return;
   originalConsoleInfo.apply(console, args);
 };
 
-console.debug = function(...args) {
+console.debug = function (...args) {
   if (shouldFilterMessage(args)) return;
   originalConsoleDebug.apply(console, args);
 };
 
-console.warn = function(...args) {
+console.warn = function (...args) {
   if (shouldFilterMessage(args)) return;
   originalConsoleWarn.apply(console, args);
 };
@@ -257,7 +261,9 @@ async function connectToWhatsApp() {
           if (update.phoneNumber) {
             contactNameCache.set(update.phoneNumber, displayName);
           }
-          console.log(`📇 Contact updated: ${displayName} (${update.id || update.lid})`);
+          console.log(
+            `📇 Contact updated: ${displayName} (${update.id || update.lid})`
+          );
         }
       }
     });
@@ -281,21 +287,25 @@ async function connectToWhatsApp() {
           const isGroup = isGroupChat(chatJid);
           const senderName = getSenderName(message);
           const owner = isOwner(senderName);
-          
+
           // Cache the pushName for this user for future mentions
           if (message.pushName) {
             const senderJid = message.key.participant || message.key.remoteJid;
             contactNameCache.set(senderJid, message.pushName);
             console.log(`💾 Cached name: ${message.pushName} for ${senderJid}`);
-            
+
             // Also cache using the phone number JID if this is a LID
             if (senderJid.endsWith("@lid") && isGroup) {
               try {
                 const groupMetadata = await sock.groupMetadata(chatJid);
-                const participant = groupMetadata.participants.find(p => p.lid === senderJid);
+                const participant = groupMetadata.participants.find(
+                  (p) => p.lid === senderJid
+                );
                 if (participant && participant.id) {
                   contactNameCache.set(participant.id, message.pushName);
-                  console.log(`💾 Also cached for phone JID: ${participant.id}`);
+                  console.log(
+                    `💾 Also cached for phone JID: ${participant.id}`
+                  );
                 }
               } catch (e) {
                 // Ignore errors
@@ -337,19 +347,20 @@ async function connectToWhatsApp() {
               getMentions: async () => {
                 // Get mentioned JIDs from the message
                 const mentionedJids =
-                  message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                
+                  message.message?.extendedTextMessage?.contextInfo
+                    ?.mentionedJid || [];
+
                 // Get the actual message text to extract names
                 const messageText = getMessageText(message) || "";
-                
+
                 console.log(`📱 Processing mentions:`, {
                   jids: mentionedJids,
                   messageText: messageText.substring(0, 100),
                 });
-                
+
                 // Convert to contact objects
                 const mentions = [];
-                
+
                 // Extract names from message text - this is the most reliable method
                 // Format: @Name or @919876543210 or @22217882616014 (LID)
                 const namesInText = [];
@@ -358,32 +369,36 @@ async function connectToWhatsApp() {
                 while ((match = atRegex.exec(messageText)) !== null) {
                   namesInText.push(match[1]);
                 }
-                
+
                 console.log(`📝 Names from text:`, namesInText);
-                
+
                 // Try to get group metadata to map LIDs to phone numbers and names
                 let groupParticipants = [];
                 if (isGroupChat(chatJid)) {
                   try {
                     const groupMetadata = await sock.groupMetadata(chatJid);
                     groupParticipants = groupMetadata.participants || [];
-                    console.log(`👥 Group has ${groupParticipants.length} participants`);
+                    console.log(
+                      `👥 Group has ${groupParticipants.length} participants`
+                    );
                   } catch (e) {
                     console.error("Error fetching group metadata:", e.message);
                   }
                 }
-                
+
                 for (let i = 0; i < mentionedJids.length; i++) {
                   const jid = mentionedJids[i];
                   try {
                     let displayName = null;
                     let phoneNumber = jid.split("@")[0];
                     const isLid = jid.endsWith("@lid");
-                    
+
                     // For LID mentions, try to find the corresponding phone number and name
                     if (isLid && groupParticipants.length > 0) {
                       // Find participant with matching LID
-                      const participant = groupParticipants.find(p => p.lid === jid);
+                      const participant = groupParticipants.find(
+                        (p) => p.lid === jid
+                      );
                       if (participant) {
                         // Get the phone number if available
                         if (participant.phoneNumber) {
@@ -391,22 +406,27 @@ async function connectToWhatsApp() {
                         } else if (participant.id) {
                           phoneNumber = participant.id.split("@")[0];
                         }
-                        
+
                         console.log(`🔍 LID mapped to:`, {
                           lid: jid,
                           phoneNumber,
                           participantId: participant.id,
                         });
-                        
+
                         // Check cache using the phone number JID
-                        if (participant.id && contactNameCache.has(participant.id)) {
+                        if (
+                          participant.id &&
+                          contactNameCache.has(participant.id)
+                        ) {
                           displayName = contactNameCache.get(participant.id);
                         }
-                        
+
                         // Try to fetch their status/profile to get name
                         if (!displayName && participant.id) {
                           try {
-                            const profilePic = await sock.profilePictureUrl(participant.id, 'preview').catch(() => null);
+                            const profilePic = await sock
+                              .profilePictureUrl(participant.id, "preview")
+                              .catch(() => null);
                             // Even if we can't get pic, we tried
                             // Unfortunately Baileys doesn't have a direct way to get profile name
                             // We can only get it from messages they send
@@ -416,7 +436,7 @@ async function connectToWhatsApp() {
                         }
                       }
                     }
-                    
+
                     // Priority 1: Use the name from message text ONLY if it's not a number
                     // If user typed "@Name", use it. If they typed "@919876543210", skip it.
                     if (namesInText[i] && !/^\d+$/.test(namesInText[i])) {
@@ -424,12 +444,12 @@ async function connectToWhatsApp() {
                       // Cache it for future use
                       contactNameCache.set(jid, displayName);
                     }
-                    
+
                     // Priority 2: Check our contact name cache
                     if (!displayName && contactNameCache.has(jid)) {
                       displayName = contactNameCache.get(jid);
                     }
-                    
+
                     // Priority 3: Use phone number as fallback (clean format)
                     if (!displayName) {
                       // For LIDs that look like long numbers, just use last 10 digits or format nicely
@@ -440,7 +460,7 @@ async function connectToWhatsApp() {
                         displayName = phoneNumber;
                       }
                     }
-                    
+
                     console.log(`✅ Mention resolved:`, {
                       jid,
                       isLid,
@@ -448,7 +468,7 @@ async function connectToWhatsApp() {
                       displayName,
                       fromCache: contactNameCache.has(jid),
                     });
-                    
+
                     mentions.push({
                       id: {
                         user: phoneNumber,
@@ -472,7 +492,7 @@ async function connectToWhatsApp() {
                     });
                   }
                 }
-                
+
                 return mentions;
               },
               hasMedia: !!(
@@ -525,20 +545,22 @@ async function connectToWhatsApp() {
                       caption: content.text,
                       gifPlayback: content.media.gifPlayback !== false,
                     };
-                    
+
                     // Add mimetype if provided
                     if (content.media.mimetype) {
                       videoMsg.mimetype = content.media.mimetype;
                     }
-                    
+
                     console.log(`📤 Sending video message:`, {
                       hasVideo: !!videoMsg.video,
                       caption: videoMsg.caption?.substring(0, 30),
                       gifPlayback: videoMsg.gifPlayback,
                       mimetype: videoMsg.mimetype,
                     });
-                    
-                    await sock.sendMessage(chatJid, videoMsg, { quoted: quotedMsg });
+
+                    await sock.sendMessage(chatJid, videoMsg, {
+                      quoted: quotedMsg,
+                    });
                   } else if (content.media.image) {
                     await sock.sendMessage(
                       chatJid,
@@ -589,7 +611,9 @@ async function connectToWhatsApp() {
             if (Math.random() > 0.6) {
               const commandReactions = ["👀", "🙄", "😏", "💀", "🤔", "😒"];
               const randomReaction =
-                commandReactions[Math.floor(Math.random() * commandReactions.length)];
+                commandReactions[
+                  Math.floor(Math.random() * commandReactions.length)
+                ];
               try {
                 await sock.sendMessage(chatJid, {
                   react: {
@@ -658,7 +682,7 @@ async function connectToWhatsApp() {
               console.error("❌ Error executing command:", cmdError);
               console.error("   Command:", command);
               console.error("   Error message:", cmdError.message);
-              
+
               // Send error message to user
               try {
                 await sock.sendMessage(
@@ -737,8 +761,14 @@ async function connectToWhatsApp() {
               if (hasImage) {
                 try {
                   console.log("📸 Detected image with mention, downloading...");
-                  const { downloadMediaMessage } = require("@whiskeysockets/baileys");
-                  const buffer = await downloadMediaMessage(message, "buffer", {});
+                  const {
+                    downloadMediaMessage,
+                  } = require("@whiskeysockets/baileys");
+                  const buffer = await downloadMediaMessage(
+                    message,
+                    "buffer",
+                    {}
+                  );
                   imageBase64 = buffer.toString("base64");
                   console.log("✅ Image downloaded and converted to base64");
                 } catch (imgError) {
@@ -749,8 +779,8 @@ async function connectToWhatsApp() {
               if (repliedTo) {
                 // Get the quoted message for context
                 const quotedText =
-                  message.message?.extendedTextMessage?.contextInfo?.quotedMessage
-                    ?.conversation || "[Media/Sticker]";
+                  message.message?.extendedTextMessage?.contextInfo
+                    ?.quotedMessage?.conversation || "[Media/Sticker]";
 
                 // Generate response based on reply
                 const context = owner
@@ -769,21 +799,21 @@ async function connectToWhatsApp() {
                 );
               } else {
                 // Generate response based on mention (with or without image)
-                const prompt = imageBase64 
-                  ? (messageText || "whats in this image") 
+                const prompt = imageBase64
+                  ? messageText || "whats in this image"
                   : messageText;
-                  
+
                 const context = imageBase64
-                  ? (owner 
-                      ? `${senderName} sent you an image. hes your creator so be less harsh but still bratty. describe what you see and roast it. be casual. NEVER use quotation marks`
-                      : `${senderName} sent you an image. describe what you see and roast it savagely. be witty and brutal. ${isGroup ? "everyones watching" : "just you two"}. NEVER use quotation marks`)
-                  : (owner
-                      ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
-                      : `${senderName} mentioned you: ${messageText}. ${
-                          isGroup
-                            ? "everyones watching"
-                            : "just you two"
-                        }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`);
+                  ? owner
+                    ? `${senderName} sent you an image. hes your creator so be less harsh but still bratty. describe what you see and roast it. be casual. NEVER use quotation marks`
+                    : `${senderName} sent you an image. describe what you see and roast it savagely. be witty and brutal. ${
+                        isGroup ? "everyones watching" : "just you two"
+                      }. NEVER use quotation marks`
+                  : owner
+                  ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
+                  : `${senderName} mentioned you: ${messageText}. ${
+                      isGroup ? "everyones watching" : "just you two"
+                    }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
 
                 response = await llmService.generateContextualResponse(
                   prompt,
@@ -796,7 +826,7 @@ async function connectToWhatsApp() {
               if (response) {
                 // Remove any quotes from the response
                 response = response.replace(/["""'']/g, "");
-                
+
                 await sock.sendMessage(chatJid, { text: response });
                 console.log(`✅ Mention/Reply response sent\n`);
               } else {
@@ -806,7 +836,7 @@ async function connectToWhatsApp() {
               console.error("❌ Error generating LLM response:", llmError);
               console.error("   Message:", messageText);
               console.error("   Error message:", llmError.message);
-              
+
               // Send error message to user
               try {
                 await sock.sendMessage(chatJid, {

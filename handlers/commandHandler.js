@@ -180,11 +180,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   async roastUser(args, message) {
     try {
       const { senderName = "User", isOwner = false } = this.currentContext;
-      
+
       // Check if a specific person is mentioned to roast
       let targetName = senderName;
       let targetIsOwner = isOwner;
-      
+
       // Check if there are mentions in the message or args
       if (args.length > 0) {
         let target = args.join(" ");
@@ -193,7 +193,8 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           if (mentions && mentions.length > 0) {
             // Get the first mentioned person's name
             const mention = mentions[0];
-            targetName = mention.pushname || mention.name || mention.number || "someone";
+            targetName =
+              mention.pushname || mention.name || mention.number || "someone";
             // Check if the mentioned person is the owner
             targetIsOwner = targetName.toLowerCase().includes("ansh");
           } else if (target) {
@@ -242,14 +243,15 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
   async generateInsult(args, message) {
     let target = args.join(" ") || "you";
-    
+
     // Check if there are mentions in the message
     try {
       const mentions = await message.getMentions();
       if (mentions && mentions.length > 0) {
         // Replace the mention IDs with actual names
         for (const mention of mentions) {
-          const name = mention.pushname || mention.name || mention.number || "someone";
+          const name =
+            mention.pushname || mention.name || mention.number || "someone";
           // Replace the @ID format with the actual name
           const mentionId = `@${mention.id.user}`;
           target = target.replace(mentionId, name);
@@ -258,7 +260,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     } catch (error) {
       console.error("Error processing mentions in insult:", error);
     }
-    
+
     return await this.llmService.generateInsult(target);
   }
 
@@ -332,7 +334,8 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       if (mentions && mentions.length > 0) {
         // Replace the mention IDs with actual names
         for (const mention of mentions) {
-          const name = mention.pushname || mention.name || mention.number || "someone";
+          const name =
+            mention.pushname || mention.name || mention.number || "someone";
           // Replace the @ID format with the actual name
           const mentionId = `@${mention.id.user}`;
           target = target.replace(mentionId, name);
@@ -749,74 +752,79 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async systemInfo(args, message) {
-    const os = require('os');
-    
+    const os = require("os");
+
     // System details
     const hostname = os.hostname();
     const platform = os.platform();
     const arch = os.arch();
     const osType = os.type();
-    
+
     // Memory
-    const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(2);
-    const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(2);
+    const totalMemGB = (os.totalmem() / 1024 ** 3).toFixed(2);
+    const freeMemGB = (os.freemem() / 1024 ** 3).toFixed(2);
     const usedMemGB = (totalMemGB - freeMemGB).toFixed(2);
     const memPercent = ((usedMemGB / totalMemGB) * 100).toFixed(1);
-    
+
     // CPU
     const cpus = os.cpus();
     const cpuModel = cpus[0].model.trim();
     const cpuCores = cpus.length;
-    
+
     // Uptime
     const uptimeSeconds = os.uptime();
     const uptimeDays = Math.floor(uptimeSeconds / 86400);
     const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
     const uptimeMins = Math.floor((uptimeSeconds % 3600) / 60);
-    
+
     // Process info
     const nodeVersion = process.version;
     const processUptime = Math.floor(process.uptime() / 60);
-    const processMem = (process.memoryUsage().heapUsed / (1024 ** 2)).toFixed(2);
-    
+    const processMem = (process.memoryUsage().heapUsed / 1024 ** 2).toFixed(2);
+
     // Detect if Raspberry Pi
-    const isRaspberryPi = cpuModel.toLowerCase().includes('arm') || 
-                          platform === 'linux' && arch.includes('arm');
-    
+    const isRaspberryPi =
+      cpuModel.toLowerCase().includes("arm") ||
+      (platform === "linux" && arch.includes("arm"));
+
     // Self-deprecating intros for Pi, savage for others
-    const intros = isRaspberryPi ? [
-      "Yeah yeah, I'm running on a Raspberry Pi. Don't judge me. 🍓",
-      "Look, I know I'm on a tiny computer. Still smarter than you though. 🤷",
-      "Running on a Pi and STILL more capable than you. Sad. 😏",
-      "My hardware is literally the size of a credit card. Your excuses? �",
-      "Yes, this is a Raspberry Pi. No, I'm not impressed by your gaming PC. 🙄",
-      "Potato PC? More like I'm running on an actual fruit and still winning. 🍓",
-    ] : [
-      "Oh, you wanna know what's running this masterpiece? Fine. 🙄",
-      "Curious about my specs? Here's what I'm working with:",
-      "Let me show you what I'm running on... 💻",
-      "Checking my guts? Alright, here you go:",
-    ];
-    
+    const intros = isRaspberryPi
+      ? [
+          "Yeah yeah, I'm running on a Raspberry Pi. Don't judge me. 🍓",
+          "Look, I know I'm on a tiny computer. Still smarter than you though. 🤷",
+          "Running on a Pi and STILL more capable than you. Sad. 😏",
+          "My hardware is literally the size of a credit card. Your excuses? �",
+          "Yes, this is a Raspberry Pi. No, I'm not impressed by your gaming PC. 🙄",
+          "Potato PC? More like I'm running on an actual fruit and still winning. 🍓",
+        ]
+      : [
+          "Oh, you wanna know what's running this masterpiece? Fine. 🙄",
+          "Curious about my specs? Here's what I'm working with:",
+          "Let me show you what I'm running on... 💻",
+          "Checking my guts? Alright, here you go:",
+        ];
+
     const intro = intros[Math.floor(Math.random() * intros.length)];
-    
+
     // Memory status emoji
     const memEmoji = memPercent > 80 ? "🔴" : memPercent > 60 ? "🟡" : "🟢";
-    
+
     // Savage ending based on hardware
-    const endings = isRaspberryPi ? [
-      "*Look, I might be smol but I'm mighty. Don't @ me.* 💪",
-      "*Tiny hardware, MASSIVE attitude. Deal with it.* 😤",
-      "*Yeah I'm pocket-sized. Your brain is too.* 🧠",
-      "*Small but deadly. Like a chihuahua. 🐕*",
-    ] : [
-      "*Satisfied? Now go touch grass.* 🌱",
-      "*There you go. Happy now?* 🙄",
-      "*Impressed? You should be.* 💅",
-    ];
-    
+    const endings = isRaspberryPi
+      ? [
+          "*Look, I might be smol but I'm mighty. Don't @ me.* 💪",
+          "*Tiny hardware, MASSIVE attitude. Deal with it.* 😤",
+          "*Yeah I'm pocket-sized. Your brain is too.* 🧠",
+          "*Small but deadly. Like a chihuahua. 🐕*",
+        ]
+      : [
+          "*Satisfied? Now go touch grass.* 🌱",
+          "*There you go. Happy now?* 🙄",
+          "*Impressed? You should be.* 💅",
+        ];
+
     const ending = endings[Math.floor(Math.random() * endings.length)];
-    
+
     return `${intro}
 
 🖥️ *SYSTEM INFO*
@@ -828,7 +836,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
 ⚙️ *CPU:* 
 └─ ${cpuModel}
-└─ ${cpuCores} core${cpuCores > 1 ? 's' : ''}
+└─ ${cpuCores} core${cpuCores > 1 ? "s" : ""}
 
 💾 *Memory:*
 └─ Total: ${totalMemGB} GB
