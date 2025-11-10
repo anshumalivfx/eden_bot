@@ -2,6 +2,7 @@ const StickerService = require("../services/stickerService");
 const VoiceService = require("../services/voiceService");
 const YouTubeService = require("../services/youtubeService");
 const InteractionService = require("../services/interactionService");
+const PetService = require("../services/petService");
 
 class CommandHandler {
   constructor(llmService) {
@@ -10,6 +11,7 @@ class CommandHandler {
     this.voiceService = VoiceService;
     this.youtubeService = new YouTubeService();
     this.interactionService = new InteractionService();
+    this.petService = new PetService();
     this.currentContext = {};
     this.commands = {
       help: this.showHelp.bind(this),
@@ -71,6 +73,8 @@ class CommandHandler {
       pokes: this.handleInteraction.bind(this),
       cuddle: this.handleInteraction.bind(this),
       cuddles: this.handleInteraction.bind(this),
+      // Pet commands
+      pet: this.handlePet.bind(this),
     };
   }
 
@@ -1120,6 +1124,160 @@ ${ending}`;
       console.error("Interaction error:", error);
       const { senderName = "User" } = this.currentContext;
       return `${senderName} tried to do something but failed miserably 🤡`;
+    }
+  }
+
+  async handlePet(args, message) {
+    try {
+      const userId = message.userId || message.from;
+      const userNumber = (message.number || userId.split("@")[0]).replace(/\D/g, "");
+      
+      // Restrict to only specific user
+      const allowedNumber = "61259152101540";
+      console.log(`Pet access check - User: ${userNumber}, Allowed: ${allowedNumber}`);
+      
+      if (userNumber !== allowedNumber) {
+        return `🔒 Sorry, the pet feature is currently in beta and only available to select users!`;
+      }
+
+      const [action, ...params] = args;
+      const fs = require("fs");
+      const path = require("path");
+
+      if (!action) {
+        // Show pet status with image
+        const display = await this.petService.formatPetDisplay(userId);
+        if (!display) {
+          return `You don't have a pet yet! 🐉\n\nCreate one with: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
+        }
+        
+        // Return with image
+        const imagePath = path.join(__dirname, "..", "assets", "Gemini_Generated_Image_kicv4ekicv4ekicv.png");
+        if (fs.existsSync(imagePath)) {
+          return {
+            media: {
+              image: fs.readFileSync(imagePath),
+              caption: display,
+            }
+          };
+        }
+        
+        return display;
+      }
+
+      switch (action.toLowerCase()) {
+        case "create": {
+          const [name, species = "dragon"] = params;
+          if (!name) {
+            return `Please provide a name! Usage: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
+          }
+
+          const validSpecies = ["dragon", "phoenix", "unicorn", "griffin", "hydra", "glimmer"];
+          const selectedSpecies = species.toLowerCase();
+          
+          if (!validSpecies.includes(selectedSpecies)) {
+            return `Invalid species! Choose from: ${validSpecies.join(", ")}`;
+          }
+
+          const existingPet = await this.petService.getPet(userId);
+          if (existingPet) {
+            return `You already have a pet named ${existingPet.name}! 🐉`;
+          }
+
+          await this.petService.createPet(userId, name, selectedSpecies);
+          const display = await this.petService.formatPetDisplay(userId);
+          
+          // Return with image
+          const imagePath = path.join(__dirname, "..", "assets", "Gemini_Generated_Image_kicv4ekicv4ekicv.png");
+          if (fs.existsSync(imagePath)) {
+            return {
+              media: {
+                image: fs.readFileSync(imagePath),
+                caption: `🎉 Congratulations! You created a new pet!\n\n${display}`,
+              }
+            };
+          }
+          
+          return `🎉 Congratulations! You created a new pet!\n\n${display}`;
+        }
+
+        case "feed": {
+          const result = await this.petService.feedPet(userId);
+          if (result.error) return result.error;
+          
+          let response = result.message;
+          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
+          
+          return response;
+        }
+
+        case "play": {
+          const result = await this.petService.playWithPet(userId);
+          if (result.error) return result.error;
+          
+          let response = result.message;
+          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
+          
+          return response;
+        }
+
+        case "train": {
+          const result = await this.petService.trainPet(userId);
+          if (result.error) return result.error;
+          
+          let response = result.message;
+          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
+          if (result.giftReady) response += `\n\n🎁 A gift is ready! Use -pet gift to claim it!`;
+          
+          return response;
+        }
+
+        case "gift": {
+          const result = await this.petService.claimGift(userId);
+          if (result.error) return result.error;
+          return result.message;
+        }
+
+        case "name": {
+          const newName = params.join(" ");
+          if (!newName) {
+            return `Please provide a new name! Usage: -pet name <new name>`;
+          }
+
+          const result = await this.petService.renamePet(userId, newName);
+          if (result.error) return result.error;
+          return result.message;
+        }
+
+        case "traits": {
+          const result = await this.petService.addTrait(userId);
+          if (result.error) return result.error;
+          return result.message;
+        }
+
+        case "leaderboard":
+        case "top": {
+          const leaderboard = await this.petService.getLeaderboard(10);
+          if (leaderboard.length === 0) {
+            return `No pets yet! Be the first to create one!`;
+          }
+
+          let board = `🏆 *Pet Leaderboard* 🏆\n━━━━━━━━━━━━━━━━━━\n\n`;
+          leaderboard.forEach((pet, index) => {
+            const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}.`;
+            const speciesEmoji = this.petService.species[pet.species]?.emoji || "🐉";
+            board += `${medal} ${speciesEmoji} ${pet.name} - Lvl ${pet.level} | Bond ${pet.bond}\n`;
+          });
+
+          return board;
+        }
+
+        default:
+          return `Unknown action! Available actions:\n-pet (view status)\n-pet create <name> <species>\n-pet feed | play | train\n-pet gift | name <new> | traits\n-pet leaderboard`;
+      }
+    } catch (error) {
+      console.error("Pet command error:", error);
+      return `Something went wrong with your pet! ${error.message}`;
     }
   }
 }
