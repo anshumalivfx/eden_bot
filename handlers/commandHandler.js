@@ -182,8 +182,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const { senderName = "User", isOwner = false } = this.currentContext;
 
       // Check if a specific person is mentioned to roast
-      let targetName = senderName;
+      let targetNumber = senderName;
       let targetIsOwner = isOwner;
+      let targetJid = message.userId; // Default to sender
+      const mentionJids = [];
 
       // Check if there are mentions in the message or args
       if (args.length > 0) {
@@ -191,37 +193,52 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         try {
           const mentions = await message.getMentions();
           if (mentions && mentions.length > 0) {
-            // Get the first mentioned person's name
+            // Get the first mentioned person's info
             const mention = mentions[0];
-            targetName =
-              mention.pushname || mention.name || mention.number || "someone";
+            targetJid = mention.jid || mention.id?._serialized;
+            targetNumber = mention.number || targetJid?.split("@")[0];
             // Check if the mentioned person is the owner
-            targetIsOwner = targetName.toLowerCase().includes("ansh");
+            targetIsOwner = (mention.pushname || "")
+              .toLowerCase()
+              .includes("ansh");
+            if (targetJid) {
+              mentionJids.push(targetJid);
+            }
           } else if (target) {
             // Use the provided name/text
-            targetName = target;
-            targetIsOwner = targetName.toLowerCase().includes("ansh");
+            targetNumber = target;
+            targetIsOwner = targetNumber.toLowerCase().includes("ansh");
           }
         } catch (error) {
           console.error("Error processing mentions in roast:", error);
           // Use provided text if mention processing fails
-          targetName = target || senderName;
+          targetNumber = target || senderName;
+        }
+      } else {
+        // No args, roasting sender
+        if (targetJid) {
+          mentionJids.push(targetJid);
         }
       }
 
+      let roastText;
       if (targetIsOwner) {
-        return await this.llmService.generateContextualResponse(
-          `Roast ${targetName} in a witty and clever way`,
-          "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever.",
-          { senderName: targetName, isOwner: true }
+        roastText = await this.llmService.generateContextualResponse(
+          `Generate a witty roast. You MUST start your response with "@${targetNumber}" followed by the roast.`,
+          "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+        );
+      } else {
+        // For regular users, use a more specific roast prompt
+        roastText = await this.llmService.generateMeanResponse(
+          `Generate a clever roast. You MUST start your response with "@${targetNumber}" followed by the roast.`,
+          "This is for a WhatsApp group roast session. Be creative and funny. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
         );
       }
 
-      // For regular users, use a more specific roast prompt
-      return await this.llmService.generateMeanResponse(
-        `Roast this person named ${targetName} in a witty, clever, and funny way. Make it a proper roast - clever insults and sarcastic humor.`,
-        "This is for a WhatsApp group roast session. Be creative and funny with your roasts."
-      );
+      return {
+        text: roastText,
+        mentions: mentionJids,
+      };
     } catch (error) {
       console.error("Roast command error:", error);
       // Return a fallback roast response
@@ -242,26 +259,51 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async generateInsult(args, message) {
-    let target = args.join(" ") || "you";
+    let targetNumber = "you";
+    let targetJid = null;
+    const mentionJids = [];
 
     // Check if there are mentions in the message
     try {
       const mentions = await message.getMentions();
+
       if (mentions && mentions.length > 0) {
-        // Replace the mention IDs with actual names
-        for (const mention of mentions) {
-          const name =
-            mention.pushname || mention.name || mention.number || "someone";
-          // Replace the @ID format with the actual name
-          const mentionId = `@${mention.id.user}`;
-          target = target.replace(mentionId, name);
+        const mention = mentions[0];
+
+        // Use jid if available, otherwise use id._serialized
+        targetJid = mention.jid || mention.id?._serialized;
+        targetNumber = mention.number || targetJid?.split("@")[0];
+
+        if (targetJid) {
+          mentionJids.push(targetJid);
         }
+      } else if (args.length > 0) {
+        targetNumber = args.join(" ");
       }
     } catch (error) {
       console.error("Error processing mentions in insult:", error);
+      if (args.length > 0) {
+        targetNumber = args.join(" ");
+      }
     }
 
-    return await this.llmService.generateInsult(target);
+    // Generate insult with proper mention
+    let insultText;
+    if (targetJid) {
+      // If we have a mention, use explicit prompt to start with @number
+      insultText = await this.llmService.generateMeanResponse(
+        `Generate a witty insult. You MUST start your response with "@${targetNumber}" followed by the insult.`,
+        "Make it funny, not actually offensive. Text casually. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+      );
+    } else {
+      // No mention, use regular insult
+      insultText = await this.llmService.generateInsult(targetNumber);
+    }
+
+    return {
+      text: insultText,
+      mentions: mentionJids,
+    };
   }
 
   async generateSarcasm(args) {
@@ -323,8 +365,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async burnSomeone(args, message) {
-    let target = args.join(" ");
-    if (!target) {
+    let targetNumber = args.join(" ");
+    let targetJid = null;
+    const mentionJids = [];
+
+    if (!targetNumber && (!message.mentions || message.mentions.length === 0)) {
       return "You want me to burn someone but didn't tell me who? Your brain must be on vacation. 🔥";
     }
 
@@ -332,23 +377,37 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       const mentions = await message.getMentions();
       if (mentions && mentions.length > 0) {
-        // Replace the mention IDs with actual names
-        for (const mention of mentions) {
-          const name =
-            mention.pushname || mention.name || mention.number || "someone";
-          // Replace the @ID format with the actual name
-          const mentionId = `@${mention.id.user}`;
-          target = target.replace(mentionId, name);
+        const mention = mentions[0];
+        targetJid = mention.jid || mention.id?._serialized;
+        targetNumber = mention.number || targetJid?.split("@")[0];
+        if (targetJid) {
+          mentionJids.push(targetJid);
         }
       }
     } catch (error) {
       console.error("Error processing mentions in burn:", error);
     }
 
-    return await this.llmService.generateMeanResponse(
-      `Create a savage burn for ${target}`,
-      "Make it clever and mean but not genuinely offensive"
-    );
+    // Generate burn with proper mention
+    let burnText;
+    if (targetJid) {
+      // If we have a mention, use explicit prompt to start with @number
+      burnText = await this.llmService.generateMeanResponse(
+        `Generate a savage burn. You MUST start your response with "@${targetNumber}" followed by the burn.`,
+        "Make it clever and mean but not genuinely offensive. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+      );
+    } else {
+      // No mention, just burn the target text
+      burnText = await this.llmService.generateMeanResponse(
+        `Create a savage burn for ${targetNumber}`,
+        "Make it clever and mean but not genuinely offensive."
+      );
+    }
+
+    return {
+      text: burnText,
+      mentions: mentionJids,
+    };
   }
 
   async savageMode(args) {
@@ -964,118 +1023,99 @@ ${ending}`;
       const interaction =
         cmd.endsWith("s") && cmd.length > 4 ? cmd.slice(0, -1) : cmd;
 
+      // Get sender info from message object (using new class structure)
+      const senderNumber = message.number || message.userId?.split("@")[0];
+      const senderJid = message.userId;
+      const sender = `@${senderNumber}`;
+
       // Get the full message body to extract @ mentions
-      const fullMessage = message.body || "";
+      const fullMessage = message.body || message.content || "";
       console.log(`📨 Full message:`, fullMessage);
 
       let target = "themselves";
-      let targetName = "themselves";
+      let targetJid = null; // Store the JID for mentions array
+      const mentionJids = []; // Array to store all JIDs to mention
 
-      // PRIORITY 1: Try to get mention from getMentions() - this has the proper name resolved
-      try {
-        const mentions = await message.getMentions();
-        if (mentions && mentions.length > 0) {
-          const mention = mentions[0];
-          // Use the resolved name (pushname or name) - this is the actual display name
-          targetName =
-            mention.pushname || mention.name || mention.number || "someone";
-          target = `@${targetName}`;
-
-          console.log(`📝 Using resolved mention:`, {
-            pushname: mention.pushname,
-            name: mention.name,
-            number: mention.number,
-            using: targetName,
-          });
-        }
-      } catch (error) {
-        console.error("Error processing mentions in interaction:", error);
+      // Always add sender to mentions
+      if (senderJid) {
+        mentionJids.push(senderJid);
       }
 
-      // PRIORITY 2: If getMentions didn't work, try extracting from text
-      if (targetName === "themselves") {
-        const mentionMatch = fullMessage.match(/@([^\s]+)/);
+      // PRIORITY 1: Check if this is a reply to someone
+      if (message.quoted && message.quoted.userId) {
+        targetJid = message.quoted.userId;
+        const targetNumber = message.quoted.number || targetJid.split("@")[0];
+        target = `@${targetNumber}`;
+        mentionJids.push(targetJid);
+        
+        console.log(`📝 Using quoted message target:`, {
+          jid: targetJid,
+          number: targetNumber,
+          target: target,
+        });
+      }
+      // PRIORITY 2: Try to get mention from getMentions() or message.mentions
+      else {
+        try {
+          let mentions = [];
 
-        if (mentionMatch) {
-          // Found @mention in text - but only use if it's NOT just numbers (LID/phone)
-          const textName = mentionMatch[1];
-          if (!/^\d+$/.test(textName)) {
-            // It's a name, not a number
-            targetName = textName;
-            target = `@${targetName}`;
-
-            console.log(`📝 Using name from text:`, {
-              fullMatch: mentionMatch[0],
-              name: targetName,
-              target: target,
-            });
-          } else {
-            console.log(
-              `📝 Skipped number from text (${textName}), waiting for resolved name`
-            );
+          // Use new message class structure
+          if (message.mentions && message.mentions.length > 0) {
+            mentions = await message.getMentions();
           }
-        } else if (args.length > 0) {
-          // No @ mention, but has args - use as target
-          target = args.join(" ");
-          targetName = target;
 
-          console.log(`📝 Using args as target:`, { target, targetName });
+          if (mentions && mentions.length > 0) {
+            const mention = mentions[0];
+            // Store the JID for mentions
+            targetJid = mention.jid || mention.id?._serialized;
+            const targetNumber = mention.number || targetJid?.split("@")[0];
+            target = `@${targetNumber}`;
+
+            // Add target to mentions array
+            if (targetJid) {
+              mentionJids.push(targetJid);
+            }
+
+            console.log(`📝 Using resolved mention:`, {
+              jid: targetJid,
+              pushname: mention.pushname,
+              name: mention.name,
+              number: mention.number,
+              using: target,
+            });
+          }
+        } catch (error) {
+          console.error("Error processing mentions in interaction:", error);
+        }
+
+        // PRIORITY 3: If no mention found, try extracting from text
+        if (target === "themselves") {
+          if (args.length > 0) {
+            // Has args - use as target
+            target = args.join(" ");
+            console.log(`📝 Using args as target:`, { target });
+          }
         }
       }
 
-      // Get interaction text
+      // Get interaction text with proper mentions (sender and target)
       const interactionText = this.interactionService.getRandomTemplate(
         interaction,
-        senderName,
+        sender,
         target
       );
 
       console.log(
-        `💫 ${interaction} interaction: ${senderName} -> ${targetName}`
+        `💫 ${interaction} interaction: ${sender} -> ${target}`,
+        `\n📱 Mentions:`,
+        mentionJids
       );
 
-      // Search for GIF
-      const gifResult = await this.interactionService.searchGif(interaction);
-
-      if (gifResult && gifResult.url) {
-        try {
-          console.log(`🎬 Downloading GIF from: ${gifResult.url}`);
-
-          // Download the GIF
-          const response = await axios.get(gifResult.url, {
-            responseType: "arraybuffer",
-            timeout: 10000,
-          });
-
-          const gifBuffer = Buffer.from(response.data);
-          console.log(`✅ GIF downloaded, size: ${gifBuffer.length} bytes`);
-
-          // Determine mimetype based on URL
-          const isMp4 =
-            gifResult.url.toLowerCase().includes(".mp4") ||
-            gifResult.url.toLowerCase().includes("mp4");
-          const mimetype = isMp4 ? "video/mp4" : "image/gif";
-
-          console.log(`📹 Sending as:`, { mimetype, gifPlayback: true });
-
-          // Return only media with caption (no separate text)
-          return {
-            media: {
-              video: gifBuffer,
-              gifPlayback: true,
-              mimetype: mimetype,
-            },
-            text: interactionText, // This will be used as caption
-          };
-        } catch (gifError) {
-          console.error("Error downloading GIF:", gifError.message);
-          // If GIF download fails, just return text
-          return interactionText;
-        }
-      } else {
-        console.log("⚠️ No GIF found, sending text only");
-        return interactionText;
-      }
+      // Return text with mentions (GIF removed for now)
+      return {
+        text: interactionText,
+        mentions: mentionJids, // Include all mentions (sender + target)
+      };
     } catch (error) {
       console.error("Interaction error:", error);
       const { senderName = "User" } = this.currentContext;

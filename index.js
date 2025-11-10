@@ -33,80 +33,224 @@ const contactNameCache = new Map();
 
 // Message wrapper class
 class MessageWrapper {
-  constructor(rawMessage, sock) {
+  constructor(rawMessage, sock, botName = "eden") {
+    // Raw message object
     this.raw = rawMessage;
     this.sock = sock;
-    this.key = rawMessage.key;
-    this.message = rawMessage.message;
-    this.pushName = rawMessage.pushName || "";
-    this.timestamp = new Date(rawMessage.messageTimestamp * 1000);
-    this.isFromMe = rawMessage.key.fromMe || false;
-    
-    // Extract user IDs
-    this.groupId = rawMessage.key.remoteJid?.endsWith("@g.us") ? rawMessage.key.remoteJid : undefined;
-    this.userId = rawMessage.key.participant || rawMessage.key.remoteJid;
+
+    // Extract message content
+    this.content = this.extractContent(rawMessage.message);
+
+    // Extract user IDs - handle both group and DM
+    const remoteJid = rawMessage.key.remoteJid;
+    const participant = rawMessage.key.participant;
+
+    // userId is the actual sender (participant in group, remoteJid in DM)
+    this.userId = participant || remoteJid;
     this.number = this.userId?.split("@")[0];
+
+    // LID support - check if sender uses LID
     this.lid = this.userId?.endsWith("@lid") ? this.userId : undefined;
-    
-    // Extract content
-    this.content = this.getMessage(rawMessage.message);
-    
-    // Extract mentions
-    this.mentions = rawMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-    
-    // Check for quoted message
-    this.quoted = this.getQuoted(rawMessage.message);
-  }
-  
-  getMessage(msg) {
-    if (!msg) return "";
-    return (
-      msg.conversation ||
-      msg.extendedTextMessage?.text ||
-      msg.imageMessage?.caption ||
-      msg.videoMessage?.caption ||
-      ""
+
+    // oldId is the c.us format (WhatsApp Web legacy format)
+    this.oldId = this.number ? `${this.number}@c.us` : undefined;
+
+    // Group ID if in a group
+    this.groupId = remoteJid?.endsWith("@g.us") ? remoteJid : undefined;
+
+    // Push name (display name)
+    this.pushName = rawMessage.pushName || "";
+
+    // Extract mentions from message
+    this.mentions =
+      rawMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
+    // Message metadata
+    this.isFromMe = rawMessage.key.fromMe || false;
+    this.timestamp = new Date((rawMessage.messageTimestamp || 0) * 1000);
+
+    // Check for quoted/reply message
+    this.quoted = this.extractQuoted(rawMessage.message);
+
+    // Message type checks
+    this.isSticker = !!rawMessage.message?.stickerMessage;
+    this.isStatusMention = remoteJid === "status@broadcast";
+    this.isViewOnce = !!(
+      rawMessage.message?.viewOnceMessage ||
+      rawMessage.message?.viewOnceMessageV2
     );
+    this.isReaction = !!rawMessage.message?.reactionMessage;
+    this.isLocationMessage = !!rawMessage.message?.locationMessage;
+
+    // Bot name
+    this.botName = botName;
   }
-  
-  getQuoted(msg) {
-    const contextInfo = msg?.extendedTextMessage?.contextInfo;
+
+  extractContent(msg) {
+    if (!msg) return "";
+
+    // Handle different message types
+    if (msg.conversation) return msg.conversation;
+    if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
+    if (msg.imageMessage?.caption) return msg.imageMessage.caption;
+    if (msg.videoMessage?.caption) return msg.videoMessage.caption;
+    if (msg.documentMessage?.caption) return msg.documentMessage.caption;
+
+    return "";
+  }
+
+  extractQuoted(msg) {
+    const contextInfo =
+      msg?.extendedTextMessage?.contextInfo ||
+      msg?.imageMessage?.contextInfo ||
+      msg?.videoMessage?.contextInfo;
+
     if (contextInfo?.quotedMessage) {
       const quoted = contextInfo.quotedMessage;
       const participant = contextInfo.participant;
+
       return {
         userId: participant,
         number: participant?.split("@")[0],
         lid: participant?.endsWith("@lid") ? participant : undefined,
-        content: quoted.conversation || quoted.extendedTextMessage?.text || "",
-        stanzaId: contextInfo.stanzaId
+        content: this.extractContent(quoted),
+        stanzaId: contextInfo.stanzaId,
+        raw: quoted,
       };
     }
     return undefined;
   }
-  
+
+  // Reply to this message
   async reply(text, quotedMsg, mentions = []) {
     const options = {};
     if (quotedMsg || this.raw) {
       options.quoted = quotedMsg || this.raw;
     }
-    
+
     await this.sock.sendMessage(
       this.groupId || this.userId,
       { text, mentions },
       options
     );
   }
-  
+
+  // Check if message has media
+  get hasMedia() {
+    const msg = this.raw.message;
+    return !!(
+      msg?.imageMessage ||
+      msg?.videoMessage ||
+      msg?.audioMessage ||
+      msg?.documentMessage ||
+      msg?.stickerMessage
+    );
+  }
+
+  // Check if has quoted message
+  get hasQuotedMsg() {
+    return !!this.quoted;
+  }
+
+  // Get message body (alias for content)
+  get body() {
+    return this.content;
+  }
+
+  // Get sender JID
+  get from() {
+    return this.groupId || this.userId;
+  }
+
+  // Download media from this message
+  async downloadMedia() {
+    if (!this.hasMedia) return null;
+
+    try {
+      const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+      const buffer = await downloadMediaMessage(this.raw, "buffer", {});
+
+      const msg = this.raw.message;
+      let mimetype = "application/octet-stream";
+      let filename = `media_${Date.now()}`;
+
+      if (msg.imageMessage) {
+        mimetype = msg.imageMessage.mimetype || "image/jpeg";
+        filename = `image_${Date.now()}.jpg`;
+      } else if (msg.videoMessage) {
+        mimetype = msg.videoMessage.mimetype || "video/mp4";
+        filename = `video_${Date.now()}.mp4`;
+      } else if (msg.audioMessage) {
+        mimetype = msg.audioMessage.mimetype || "audio/ogg";
+        filename = `audio_${Date.now()}.ogg`;
+      } else if (msg.documentMessage) {
+        mimetype = msg.documentMessage.mimetype || "application/pdf";
+        filename = msg.documentMessage.fileName || `document_${Date.now()}`;
+      } else if (msg.stickerMessage) {
+        mimetype = "image/webp";
+        filename = `sticker_${Date.now()}.webp`;
+      }
+
+      return {
+        data: buffer.toString("base64"),
+        buffer: buffer,
+        mimetype: mimetype,
+        filename: filename,
+      };
+    } catch (error) {
+      console.error("Error downloading media:", error);
+      return null;
+    }
+  }
+
+  // Get quoted message
+  async getQuotedMessage() {
+    if (!this.quoted) return null;
+
+    return {
+      body: this.quoted.content,
+      fromMe: false,
+      hasMedia: false, // We can enhance this later if needed
+      downloadMedia: async () => {
+        // Try to download media from quoted message
+        if (!this.quoted.raw) return null;
+
+        try {
+          const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+          const quotedMsgObj = {
+            key: {
+              remoteJid: this.groupId || this.userId,
+              fromMe: false,
+              id: this.quoted.stanzaId,
+            },
+            message: this.quoted.raw,
+          };
+
+          const buffer = await downloadMediaMessage(quotedMsgObj, "buffer", {});
+
+          return {
+            data: buffer.toString("base64"),
+            buffer: buffer,
+            mimetype: "application/octet-stream",
+            filename: `quoted_media_${Date.now()}`,
+          };
+        } catch (error) {
+          console.error("Error downloading quoted media:", error);
+          return null;
+        }
+      },
+    };
+  }
+
   // Backward compatibility method for old API
   async getMentions() {
     const mentionedJids = this.mentions;
     const mentions = [];
-    
+
     if (!mentionedJids || mentionedJids.length === 0) {
       return mentions;
     }
-    
+
     // Get group participants if needed
     let groupParticipants = [];
     if (this.groupId) {
@@ -117,43 +261,44 @@ class MessageWrapper {
         console.error("Error fetching group metadata:", e.message);
       }
     }
-    
+
     // Process each mentioned JID
     for (const jid of mentionedJids) {
       let displayName = null;
       let phoneNumber = jid.split("@")[0];
       const isLid = jid.endsWith("@lid");
-      
+
       // For LID, find corresponding phone number
       if (isLid && groupParticipants.length > 0) {
-        const participant = groupParticipants.find(p => p.lid === jid);
+        const participant = groupParticipants.find((p) => p.lid === jid);
         if (participant) {
           if (participant.phoneNumber) {
             phoneNumber = participant.phoneNumber.split("@")[0];
           } else if (participant.id) {
             phoneNumber = participant.id.split("@")[0];
           }
-          
+
           // Check cache for name
           if (participant.id && contactNameCache.has(participant.id)) {
             displayName = contactNameCache.get(participant.id);
           }
         }
       }
-      
+
       // Check cache for current JID
       if (!displayName && contactNameCache.has(jid)) {
         displayName = contactNameCache.get(jid);
       }
-      
+
       mentions.push({
         jid,
+        id: { user: phoneNumber, _serialized: jid },
         number: phoneNumber,
         pushname: displayName,
-        name: displayName
+        name: displayName,
       });
     }
-    
+
     return mentions;
   }
 }
@@ -450,8 +595,33 @@ async function connectToWhatsApp() {
             const command = messageText.slice(COMMAND_PREFIX.length).trim();
 
             // Create wrapped message with new API
-            const msg = new MessageWrapper(message, sock);
-            
+            const msg = new MessageWrapper(
+              message,
+              sock,
+              BOT_NAME.toLowerCase()
+            );
+
+            // Log the message structure for debugging
+            console.log("📦 Message Object:", {
+              content: msg.content,
+              userId: msg.userId,
+              lid: msg.lid,
+              oldId: msg.oldId,
+              number: msg.number,
+              groupId: msg.groupId,
+              pushName: msg.pushName,
+              mentions: msg.mentions,
+              isFromMe: msg.isFromMe,
+              timestamp: msg.timestamp,
+              quoted: msg.quoted,
+              isSticker: msg.isSticker,
+              isStatusMention: msg.isStatusMention,
+              isViewOnce: msg.isViewOnce,
+              isReaction: msg.isReaction,
+              botName: msg.botName,
+              isLocationMessage: msg.isLocationMessage,
+            });
+
             // Also create adapter for backward compatibility with old command handlers
             const messageAdapter = {
               ...msg,
@@ -866,88 +1036,52 @@ async function connectToWhatsApp() {
 
                 if (typeof response === "object" && response.media) {
                   // Remove quotes from text
-                  let cleanText = response.text ? response.text.replace(/["""'']/g, "") : "";
-                  
-                  // Extract mentions from response text
-                  const mentionMatches = cleanText.match(/@([^\s]+)/g) || [];
-                  const mentionJids = [];
-                  
-                  if (mentionMatches.length > 0) {
-                    const originalMentions = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                    
-                    for (const mentionText of mentionMatches) {
-                      const name = mentionText.substring(1);
-                      
-                      for (const [jid, cachedName] of contactNameCache.entries()) {
-                        if (cachedName === name && originalMentions.includes(jid)) {
-                          if (!mentionJids.includes(jid)) {
-                            mentionJids.push(jid);
-                            // Replace @Name with @phoneNumber in text
-                            const phoneNumber = jid.split("@")[0];
-                            cleanText = cleanText.replace(mentionText, `@${phoneNumber}`);
-                          }
-                          break;
-                        }
-                      }
-                    }
-                  }
-                  
+                  let cleanText = response.text
+                    ? response.text.replace(/["""'']/g, "")
+                    : "";
+
+                  // Use mentions from response if provided, otherwise extract from text
+                  let mentionJids = response.mentions || [];
+
                   // Send media with caption and mentions
                   const mediaMessage = {
                     ...response.media,
                   };
-                  
+
                   if (cleanText) {
                     mediaMessage.caption = cleanText;
                     if (mentionJids.length > 0) {
                       mediaMessage.mentions = mentionJids;
                     }
                   }
-                  
-                  await sock.sendMessage(
-                    chatJid,
-                    mediaMessage,
-                    { quoted: quotedMsg }
-                  );
+
+                  await sock.sendMessage(chatJid, mediaMessage, {
+                    quoted: quotedMsg,
+                  });
                 } else {
-                  // Remove quotes from response
-                  let cleanResponse = response.replace(/["""'']/g, "");
-                  
-                  // Extract mentions from response text
-                  // Look for @Name format and try to match with mentioned users
-                  const mentionMatches = cleanResponse.match(/@([^\s]+)/g) || [];
-                  const mentionJids = [];
-                  
-                  if (mentionMatches.length > 0) {
-                    // Get all mentioned JIDs from original message
-                    const originalMentions = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                    
-                    // For each @Name in response, find corresponding JID and replace with @phoneNumber
-                    for (const mentionText of mentionMatches) {
-                      const name = mentionText.substring(1); // Remove @
-                      
-                      // Try to find JID by matching cached names
-                      for (const [jid, cachedName] of contactNameCache.entries()) {
-                        if (cachedName === name && originalMentions.includes(jid)) {
-                          if (!mentionJids.includes(jid)) {
-                            mentionJids.push(jid);
-                            // Replace @Name with @phoneNumber in text
-                            const phoneNumber = jid.split("@")[0];
-                            cleanResponse = cleanResponse.replace(mentionText, `@${phoneNumber}`);
-                          }
-                          break;
-                        }
-                      }
-                    }
-                    
-                    console.log(`📱 Sending mentions:`, { mentionMatches, mentionJids });
+                  // Handle string or object with text and mentions
+                  let cleanResponse, mentionJids;
+
+                  if (typeof response === "object" && response.text) {
+                    // Response is an object with text and mentions
+                    cleanResponse = response.text.replace(/["""'']/g, "");
+                    mentionJids = response.mentions || [];
+                  } else {
+                    // Response is just a string
+                    cleanResponse = response.replace(/["""'']/g, "");
+                    mentionJids = [];
                   }
-                  
+
+                  console.log(`📱 Sending message with mentions:`, {
+                    mentionJids,
+                  });
+
                   await sock.sendMessage(
                     chatJid,
                     {
                       text: cleanResponse,
-                      mentions: mentionJids.length > 0 ? mentionJids : undefined,
+                      mentions:
+                        mentionJids.length > 0 ? mentionJids : undefined,
                     },
                     { quoted: quotedMsg }
                   );
