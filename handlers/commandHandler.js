@@ -1148,13 +1148,13 @@ ${ending}`;
         ""
       );
 
-      // Restrict to only specific user
-      const allowedNumber = "61259152101540";
+      // Restrict to only specific users
+      const allowedNumbers = ["61259152101540", "207099061624867"];
       console.log(
-        `Pet access check - User: ${userNumber}, Allowed: ${allowedNumber}`
+        `Pet access check - User: ${userNumber}, Allowed: ${allowedNumbers.join(", ")}`
       );
 
-      if (userNumber !== allowedNumber) {
+      if (!allowedNumbers.includes(userNumber)) {
         return `🔒 Sorry, the pet feature is currently in beta and only available to select users!`;
       }
 
@@ -1166,23 +1166,32 @@ ${ending}`;
         // Show pet status with image
         const display = await this.petService.formatPetDisplay(userId);
         if (!display) {
-          return `You don't have a pet yet! 🐉\n\nCreate one with: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
+          return `You don't have a pet yet! 🐉\n\nCreate one with: -pet create <name> <species>\n\nSpecies: dragon, glimmer`;
         }
 
-        // Return with image
-        const imagePath = path.join(
-          __dirname,
-          "..",
-          "assets",
-          "Gemini_Generated_Image_kicv4ekicv4ekicv.png"
-        );
-        if (fs.existsSync(imagePath)) {
-          return {
-            media: {
-              image: fs.readFileSync(imagePath),
-              caption: display,
-            },
-          };
+        // Get pet data to determine which image to show
+        const pet = await this.petService.getPet(userId);
+        if (pet) {
+          // Return with appropriate image based on species
+          let imageFilename;
+          if (pet.species === "glimmer") {
+            imageFilename = "Gemini_Generated_Image_kicv4ekicv4ekicv.png";
+          } else if (pet.species === "dragon") {
+            imageFilename = "Gemini_Generated_Image_1kosex1kosex1kos.png";
+          } else {
+            // Fallback to glimmer image for any other species
+            imageFilename = "Gemini_Generated_Image_kicv4ekicv4ekicv.png";
+          }
+
+          const imagePath = path.join(__dirname, "..", "assets", imageFilename);
+          if (fs.existsSync(imagePath)) {
+            return {
+              media: {
+                image: fs.readFileSync(imagePath),
+                caption: display,
+              },
+            };
+          }
         }
 
         return display;
@@ -1192,17 +1201,10 @@ ${ending}`;
         case "create": {
           const [name, species = "dragon"] = params;
           if (!name) {
-            return `Please provide a name! Usage: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
+            return `Please provide a name! Usage: -pet create <name> <species>\n\nSpecies: dragon, glimmer`;
           }
 
-          const validSpecies = [
-            "dragon",
-            "phoenix",
-            "unicorn",
-            "griffin",
-            "hydra",
-            "glimmer",
-          ];
+          const validSpecies = ["dragon", "glimmer"];
           const selectedSpecies = species.toLowerCase();
 
           if (!validSpecies.includes(selectedSpecies)) {
@@ -1217,13 +1219,15 @@ ${ending}`;
           await this.petService.createPet(userId, name, selectedSpecies);
           const display = await this.petService.formatPetDisplay(userId);
 
-          // Return with image
-          const imagePath = path.join(
-            __dirname,
-            "..",
-            "assets",
-            "Gemini_Generated_Image_kicv4ekicv4ekicv.png"
-          );
+          // Return with appropriate image based on species
+          let imageFilename;
+          if (selectedSpecies === "glimmer") {
+            imageFilename = "Gemini_Generated_Image_kicv4ekicv4ekicv.png";
+          } else if (selectedSpecies === "dragon") {
+            imageFilename = "Gemini_Generated_Image_1kosex1kosex1kos.png";
+          }
+
+          const imagePath = path.join(__dirname, "..", "assets", imageFilename);
           if (fs.existsSync(imagePath)) {
             return {
               media: {
@@ -1351,10 +1355,14 @@ ${ending}`;
       const limit = Math.min(Math.max(messageCount, 20), 100); // Between 20-100 messages
 
       // Send processing message
-      await message.reply(`🔍 Analyzing last ${limit} messages from WhatsApp history... This may take a moment.`);
+      await message.reply(
+        `🔍 Analyzing last ${limit} messages from WhatsApp history... This may take a moment.`
+      );
 
       // Get messages from WhatsApp synced message store
-      const chatHistory = message.getStoredMessages ? message.getStoredMessages(limit) : [];
+      const chatHistory = message.getStoredMessages
+        ? message.getStoredMessages(limit)
+        : [];
 
       if (!chatHistory || chatHistory.length === 0) {
         return `❌ No message history available yet. WhatsApp needs to sync messages first.\n\nℹ️ This happens automatically when:\n- Bot just started and history is being synced\n- This is a new group\n\nTry again in a moment or after some messages are sent!`;
@@ -1362,12 +1370,12 @@ ${ending}`;
 
       // Format messages for analysis (filter out commands and system messages)
       const formattedMessages = chatHistory
-        .filter(msg => {
-          const content = msg.content || '';
-          return content.trim().length > 0 && !content.startsWith('-');
+        .filter((msg) => {
+          const content = msg.content || "";
+          return content.trim().length > 0 && !content.startsWith("-");
         })
-        .map(msg => `${msg.sender}: ${msg.content}`)
-        .join('\n');
+        .map((msg) => `${msg.sender}: ${msg.content}`)
+        .join("\n");
 
       if (!formattedMessages) {
         return `❌ No text messages found in the history. Only commands were detected.`;
@@ -1375,7 +1383,7 @@ ${ending}`;
 
       // Create prompt for LLM
       const systemPrompt = `You are an expert at analyzing group chat conversations. Provide clear, structured insights with emojis. Be concise and insightful.`;
-      
+
       const userPrompt = `Analyze this WhatsApp group chat conversation and provide:
 
 1. **Overall Sentiment**: General mood (positive/negative/neutral/mixed)
@@ -1394,9 +1402,15 @@ Provide a structured analysis with emojis.`;
       // Use the LLM service to generate analysis
       let analysis;
       try {
-        if (this.llmService.groqApiKey && this.llmService.groqApiKey !== "your_groq_api_key_here") {
+        if (
+          this.llmService.groqApiKey &&
+          this.llmService.groqApiKey !== "your_groq_api_key_here"
+        ) {
           analysis = await this.llmService.callGroq(userPrompt, systemPrompt);
-        } else if (this.llmService.openaiApiKey && this.llmService.openaiApiKey !== "your_openai_api_key_here") {
+        } else if (
+          this.llmService.openaiApiKey &&
+          this.llmService.openaiApiKey !== "your_openai_api_key_here"
+        ) {
           analysis = await this.llmService.callOpenAI(userPrompt, systemPrompt);
         } else {
           // Fallback to Ollama
@@ -1404,8 +1418,8 @@ Provide a structured analysis with emojis.`;
           analysis = await this.llmService.callOllama(fullPrompt);
         }
       } catch (error) {
-        console.error('LLM call error:', error);
-        throw new Error('Failed to generate analysis from LLM');
+        console.error("LLM call error:", error);
+        throw new Error("Failed to generate analysis from LLM");
       }
 
       const response = `📊 *Chat Sentiment Analysis*\n━━━━━━━━━━━━━━━━━━━━\n\n${analysis}\n\n━━━━━━━━━━━━━━━━━━━━\n📈 Analyzed ${chatHistory.length} messages`;
@@ -1417,5 +1431,7 @@ Provide a structured analysis with emojis.`;
     }
   }
 }
+
+// 207099061624867
 
 module.exports = CommandHandler;
