@@ -31,6 +31,10 @@ let botId = null;
 // Maps JID -> display name from pushName or message text
 const contactNameCache = new Map();
 
+// Message store for sentiment analysis
+// Simple in-memory store that keeps messages synced from WhatsApp
+const messageStore = new Map();
+
 // Message wrapper class
 class MessageWrapper {
   constructor(rawMessage, sock, botName = "eden") {
@@ -518,6 +522,103 @@ async function connectToWhatsApp() {
     // Handle credentials update
     sock.ev.on("creds.update", saveCreds);
 
+    // Handle message history sync from WhatsApp
+    sock.ev.on("messaging-history.set", ({ messages, chats, isLatest }) => {
+      console.log(`📥 Received message history: ${messages.length} messages from ${chats.length} chats (latest: ${isLatest})`);
+      
+      // Store messages in messageStore for sentiment analysis
+      for (const msg of messages) {
+        const chatId = msg.key.remoteJid;
+        if (!chatId) continue;
+        
+        // Initialize array for this chat if needed
+        if (!messageStore.has(chatId)) {
+          messageStore.set(chatId, []);
+        }
+        
+        const chatMessages = messageStore.get(chatId);
+        
+        // Extract message content
+        let content = '';
+        if (msg.message?.conversation) {
+          content = msg.message.conversation;
+        } else if (msg.message?.extendedTextMessage?.text) {
+          content = msg.message.extendedTextMessage.text;
+        } else if (msg.message?.imageMessage?.caption) {
+          content = msg.message.imageMessage.caption;
+        } else if (msg.message?.videoMessage?.caption) {
+          content = msg.message.videoMessage.caption;
+        }
+        
+        if (content && content.trim().length > 0) {
+          const senderJid = msg.key.participant || msg.key.remoteJid;
+          const senderName = msg.pushName || senderJid?.split('@')[0] || 'Unknown';
+          
+          chatMessages.push({
+            sender: senderName,
+            senderJid: senderJid,
+            content: content,
+            timestamp: new Date((msg.messageTimestamp || 0) * 1000),
+            messageId: msg.key.id,
+          });
+        }
+      }
+      
+      // Keep only last 100 messages per chat to save memory
+      for (const [chatId, messages] of messageStore.entries()) {
+        if (messages.length > 100) {
+          messageStore.set(chatId, messages.slice(-100));
+        }
+      }
+      
+      console.log(`💾 Message store now has ${messageStore.size} chats`);
+    });
+
+    // Store new messages as they arrive
+    sock.ev.on("messages.upsert", async ({ messages: upsertedMessages, type }) => {
+      if (type === "notify") {
+        for (const msg of upsertedMessages) {
+          const chatId = msg.key.remoteJid;
+          if (!chatId || msg.key.fromMe) continue;
+          
+          // Extract message content
+          let content = '';
+          if (msg.message?.conversation) {
+            content = msg.message.conversation;
+          } else if (msg.message?.extendedTextMessage?.text) {
+            content = msg.message.extendedTextMessage.text;
+          } else if (msg.message?.imageMessage?.caption) {
+            content = msg.message.imageMessage.caption;
+          } else if (msg.message?.videoMessage?.caption) {
+            content = msg.message.videoMessage.caption;
+          }
+          
+          if (content && content.trim().length > 0) {
+            if (!messageStore.has(chatId)) {
+              messageStore.set(chatId, []);
+            }
+            
+            const chatMessages = messageStore.get(chatId);
+            const senderJid = msg.key.participant || msg.key.remoteJid;
+            const senderName = msg.pushName || senderJid?.split('@')[0] || 'Unknown';
+            
+            chatMessages.push({
+              sender: senderName,
+              senderJid: senderJid,
+              content: content,
+              timestamp: new Date((msg.messageTimestamp || 0) * 1000),
+              messageId: msg.key.id,
+            });
+            
+            // Keep only last 100 messages
+            if (chatMessages.length > 100) {
+              chatMessages.shift();
+            }
+          }
+        }
+      }
+    });
+
     // Handle contact updates - Baileys emits this when it receives contact info
     sock.ev.on("contacts.update", (updates) => {
       for (const update of updates) {
@@ -630,6 +731,14 @@ async function connectToWhatsApp() {
               hasQuotedMsg:
                 !!message.message?.extendedTextMessage?.contextInfo
                   ?.quotedMessage,
+              // Preserve all MessageWrapper methods
+              downloadMedia: () => msg.downloadMedia(),
+              reply: (text, quotedMsg, mentions) => msg.reply(text, quotedMsg, mentions),
+              // Add method to get messages from store
+              getStoredMessages: (limit) => {
+                const messages = messageStore.get(msg.groupId || msg.userId) || [];
+                return messages.slice(-limit);
+              },
               getQuotedMessage: async () => {
                 const contextInfo =
                   message.message?.extendedTextMessage?.contextInfo;

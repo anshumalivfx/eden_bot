@@ -181,6 +181,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-analyze [count]\` - Analyze group sentiment & summarize chat
 • \`-sentiment [count]\` - Same as analyze (alias)
 • \`-summary [count]\` - Same as analyze (alias)
+• Uses synced WhatsApp message history
 • Default: Analyzes last 40 messages
 • Range: 20-100 messages
 • Example: \`-analyze 50\` analyzes last 50 messages
@@ -1350,23 +1351,26 @@ ${ending}`;
       const limit = Math.min(Math.max(messageCount, 20), 100); // Between 20-100 messages
 
       // Send processing message
-      await message.reply(`🔍 Analyzing last ${limit} messages... This may take a moment.`);
+      await message.reply(`🔍 Analyzing last ${limit} messages from WhatsApp history... This may take a moment.`);
 
-      // Fetch chat history
-      const chatHistory = await this.fetchChatHistory(message.sock, message.groupId, limit);
+      // Get messages from WhatsApp synced message store
+      const chatHistory = message.getStoredMessages ? message.getStoredMessages(limit) : [];
 
       if (!chatHistory || chatHistory.length === 0) {
-        return `❌ Could not retrieve chat history. Please try again.`;
+        return `❌ No message history available yet. WhatsApp needs to sync messages first.\n\nℹ️ This happens automatically when:\n- Bot just started and history is being synced\n- This is a new group\n\nTry again in a moment or after some messages are sent!`;
       }
 
-      // Format messages for analysis
+      // Format messages for analysis (filter out commands and system messages)
       const formattedMessages = chatHistory
-        .filter(msg => msg.content && msg.content.trim().length > 0)
+        .filter(msg => {
+          const content = msg.content || '';
+          return content.trim().length > 0 && !content.startsWith('-');
+        })
         .map(msg => `${msg.sender}: ${msg.content}`)
         .join('\n');
 
       if (!formattedMessages) {
-        return `❌ No text messages found in the last ${limit} messages.`;
+        return `❌ No text messages found in the history. Only commands were detected.`;
       }
 
       // Create prompt for LLM
@@ -1396,54 +1400,6 @@ Provide a clear, structured analysis with emojis. Be insightful but concise.`;
     } catch (error) {
       console.error("Sentiment analysis error:", error);
       return `❌ Failed to analyze chat sentiment: ${error.message}`;
-    }
-  }
-
-  async fetchChatHistory(sock, groupId, limit = 40) {
-    try {
-      // Load messages from the group
-      const messages = await sock.loadMessages(groupId, limit);
-      
-      const chatHistory = [];
-      
-      for (const msg of messages) {
-        if (!msg.message) continue;
-        
-        // Extract sender info
-        const sender = msg.key.participant || msg.key.remoteJid;
-        const senderNumber = sender?.split('@')[0];
-        const senderName = msg.pushName || senderNumber || 'Unknown';
-        
-        // Extract message content
-        let content = '';
-        if (msg.message.conversation) {
-          content = msg.message.conversation;
-        } else if (msg.message.extendedTextMessage?.text) {
-          content = msg.message.extendedTextMessage.text;
-        } else if (msg.message.imageMessage?.caption) {
-          content = msg.message.imageMessage.caption;
-        } else if (msg.message.videoMessage?.caption) {
-          content = msg.message.videoMessage.caption;
-        }
-        
-        // Skip empty messages, stickers, and bot commands
-        if (!content || content.startsWith('-') || content.trim().length < 2) {
-          continue;
-        }
-        
-        chatHistory.push({
-          sender: senderName,
-          senderNumber: senderNumber,
-          content: content,
-          timestamp: new Date((msg.messageTimestamp || 0) * 1000),
-        });
-      }
-      
-      // Return in chronological order (oldest first)
-      return chatHistory.reverse();
-    } catch (error) {
-      console.error('Error fetching chat history:', error);
-      throw error;
     }
   }
 }
