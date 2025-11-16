@@ -1374,25 +1374,39 @@ ${ending}`;
       }
 
       // Create prompt for LLM
-      const prompt = `Analyze the following group chat conversation and provide:
+      const systemPrompt = `You are an expert at analyzing group chat conversations. Provide clear, structured insights with emojis. Be concise and insightful.`;
+      
+      const userPrompt = `Analyze this WhatsApp group chat conversation and provide:
 
-1. **Overall Sentiment**: Describe the general mood (positive, negative, neutral, mixed)
+1. **Overall Sentiment**: General mood (positive/negative/neutral/mixed)
 2. **Key Topics**: Main topics discussed (max 5)
 3. **Active Participants**: Most active members and their sentiment
-4. **Emotional Tone**: Dominant emotions (joy, anger, frustration, excitement, etc.)
-5. **Summary**: Brief 2-3 sentence summary of the conversation
+4. **Emotional Tone**: Dominant emotions (joy, anger, excitement, etc.)
+5. **Summary**: Brief 2-3 sentence summary
 
 Chat History (${chatHistory.length} messages):
 ━━━━━━━━━━━━━━━━━━
 ${formattedMessages}
 ━━━━━━━━━━━━━━━━━━
 
-Provide a clear, structured analysis with emojis. Be insightful but concise.`;
+Provide a structured analysis with emojis.`;
 
-      const analysis = await this.llmService.generateResponse(prompt, {
-        temperature: 0.7,
-        maxTokens: 800,
-      });
+      // Use the LLM service to generate analysis
+      let analysis;
+      try {
+        if (this.llmService.groqApiKey && this.llmService.groqApiKey !== "your_groq_api_key_here") {
+          analysis = await this.llmService.callGroq(userPrompt, systemPrompt);
+        } else if (this.llmService.openaiApiKey && this.llmService.openaiApiKey !== "your_openai_api_key_here") {
+          analysis = await this.llmService.callOpenAI(userPrompt, systemPrompt);
+        } else {
+          // Fallback to Ollama
+          const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+          analysis = await this.llmService.callOllama(fullPrompt);
+        }
+      } catch (error) {
+        console.error('LLM call error:', error);
+        throw new Error('Failed to generate analysis from LLM');
+      }
 
       const response = `📊 *Chat Sentiment Analysis*\n━━━━━━━━━━━━━━━━━━━━\n\n${analysis}\n\n━━━━━━━━━━━━━━━━━━━━\n📈 Analyzed ${chatHistory.length} messages`;
 
