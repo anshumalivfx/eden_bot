@@ -6,53 +6,107 @@ class PetService {
     this.dbPath = path.join(__dirname, "..", "pets.db");
     this.db = new sqlite3.Database(this.dbPath);
     this.initDatabase();
-    
+
     // Pet species with unique traits
     this.species = {
       dragon: {
         name: "Dragon",
         emoji: "🐉",
-        traits: ["Fire Breath", "Sky Soarer", "Treasure Hoarder", "Ancient Wisdom", "Fierce Guardian"]
+        traits: [
+          "Fire Breath",
+          "Sky Soarer",
+          "Treasure Hoarder",
+          "Ancient Wisdom",
+          "Fierce Guardian",
+        ],
       },
       phoenix: {
         name: "Phoenix",
         emoji: "🔥",
-        traits: ["Eternal Rebirth", "Flame Walker", "Sun Blessed", "Ash Dance", "Phoenix Tears"]
+        traits: [
+          "Eternal Rebirth",
+          "Flame Walker",
+          "Sun Blessed",
+          "Ash Dance",
+          "Phoenix Tears",
+        ],
       },
       unicorn: {
         name: "Unicorn",
         emoji: "🦄",
-        traits: ["Magic Horn", "Rainbow Mane", "Pure Heart", "Starlight Gallop", "Dream Weaver"]
+        traits: [
+          "Magic Horn",
+          "Rainbow Mane",
+          "Pure Heart",
+          "Starlight Gallop",
+          "Dream Weaver",
+        ],
       },
       griffin: {
         name: "Griffin",
         emoji: "🦅",
-        traits: ["Lion's Courage", "Eagle Eyes", "Sky Predator", "Noble Heart", "Mountain King"]
+        traits: [
+          "Lion's Courage",
+          "Eagle Eyes",
+          "Sky Predator",
+          "Noble Heart",
+          "Mountain King",
+        ],
       },
       hydra: {
         name: "Hydra",
         emoji: "🐍",
-        traits: ["Multi-Head", "Regenerator", "Venom Strike", "Water Serpent", "Endless Hunger"]
+        traits: [
+          "Multi-Head",
+          "Regenerator",
+          "Venom Strike",
+          "Water Serpent",
+          "Endless Hunger",
+        ],
       },
       glimmer: {
         name: "Glimmer",
         emoji: "✨",
-        traits: ["Sparkle Dust", "Light Weaver", "Crystal Wings", "Shimmer Aura", "Rainbow Trail"]
-      }
+        traits: [
+          "Sparkle Dust",
+          "Light Weaver",
+          "Crystal Wings",
+          "Shimmer Aura",
+          "Rainbow Trail",
+        ],
+      },
     };
 
     // Moods based on stats
     this.moods = [
-      "Playful", "Happy", "Excited", "Content", "Sleepy",
-      "Hungry", "Energetic", "Lazy", "Curious", "Affectionate",
-      "Mischievous", "Calm", "Restless", "Proud", "Grumpy"
+      "Playful",
+      "Happy",
+      "Excited",
+      "Content",
+      "Sleepy",
+      "Hungry",
+      "Energetic",
+      "Lazy",
+      "Curious",
+      "Affectionate",
+      "Mischievous",
+      "Calm",
+      "Restless",
+      "Proud",
+      "Grumpy",
     ];
 
     // Gifts that can be claimed
     this.gifts = [
-      "✨ Stardust", "💎 Crystal Shard", "🌟 Moonstone",
-      "🔮 Magic Orb", "🎁 Mystery Box", "🏆 Trophy",
-      "👑 Crown", "⚡ Lightning Bolt", "🌈 Rainbow Scale"
+      "✨ Stardust",
+      "💎 Crystal Shard",
+      "🌟 Moonstone",
+      "🔮 Magic Orb",
+      "🎁 Mystery Box",
+      "🏆 Trophy",
+      "👑 Crown",
+      "⚡ Lightning Bolt",
+      "🌈 Rainbow Scale",
     ];
   }
 
@@ -96,7 +150,7 @@ class PetService {
   async createPet(userId, name, species) {
     const now = Date.now();
     const speciesData = this.species[species] || this.species.dragon;
-    
+
     // Select 3 random traits
     const selectedTraits = this.getRandomTraits(speciesData.traits, 3);
 
@@ -138,7 +192,10 @@ class PetService {
 
   async feedPet(userId) {
     const pet = await this.getPet(userId);
-    if (!pet) return { error: "You don't have a pet yet! Use -pet create <name> <species>" };
+    if (!pet)
+      return {
+        error: "You don't have a pet yet! Use -pet create <name> <species>",
+      };
 
     const now = Date.now();
     const timeSinceLastFed = now - pet.lastFed;
@@ -146,7 +203,9 @@ class PetService {
 
     if (timeSinceLastFed < cooldown) {
       const timeLeft = Math.ceil((cooldown - timeSinceLastFed) / (60 * 1000));
-      return { error: `Your pet is still full! Feed again in ${timeLeft} minutes.` };
+      return {
+        error: `Your pet is still full! Feed again in ${timeLeft} minutes.`,
+      };
     }
 
     // Update stats
@@ -160,26 +219,31 @@ class PetService {
       happiness: newHappiness,
       experience: newExp,
       level: newLevel,
-      lastFed: now
+      lastFed: now,
     });
 
     return {
       success: true,
       message: `🍖 Fed ${pet.name}! +30 Hunger, +10 Happiness, +15 EXP`,
-      levelUp: newLevel > pet.level
+      levelUp: newLevel > pet.level,
     };
   }
 
   async playWithPet(userId) {
     const pet = await this.getPet(userId);
-    if (!pet) return { error: "You don't have a pet yet! Use -pet create <name> <species>" };
+    if (!pet)
+      return {
+        error: "You don't have a pet yet! Use -pet create <name> <species>",
+      };
 
     const now = Date.now();
     const timeSinceLastPlayed = now - pet.lastPlayed;
     const cooldown = 1 * 60 * 60 * 1000; // 1 hour
 
     if (timeSinceLastPlayed < cooldown) {
-      const timeLeft = Math.ceil((cooldown - timeSinceLastPlayed) / (60 * 1000));
+      const timeLeft = Math.ceil(
+        (cooldown - timeSinceLastPlayed) / (60 * 1000)
+      );
       return { error: `Your pet is tired! Play again in ${timeLeft} minutes.` };
     }
 
@@ -196,27 +260,34 @@ class PetService {
       bond: newBond,
       experience: newExp,
       level: newLevel,
-      lastPlayed: now
+      lastPlayed: now,
     });
 
     return {
       success: true,
       message: `🎾 Played with ${pet.name}! +20 Happiness, +5 Bond, +20 EXP`,
-      levelUp: newLevel > pet.level
+      levelUp: newLevel > pet.level,
     };
   }
 
   async trainPet(userId) {
     const pet = await this.getPet(userId);
-    if (!pet) return { error: "You don't have a pet yet! Use -pet create <name> <species>" };
+    if (!pet)
+      return {
+        error: "You don't have a pet yet! Use -pet create <name> <species>",
+      };
 
     const now = Date.now();
     const timeSinceLastTrained = now - pet.lastTrained;
     const cooldown = 3 * 60 * 60 * 1000; // 3 hours
 
     if (timeSinceLastTrained < cooldown) {
-      const timeLeft = Math.ceil((cooldown - timeSinceLastTrained) / (60 * 1000));
-      return { error: `Your pet needs rest! Train again in ${timeLeft} minutes.` };
+      const timeLeft = Math.ceil(
+        (cooldown - timeSinceLastTrained) / (60 * 1000)
+      );
+      return {
+        error: `Your pet needs rest! Train again in ${timeLeft} minutes.`,
+      };
     }
 
     // Update stats
@@ -226,7 +297,8 @@ class PetService {
     const newLevel = Math.floor(newExp / 100) + 1;
 
     // Check if gift should be ready
-    const newGiftReady = (newLevel % 5 === 0 && newLevel !== pet.level) ? 1 : pet.giftReady;
+    const newGiftReady =
+      newLevel % 5 === 0 && newLevel !== pet.level ? 1 : pet.giftReady;
 
     await this.updatePet(userId, {
       energy: newEnergy,
@@ -234,14 +306,14 @@ class PetService {
       experience: newExp,
       level: newLevel,
       giftReady: newGiftReady,
-      lastTrained: now
+      lastTrained: now,
     });
 
     return {
       success: true,
       message: `💪 Trained ${pet.name}! +8 Bond, +35 EXP`,
       levelUp: newLevel > pet.level,
-      giftReady: newGiftReady === 1
+      giftReady: newGiftReady === 1,
     };
   }
 
@@ -250,7 +322,10 @@ class PetService {
     if (!pet) return { error: "You don't have a pet yet!" };
 
     if (!pet.giftReady) {
-      return { error: "No gift available! Train your pet to unlock gifts at levels 5, 10, 15, etc." };
+      return {
+        error:
+          "No gift available! Train your pet to unlock gifts at levels 5, 10, 15, etc.",
+      };
     }
 
     const gift = this.gifts[Math.floor(Math.random() * this.gifts.length)];
@@ -260,7 +335,7 @@ class PetService {
     return {
       success: true,
       gift: gift,
-      message: `🎁 ${pet.name} gave you a gift: ${gift}!`
+      message: `🎁 ${pet.name} gave you a gift: ${gift}!`,
     };
   }
 
@@ -276,7 +351,7 @@ class PetService {
 
     return {
       success: true,
-      message: `✏️ Your pet is now named ${newName}!`
+      message: `✏️ Your pet is now named ${newName}!`,
     };
   }
 
@@ -285,20 +360,23 @@ class PetService {
     if (!pet) return { error: "You don't have a pet yet!" };
 
     const speciesData = this.species[pet.species] || this.species.dragon;
-    const currentTraits = pet.traits.split(",").filter(t => t);
+    const currentTraits = pet.traits.split(",").filter((t) => t);
 
     if (currentTraits.length >= 5) {
       return { error: "Your pet already has maximum traits (5)!" };
     }
 
     // Get available traits
-    const availableTraits = speciesData.traits.filter(t => !currentTraits.includes(t));
-    
+    const availableTraits = speciesData.traits.filter(
+      (t) => !currentTraits.includes(t)
+    );
+
     if (availableTraits.length === 0) {
       return { error: "Your pet has all available traits!" };
     }
 
-    const newTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
+    const newTrait =
+      availableTraits[Math.floor(Math.random() * availableTraits.length)];
     const updatedTraits = [...currentTraits, newTrait].join(",");
 
     await this.updatePet(userId, { traits: updatedTraits });
@@ -306,7 +384,7 @@ class PetService {
     return {
       success: true,
       trait: newTrait,
-      message: `✨ ${pet.name} learned a new trait: ${newTrait}!`
+      message: `✨ ${pet.name} learned a new trait: ${newTrait}!`,
     };
   }
 
@@ -318,7 +396,7 @@ class PetService {
     if (pet.hunger < 40) return "Hungry";
     if (pet.happiness < 40) return "Grumpy";
     if (pet.bond > 80) return "Affectionate";
-    
+
     return this.moods[Math.floor(Math.random() * this.moods.length)];
   }
 
@@ -344,35 +422,38 @@ class PetService {
 
     const speciesData = this.species[updatedPet.species] || this.species.dragon;
     const mood = this.getMood(updatedPet);
-    const traits = updatedPet.traits.split(",").filter(t => t).join(", ");
-    const expToNextLevel = ((updatedPet.level * 100) - updatedPet.experience);
-    
+    const traits = updatedPet.traits
+      .split(",")
+      .filter((t) => t)
+      .join(", ");
+    const expToNextLevel = updatedPet.level * 100 - updatedPet.experience;
+
     let display = `${speciesData.emoji}  *Your Pet*\n`;
     display += `━━━━━━━━━━━━━━━━━━━━━\n`;
     display += `*Name:* ${updatedPet.name}\n`;
     display += `*Species:* ${speciesData.name}\n`;
     display += `*Level:* ${updatedPet.level}    *Bond:* ${updatedPet.bond}/100\n`;
     display += `*EXP:* ${expToNextLevel} to next level\n\n`;
-    
+
     display += `*Happiness:*\n`;
     display += `└ ${this.createProgressBar(updatedPet.happiness)}\n`;
-    
+
     display += `*Energy:*\n`;
     display += `└ ${this.createProgressBar(updatedPet.energy)}\n`;
-    
+
     display += `*Hunger:*\n`;
     display += `└ ${this.createProgressBar(updatedPet.hunger)}\n\n`;
-    
+
     display += `*Mood:* ${mood}\n`;
     display += `*Traits:* ${traits || "None"}\n`;
-    
+
     if (updatedPet.giftReady) {
       display += `*Gift:* 🎁 Ready!\n`;
       display += `💡 *Tip:* Gift is ready! Use -pet gift\n\n`;
     } else {
       display += `*Gift:* Not ready (unlock at levels 5, 10, 15...)\n\n`;
     }
-    
+
     display += `_Actions:_ -pet play | feed | train | gift | traits | name <name>\n`;
     display += `_Create:_ -pet create <name> <dragon/phoenix/unicorn/griffin/hydra>`;
 
@@ -400,7 +481,7 @@ class PetService {
       await this.updatePet(pet.userId, {
         hunger: newHunger,
         happiness: newHappiness,
-        energy: newEnergy
+        energy: newEnergy,
       });
     }
   }

@@ -75,6 +75,10 @@ class CommandHandler {
       cuddles: this.handleInteraction.bind(this),
       // Pet commands
       pet: this.handlePet.bind(this),
+      // Chat analysis commands
+      analyze: this.analyzeChatSentiment.bind(this),
+      sentiment: this.analyzeChatSentiment.bind(this),
+      summary: this.analyzeChatSentiment.bind(this),
     };
   }
 
@@ -172,6 +176,14 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-poke @person\` - Poke someone
 • \`-fuck @person\` - Flip someone off
 • Example: \`-hug @Ansh\` sends a hug GIF!
+
+*📊 Chat Analysis (Group Only):*
+• \`-analyze [count]\` - Analyze group sentiment & summarize chat
+• \`-sentiment [count]\` - Same as analyze (alias)
+• \`-summary [count]\` - Same as analyze (alias)
+• Default: Analyzes last 40 messages
+• Range: 20-100 messages
+• Example: \`-analyze 50\` analyzes last 50 messages
 
 *🎯 Mention Me:*
 Say "Eden" or "@Eden" and I'll grace you with my presence. Maybe.
@@ -1051,7 +1063,7 @@ ${ending}`;
         const targetNumber = message.quoted.number || targetJid.split("@")[0];
         target = `@${targetNumber}`;
         mentionJids.push(targetJid);
-        
+
         console.log(`📝 Using quoted message target:`, {
           jid: targetJid,
           number: targetNumber,
@@ -1130,12 +1142,17 @@ ${ending}`;
   async handlePet(args, message) {
     try {
       const userId = message.userId || message.from;
-      const userNumber = (message.number || userId.split("@")[0]).replace(/\D/g, "");
-      
+      const userNumber = (message.number || userId.split("@")[0]).replace(
+        /\D/g,
+        ""
+      );
+
       // Restrict to only specific user
       const allowedNumber = "61259152101540";
-      console.log(`Pet access check - User: ${userNumber}, Allowed: ${allowedNumber}`);
-      
+      console.log(
+        `Pet access check - User: ${userNumber}, Allowed: ${allowedNumber}`
+      );
+
       if (userNumber !== allowedNumber) {
         return `🔒 Sorry, the pet feature is currently in beta and only available to select users!`;
       }
@@ -1150,18 +1167,23 @@ ${ending}`;
         if (!display) {
           return `You don't have a pet yet! 🐉\n\nCreate one with: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
         }
-        
+
         // Return with image
-        const imagePath = path.join(__dirname, "..", "assets", "Gemini_Generated_Image_kicv4ekicv4ekicv.png");
+        const imagePath = path.join(
+          __dirname,
+          "..",
+          "assets",
+          "Gemini_Generated_Image_kicv4ekicv4ekicv.png"
+        );
         if (fs.existsSync(imagePath)) {
           return {
             media: {
               image: fs.readFileSync(imagePath),
               caption: display,
-            }
+            },
           };
         }
-        
+
         return display;
       }
 
@@ -1172,9 +1194,16 @@ ${ending}`;
             return `Please provide a name! Usage: -pet create <name> <species>\n\nSpecies: dragon, phoenix, unicorn, griffin, hydra, glimmer`;
           }
 
-          const validSpecies = ["dragon", "phoenix", "unicorn", "griffin", "hydra", "glimmer"];
+          const validSpecies = [
+            "dragon",
+            "phoenix",
+            "unicorn",
+            "griffin",
+            "hydra",
+            "glimmer",
+          ];
           const selectedSpecies = species.toLowerCase();
-          
+
           if (!validSpecies.includes(selectedSpecies)) {
             return `Invalid species! Choose from: ${validSpecies.join(", ")}`;
           }
@@ -1186,49 +1215,70 @@ ${ending}`;
 
           await this.petService.createPet(userId, name, selectedSpecies);
           const display = await this.petService.formatPetDisplay(userId);
-          
+
           // Return with image
-          const imagePath = path.join(__dirname, "..", "assets", "Gemini_Generated_Image_kicv4ekicv4ekicv.png");
+          const imagePath = path.join(
+            __dirname,
+            "..",
+            "assets",
+            "Gemini_Generated_Image_kicv4ekicv4ekicv.png"
+          );
           if (fs.existsSync(imagePath)) {
             return {
               media: {
                 image: fs.readFileSync(imagePath),
                 caption: `🎉 Congratulations! You created a new pet!\n\n${display}`,
-              }
+              },
             };
           }
-          
+
           return `🎉 Congratulations! You created a new pet!\n\n${display}`;
         }
 
         case "feed": {
           const result = await this.petService.feedPet(userId);
           if (result.error) return result.error;
-          
+
           let response = result.message;
-          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
-          
+          if (result.levelUp)
+            response += `\n\n🎊 Level Up! Your pet is now level ${
+              Math.floor(
+                (await this.petService.getPet(userId)).experience / 100
+              ) + 1
+            }!`;
+
           return response;
         }
 
         case "play": {
           const result = await this.petService.playWithPet(userId);
           if (result.error) return result.error;
-          
+
           let response = result.message;
-          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
-          
+          if (result.levelUp)
+            response += `\n\n🎊 Level Up! Your pet is now level ${
+              Math.floor(
+                (await this.petService.getPet(userId)).experience / 100
+              ) + 1
+            }!`;
+
           return response;
         }
 
         case "train": {
           const result = await this.petService.trainPet(userId);
           if (result.error) return result.error;
-          
+
           let response = result.message;
-          if (result.levelUp) response += `\n\n🎊 Level Up! Your pet is now level ${Math.floor((await this.petService.getPet(userId)).experience / 100) + 1}!`;
-          if (result.giftReady) response += `\n\n🎁 A gift is ready! Use -pet gift to claim it!`;
-          
+          if (result.levelUp)
+            response += `\n\n🎊 Level Up! Your pet is now level ${
+              Math.floor(
+                (await this.petService.getPet(userId)).experience / 100
+              ) + 1
+            }!`;
+          if (result.giftReady)
+            response += `\n\n🎁 A gift is ready! Use -pet gift to claim it!`;
+
           return response;
         }
 
@@ -1264,8 +1314,16 @@ ${ending}`;
 
           let board = `🏆 *Pet Leaderboard* 🏆\n━━━━━━━━━━━━━━━━━━\n\n`;
           leaderboard.forEach((pet, index) => {
-            const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}.`;
-            const speciesEmoji = this.petService.species[pet.species]?.emoji || "🐉";
+            const medal =
+              index === 0
+                ? "🥇"
+                : index === 1
+                ? "🥈"
+                : index === 2
+                ? "🥉"
+                : `${index + 1}.`;
+            const speciesEmoji =
+              this.petService.species[pet.species]?.emoji || "🐉";
             board += `${medal} ${speciesEmoji} ${pet.name} - Lvl ${pet.level} | Bond ${pet.bond}\n`;
           });
 
@@ -1278,6 +1336,114 @@ ${ending}`;
     } catch (error) {
       console.error("Pet command error:", error);
       return `Something went wrong with your pet! ${error.message}`;
+    }
+  }
+
+  async analyzeChatSentiment(args, message) {
+    try {
+      // Only works in groups
+      if (!message.groupId) {
+        return `📊 This command only works in group chats!`;
+      }
+
+      const messageCount = parseInt(args[0]) || 40;
+      const limit = Math.min(Math.max(messageCount, 20), 100); // Between 20-100 messages
+
+      // Send processing message
+      await message.reply(`🔍 Analyzing last ${limit} messages... This may take a moment.`);
+
+      // Fetch chat history
+      const chatHistory = await this.fetchChatHistory(message.sock, message.groupId, limit);
+
+      if (!chatHistory || chatHistory.length === 0) {
+        return `❌ Could not retrieve chat history. Please try again.`;
+      }
+
+      // Format messages for analysis
+      const formattedMessages = chatHistory
+        .filter(msg => msg.content && msg.content.trim().length > 0)
+        .map(msg => `${msg.sender}: ${msg.content}`)
+        .join('\n');
+
+      if (!formattedMessages) {
+        return `❌ No text messages found in the last ${limit} messages.`;
+      }
+
+      // Create prompt for LLM
+      const prompt = `Analyze the following group chat conversation and provide:
+
+1. **Overall Sentiment**: Describe the general mood (positive, negative, neutral, mixed)
+2. **Key Topics**: Main topics discussed (max 5)
+3. **Active Participants**: Most active members and their sentiment
+4. **Emotional Tone**: Dominant emotions (joy, anger, frustration, excitement, etc.)
+5. **Summary**: Brief 2-3 sentence summary of the conversation
+
+Chat History (${chatHistory.length} messages):
+━━━━━━━━━━━━━━━━━━
+${formattedMessages}
+━━━━━━━━━━━━━━━━━━
+
+Provide a clear, structured analysis with emojis. Be insightful but concise.`;
+
+      const analysis = await this.llmService.generateResponse(prompt, {
+        temperature: 0.7,
+        maxTokens: 800,
+      });
+
+      const response = `📊 *Chat Sentiment Analysis*\n━━━━━━━━━━━━━━━━━━━━\n\n${analysis}\n\n━━━━━━━━━━━━━━━━━━━━\n📈 Analyzed ${chatHistory.length} messages`;
+
+      return response;
+    } catch (error) {
+      console.error("Sentiment analysis error:", error);
+      return `❌ Failed to analyze chat sentiment: ${error.message}`;
+    }
+  }
+
+  async fetchChatHistory(sock, groupId, limit = 40) {
+    try {
+      // Load messages from the group
+      const messages = await sock.loadMessages(groupId, limit);
+      
+      const chatHistory = [];
+      
+      for (const msg of messages) {
+        if (!msg.message) continue;
+        
+        // Extract sender info
+        const sender = msg.key.participant || msg.key.remoteJid;
+        const senderNumber = sender?.split('@')[0];
+        const senderName = msg.pushName || senderNumber || 'Unknown';
+        
+        // Extract message content
+        let content = '';
+        if (msg.message.conversation) {
+          content = msg.message.conversation;
+        } else if (msg.message.extendedTextMessage?.text) {
+          content = msg.message.extendedTextMessage.text;
+        } else if (msg.message.imageMessage?.caption) {
+          content = msg.message.imageMessage.caption;
+        } else if (msg.message.videoMessage?.caption) {
+          content = msg.message.videoMessage.caption;
+        }
+        
+        // Skip empty messages, stickers, and bot commands
+        if (!content || content.startsWith('-') || content.trim().length < 2) {
+          continue;
+        }
+        
+        chatHistory.push({
+          sender: senderName,
+          senderNumber: senderNumber,
+          content: content,
+          timestamp: new Date((msg.messageTimestamp || 0) * 1000),
+        });
+      }
+      
+      // Return in chronological order (oldest first)
+      return chatHistory.reverse();
+    } catch (error) {
+      console.error('Error fetching chat history:', error);
+      throw error;
     }
   }
 }
