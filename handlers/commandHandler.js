@@ -40,7 +40,10 @@ class CommandHandler {
       fortune: this.fortuneTelling.bind(this),
       excuse: this.generateExcuse.bind(this),
       sticker: this.createSticker.bind(this),
+      s: this.createSticker.bind(this), // Short alias for sticker
       s2: this.createSticker.bind(this), // Short alias for sticker
+      take: this.createSticker.bind(this), // Alias for sticker
+      t: this.createSticker.bind(this), // Short alias for sticker
       voice: this.createVoice.bind(this),
       v: this.createVoice.bind(this), // Short alias for voice
       speak: this.createVoice.bind(this),
@@ -587,9 +590,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           return "I can only work with images, GIFs, or videos. What you sent me is... questionable. 🤔";
         }
 
-        // Send sticker with Baileys
+        // Send sticker with Baileys with proper metadata
         await message.reply({
           sticker: stickerBuffer,
+          packname: "Fuck Off",
+          author: "Eden's Sarcasm 😈",
         });
         return this.stickerService.getRandomStickerQuote();
       } else if (targetMessage.body && targetMessage.body.trim()) {
@@ -609,9 +614,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           "text"
         );
 
-        // Send text sticker with Baileys
+        // Send text sticker with Baileys with proper metadata
         await message.reply({
           sticker: stickerBuffer,
+          packname: "Fuck Off",
+          author: "Eden's Sarcasm 😈",
         });
         return this.stickerService.getRandomTextStickerQuote();
       } else {
@@ -1151,7 +1158,9 @@ ${ending}`;
       // Restrict to only specific users
       const allowedNumbers = ["61259152101540", "207099061624867"];
       console.log(
-        `Pet access check - User: ${userNumber}, Allowed: ${allowedNumbers.join(", ")}`
+        `Pet access check - User: ${userNumber}, Allowed: ${allowedNumbers.join(
+          ", "
+        )}`
       );
 
       if (!allowedNumbers.includes(userNumber)) {
