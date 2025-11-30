@@ -3,6 +3,7 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
 const fs = require("fs").promises;
 const path = require("path");
+const { Image } = require("node-webpmux");
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
@@ -21,6 +22,32 @@ class StickerService {
     }
   }
 
+  async addStickerMetadata(webpBuffer, packname = "Fuck Off", author = "Eden's Sarcasm 😈") {
+    try {
+      const img = new Image();
+      await img.load(webpBuffer);
+      
+      const exifData = {
+        "sticker-pack-id": "com.eden.sticker",
+        "sticker-pack-name": packname,
+        "sticker-pack-publisher": author,
+        "android-app-store-link": "https://play.google.com/store/apps/details?id=com.whatsapp",
+        "ios-app-store-link": "https://itunes.apple.com/app/whatsapp-messenger/id310633997",
+        "emojis": ["😈"]
+      };
+      
+      const exifJson = JSON.stringify(exifData);
+      const exifBuffer = Buffer.from(exifJson, "utf-8");
+      img.exif = exifBuffer;
+      
+      return await img.save(null);
+    } catch (error) {
+      console.error("Error adding sticker metadata:", error);
+      // Return original buffer if metadata addition fails
+      return webpBuffer;
+    }
+  }
+
   async createStickerFromImage(imageBuffer, filename = "sticker") {
     try {
       const outputPath = path.join(this.tempDir, `${filename}_sticker.webp`);
@@ -35,7 +62,10 @@ class StickerService {
         .toFile(outputPath);
 
       // Read the processed file
-      const stickerBuffer = await fs.readFile(outputPath);
+      let stickerBuffer = await fs.readFile(outputPath);
+
+      // Add EXIF metadata
+      stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
       // Clean up temp file
       await fs.unlink(outputPath).catch(() => {});
@@ -71,7 +101,10 @@ class StickerService {
             .output(outputPath)
             .on("end", async () => {
               try {
-                const stickerBuffer = await fs.readFile(outputPath);
+                let stickerBuffer = await fs.readFile(outputPath);
+
+                // Add EXIF metadata
+                stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
                 // Clean up temp files
                 await fs.unlink(inputPath).catch(() => {});
@@ -165,7 +198,10 @@ class StickerService {
             .output(outputPath)
             .on("end", async () => {
               try {
-                const stickerBuffer = await fs.readFile(outputPath);
+                let stickerBuffer = await fs.readFile(outputPath);
+
+                // Add EXIF metadata
+                stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
                 // Clean up temp files
                 await fs.unlink(inputPath).catch(() => {});
@@ -236,7 +272,10 @@ class StickerService {
         .toFile(outputPath);
 
       // Read the processed file
-      const stickerBuffer = await fs.readFile(outputPath);
+      let stickerBuffer = await fs.readFile(outputPath);
+
+      // Add EXIF metadata
+      stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
       // Clean up temp file
       await fs.unlink(outputPath).catch(() => {});
