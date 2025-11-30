@@ -1026,11 +1026,13 @@ async function connectToWhatsApp() {
                     { quoted: quotedMsg }
                   );
                 } else if (content?.sticker) {
-                  // Handle sticker
+                  // Handle sticker with metadata
                   await sock.sendMessage(
                     chatJid,
                     {
                       sticker: content.sticker,
+                      packname: content.packname || "Fuck Off",
+                      author: content.author || "Eden's Sarcasm 😈",
                     },
                     { quoted: quotedMsg }
                   );
