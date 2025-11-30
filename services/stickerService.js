@@ -28,17 +28,13 @@ class StickerService {
       await img.load(webpBuffer);
       
       const exifData = {
-        "sticker-pack-id": "com.eden.sticker",
+        "sticker-pack-id": "com.eden.stickers",
         "sticker-pack-name": packname,
-        "sticker-pack-publisher": author,
-        "android-app-store-link": "https://play.google.com/store/apps/details?id=com.whatsapp",
-        "ios-app-store-link": "https://itunes.apple.com/app/whatsapp-messenger/id310633997",
-        "emojis": ["😈"]
+        "sticker-pack-publisher": author
       };
       
       const exifJson = JSON.stringify(exifData);
-      const exifBuffer = Buffer.from(exifJson, "utf-8");
-      img.exif = exifBuffer;
+      img.exif = exifJson;
       
       return await img.save(null);
     } catch (error) {
