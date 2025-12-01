@@ -10,9 +10,52 @@ const {
 const pino = require("pino");
 const qrcode = require("qrcode-terminal");
 const readline = require("readline");
+const fs = require("fs");
+const path = require("path");
 const LLMService = require("./services/llmService");
 const CommandHandler = require("./handlers/commandHandler");
+const MessageStore = require("./database/messageStore");
 require("dotenv").config();
+
+// Load nice users configuration
+let niceUsersConfig = { niceUsers: [] };
+const niceUsersPath = path.join(__dirname, "nice-users.json");
+try {
+  const data = fs.readFileSync(niceUsersPath, "utf8");
+  niceUsersConfig = JSON.parse(data);
+  console.log(
+    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users from config`
+  );
+} catch (error) {
+  console.log("⚠️ No nice-users.json found, using default behavior");
+}
+
+// Helper to check if user should be treated nicely
+function isNiceUser(jid) {
+  if (!jid) return false;
+  // Extract just the number part from JID (removes @s.whatsapp.net, @lid, etc)
+  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
+  const result = niceUsersConfig.niceUsers.some((user) => {
+    const configNumber = user.jid.replace(/[^0-9]/g, "");
+    return (
+      numberPart.includes(configNumber) || configNumber.includes(numberPart)
+    );
+  });
+  console.log(`🔍 Nice user check: ${jid} -> ${numberPart} -> ${result}`);
+  return result;
+}
+
+// Helper to get nice user info
+function getNiceUserInfo(jid) {
+  if (!jid) return null;
+  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
+  return niceUsersConfig.niceUsers.find((user) => {
+    const configNumber = user.jid.replace(/[^0-9]/g, "");
+    return (
+      numberPart.includes(configNumber) || configNumber.includes(numberPart)
+    );
+  });
+}
 
 // Initialize services
 const llmService = new LLMService();
@@ -21,19 +64,61 @@ const commandHandler = new CommandHandler(llmService);
 // Bot configuration
 const COMMAND_PREFIX = process.env.COMMAND_PREFIX || "-";
 const BOT_NAME = "Eden";
-const TRIGGER_NAMES = ["Eden", "eden", "Ansh", "@~Ansh"];
+const TRIGGER_NAMES = ["Eden", "eden", "Ansh", "@~Ansh", "@~Eden"];
 const RESPONSE_PROBABILITY = 0.8; // 80% chance to respond when mentioned
 
 // Store bot's own ID
 let botId = null;
+let botLid = null; // Bot's LID in groups
 
 // Contact name cache for mentions
 // Maps JID -> display name from pushName or message text
 const contactNameCache = new Map();
 
-// Message store for sentiment analysis
-// Simple in-memory store that keeps messages synced from WhatsApp
-const messageStore = new Map();
+// Initialize SQLite message store for persistent context
+const messageStore = new MessageStore();
+
+// Helper to add message to context store
+function addMessageToContext(
+  chatId,
+  sender,
+  message,
+  isBot = false,
+  messageId = null,
+  senderJid = null
+) {
+  messageStore.addMessage(chatId, sender, message, isBot, messageId, senderJid);
+}
+
+// Helper to get conversation context (filtered by specific user)
+function getConversationContext(chatId, targetUser = null, limit = 15) {
+  // Get messages from SQLite database
+  const contextMessages = messageStore.getContext(chatId, targetUser, limit);
+
+  // Debug: Show conversation history being used
+  console.log(
+    `\n💬 Retrieved ${contextMessages.length} context messages for ${
+      targetUser || "all users"
+    }:`
+  );
+  contextMessages.forEach((m, i) => {
+    // Safety check for undefined message
+    const messageText = m.message || "[empty message]";
+    const preview = messageText.substring(0, 60);
+    console.log(
+      `   ${i + 1}. ${m.is_bot ? "Eden" : m.sender_name}: ${preview}${
+        messageText.length > 60 ? "..." : ""
+      }`
+    );
+  });
+  console.log("");
+
+  return contextMessages
+    .map(
+      (m) => `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`
+    )
+    .join("\n");
+}
 
 // Message wrapper class
 class MessageWrapper {
@@ -340,11 +425,47 @@ function isBotMentioned(message) {
 // Helper function to check if message is a reply to bot
 function isReplyToBot(message) {
   try {
-    const quotedMessage = message.message?.extendedTextMessage?.contextInfo;
-    if (quotedMessage?.participant || quotedMessage?.stanzaId) {
-      // Check if the quoted message is from the bot
-      return quotedMessage.participant === botId;
+    const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+    if (!contextInfo || !contextInfo.quotedMessage) return false;
+
+    // Check if the quoted message has fromMe flag (Baileys way)
+    const quotedKey = contextInfo.stanzaId;
+    const quotedParticipant = contextInfo.participant;
+
+    console.log(
+      `🔍 Reply check: stanzaId=${quotedKey}, participant=${quotedParticipant}, botId=${botId}, botLid=${botLid}`
+    );
+
+    // Method 1: Check if quoted participant matches bot IDs
+    if (quotedParticipant) {
+      const isBot =
+        quotedParticipant === botId || (botLid && quotedParticipant === botLid);
+      if (isBot) {
+        console.log(`✅ Reply detected via participant match`);
+        return true;
+      }
     }
+
+    // Method 2: Check message store for this stanzaId to see if it's from bot
+    const chatId = message.key.remoteJid;
+    const recentMessages = messageStore.getContext(chatId, null, 50);
+    const quotedFromBot = recentMessages.some(
+      (m) => m.is_bot && m.message_id === quotedKey
+    );
+
+    if (quotedFromBot) {
+      console.log(`✅ Reply detected via message store`);
+      return true;
+    }
+
+    // Method 3: In DMs, if there's a quoted message, likely replying to bot
+    const isGroup = chatId?.endsWith("@g.us");
+    if (!isGroup) {
+      console.log(`✅ Reply detected (DM)`);
+      return true;
+    }
+
+    console.log(`❌ Not a reply to bot`);
     return false;
   } catch (error) {
     console.error("Error checking reply:", error);
@@ -514,6 +635,15 @@ async function connectToWhatsApp() {
         // Store bot's ID
         botId = sock.user?.id;
         console.log(`🤖 Bot ID: ${botId}\n`);
+
+        // Clean up duplicate messages on startup
+        console.log("🧹 Cleaning up duplicate messages...");
+        const removed = messageStore.removeDuplicates();
+        if (removed > 0) {
+          console.log(`✨ Database cleanup complete!\n`);
+        } else {
+          console.log(`✨ No duplicates found\n`);
+        }
       } else if (connection === "connecting") {
         console.log("🔌 Connecting to WhatsApp...");
       }
@@ -528,17 +658,10 @@ async function connectToWhatsApp() {
         `📥 Received message history: ${messages.length} messages from ${chats.length} chats (latest: ${isLatest})`
       );
 
-      // Store messages in messageStore for sentiment analysis
+      // Store messages in SQLite database
       for (const msg of messages) {
         const chatId = msg.key.remoteJid;
         if (!chatId) continue;
-
-        // Initialize array for this chat if needed
-        if (!messageStore.has(chatId)) {
-          messageStore.set(chatId, []);
-        }
-
-        const chatMessages = messageStore.get(chatId);
 
         // Extract message content
         let content = "";
@@ -556,25 +679,18 @@ async function connectToWhatsApp() {
           const senderJid = msg.key.participant || msg.key.remoteJid;
           const senderName =
             msg.pushName || senderJid?.split("@")[0] || "Unknown";
+          const isBot = msg.key.fromMe;
+          const messageId = msg.key.id;
 
-          chatMessages.push({
-            sender: senderName,
-            senderJid: senderJid,
-            content: content,
-            timestamp: new Date((msg.messageTimestamp || 0) * 1000),
-            messageId: msg.key.id,
-          });
+          messageStore.addMessage(chatId, senderName, content, isBot, messageId, senderJid);
         }
       }
 
-      // Keep only last 100 messages per chat to save memory
-      for (const [chatId, messages] of messageStore.entries()) {
-        if (messages.length > 100) {
-          messageStore.set(chatId, messages.slice(-100));
-        }
-      }
+      // Clean old messages (keep last 100 per chat)
+      messageStore.cleanOldMessages();
 
-      console.log(`💾 Message store now has ${messageStore.size} chats`);
+      const stats = messageStore.getStats();
+      console.log(`💾 Message store: ${stats.totalMessages} messages in ${stats.totalChats} chats`);
     });
 
     // Store new messages as they arrive
@@ -584,6 +700,18 @@ async function connectToWhatsApp() {
         if (type === "notify") {
           for (const msg of upsertedMessages) {
             const chatId = msg.key.remoteJid;
+
+            // Capture bot's LID from its own messages in groups
+            if (
+              msg.key.fromMe &&
+              msg.key.participant &&
+              chatId?.endsWith("@g.us") &&
+              !botLid
+            ) {
+              botLid = msg.key.participant;
+              console.log(`💾 Captured bot LID from own message: ${botLid}`);
+            }
+
             if (!chatId || msg.key.fromMe) continue;
 
             // Extract message content
@@ -599,27 +727,12 @@ async function connectToWhatsApp() {
             }
 
             if (content && content.trim().length > 0) {
-              if (!messageStore.has(chatId)) {
-                messageStore.set(chatId, []);
-              }
-
-              const chatMessages = messageStore.get(chatId);
               const senderJid = msg.key.participant || msg.key.remoteJid;
               const senderName =
                 msg.pushName || senderJid?.split("@")[0] || "Unknown";
+              const messageId = msg.key.id;
 
-              chatMessages.push({
-                sender: senderName,
-                senderJid: senderJid,
-                content: content,
-                timestamp: new Date((msg.messageTimestamp || 0) * 1000),
-                messageId: msg.key.id,
-              });
-
-              // Keep only last 100 messages
-              if (chatMessages.length > 100) {
-                chatMessages.shift();
-              }
+              messageStore.addMessage(chatId, senderName, content, false, messageId, senderJid);
             }
           }
         }
@@ -744,9 +857,7 @@ async function connectToWhatsApp() {
                 msg.reply(text, quotedMsg, mentions),
               // Add method to get messages from store
               getStoredMessages: (limit) => {
-                const messages =
-                  messageStore.get(msg.groupId || msg.userId) || [];
-                return messages.slice(-limit);
+                return messageStore.getContext(msg.groupId || msg.userId, null, limit);
               },
               getQuotedMessage: async () => {
                 const contextInfo =
@@ -1231,33 +1342,34 @@ async function connectToWhatsApp() {
             continue;
           }
 
+          // Check if sender is a nice user (special handling)
+          const senderJid = message.key.participant || message.key.remoteJid;
+          const niceUser = isNiceUser(senderJid);
+          const niceUserInfo = getNiceUserInfo(senderJid);
+
+          // Store incoming message in context with senderJid
+          addMessageToContext(
+            chatJid,
+            senderName,
+            messageText,
+            false,
+            null,
+            senderJid
+          );
+
           // Check if bot was mentioned or message is a reply to bot
           const mentioned = isBotMentioned(message);
           const repliedTo = isReplyToBot(message);
 
+          console.log(
+            `📬 Message check: mentioned=${mentioned}, repliedTo=${repliedTo}, text="${messageText.substring(
+              0,
+              50
+            )}"`
+          );
+
           if (mentioned || repliedTo) {
-            // Decide whether to respond (probability check)
-            if (Math.random() > RESPONSE_PROBABILITY) {
-              console.log(`🎲 Skipping response (probability check)`);
-              // Sometimes just react with an emoji instead of responding
-              if (Math.random() > 0.5) {
-                const reactions = ["💀", "🙄", "😒", "💅", "🤡", "👀", "😤"];
-                const randomReaction =
-                  reactions[Math.floor(Math.random() * reactions.length)];
-                try {
-                  await sock.sendMessage(chatJid, {
-                    react: {
-                      text: randomReaction,
-                      key: message.key,
-                    },
-                  });
-                  console.log(`😊 Reacted with ${randomReaction}\n`);
-                } catch (error) {
-                  console.error("Error reacting to message:", error);
-                }
-              }
-              continue;
-            }
+            // Always respond when mentioned or replied to (no probability check)
 
             console.log(
               `🎯 ${mentioned ? "Mention" : "Reply"} detected: ${messageText}`
@@ -1268,7 +1380,10 @@ async function connectToWhatsApp() {
 
             // Sometimes react to the message first
             if (Math.random() > 0.7) {
-              const reactions = ["💀", "🙄", "😏", "💅", "👀"];
+              // Different reactions for nice users - cute and friendly
+              const reactions = niceUser
+                ? ["😊", "💕", "😘", "🥰", "✨", "💖"]
+                : ["💀", "🙄", "😏", "💅", "👀"];
               const randomReaction =
                 reactions[Math.floor(Math.random() * reactions.length)];
               try {
@@ -1278,7 +1393,11 @@ async function connectToWhatsApp() {
                     key: message.key,
                   },
                 });
-                console.log(`😊 Reacted with ${randomReaction}`);
+                console.log(
+                  `😊 Reacted with ${randomReaction}${
+                    niceUser ? ` (nice user: ${niceUserInfo?.name})` : ""
+                  }`
+                );
               } catch (error) {
                 console.error("Error reacting to message:", error);
               }
@@ -1314,66 +1433,139 @@ async function connectToWhatsApp() {
                   message.message?.extendedTextMessage?.contextInfo
                     ?.quotedMessage?.conversation || "[Media/Sticker]";
 
+                // Get recent conversation history with THIS specific user
+                const conversationHistory = getConversationContext(
+                  chatJid,
+                  senderName,
+                  5
+                );
+                const contextPrefix = conversationHistory
+                  ? `Recent conversation with ${senderName}:\n${conversationHistory}\n\nNow responding to: `
+                  : "";
+
                 // Generate response based on reply
                 const context = imageBase64
-                  ? owner
-                    ? `${senderName} replied to you with an image. hes your creator so be nice and friendly. look at the image and respond naturally like a friend would. be honest and kind. NEVER use quotation marks`
-                    : `${senderName} replied to you with an image. look at it and respond like a real person. be playful and genuine, not harsh. if its personal (like selfie), be encouraging. sound natural. ${
+                  ? niceUser
+                    ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
+                    : `${contextPrefix}${senderName} replied to you with an image. look at it and respond like a real person. be playful and genuine, not harsh. if its personal (like selfie), be encouraging. sound natural. ${
                         isGroup
                           ? "everyones watching in the group"
                           : "just you two"
                       }. NEVER use quotation marks`
+                  : niceUser
+                  ? `${contextPrefix}${senderName}: ${messageText}. you said: ${quotedText}. respond like you text friends. be nice and helpful. NO swearing`
                   : owner
-                  ? `${senderName} replied to your text. hes your creator so be less harsh but still annoying. like youre rolling your eyes but lowkey care. text casually like a real person. NEVER use quotation marks or quotes around words`
-                  : `${senderName} replied to you saying: ${messageText}. you said before: ${quotedText}. text back sarcastic and witty. ${
-                      isGroup
-                        ? "everyones watching in the group"
-                        : "just you two"
-                    }. sound natural not robotic. be short and savage. NEVER use quotation marks or quotes`;
+                  ? `${contextPrefix}${senderName} said: ${messageText}. be sarcastic. 5-10 words. examples: 'bruh what', 'lol ok', 'wtf dude'. swear sometimes`
+                  : `${contextPrefix}${senderName} said: ${messageText}. ${isGroup ? "group" : "dm"}. sarcastic. 5-10 words. examples: 'lol ok', 'cool story', 'and?'. swear if annoyed`;
+
+                console.log(
+                  `🎭 Context mode: ${
+                    niceUser ? "NICE USER (friendly)" : "REGULAR (sarcastic)"
+                  } for ${senderName}`
+                );
+                console.log(
+                  `\n📝 Context sent to LLM (reply):\n${context.substring(
+                    0,
+                    400
+                  )}...\n`
+                );
 
                 response = await llmService.generateContextualResponse(
                   messageText || "what do you think about this image",
                   context,
-                  { senderName, isOwner: owner, mood: "sarcastic" },
+                  {
+                    senderName,
+                    isOwner: owner,
+                    mood: niceUser ? "friendly" : "sarcastic",
+                  },
                   imageBase64
                 );
               } else {
+                // Get recent conversation history with THIS specific user
+                const conversationHistory = getConversationContext(
+                  chatJid,
+                  senderName,
+                  20
+                );
+                const contextPrefix = conversationHistory
+                  ? `Recent conversation with ${senderName}:\n${conversationHistory}\n\nNow responding to: `
+                  : "";
+
                 // Generate response based on mention (with or without image)
                 const prompt = imageBase64
                   ? messageText || "whats in this image"
                   : messageText;
 
                 const context = imageBase64
-                  ? owner
-                    ? `${senderName} sent you an image. hes your creator so be nice but still sassy. look at the image and respond like a real friend would - be honest but kind. if they ask how they look, be genuinely nice with a playful twist. respond naturally like texting a friend. NEVER use quotation marks`
-                    : `${senderName} sent you an image. look at it and respond like a real person texting. be playful and witty but not mean. if someone asks how they look, be nice and encouraging with some sass. if its a selfie, compliment them genuinely. keep it natural and friendly. ${
+                  ? niceUser
+                    ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
+                    : `${contextPrefix}${senderName} sent you an image. look at it and respond like a real person texting. be playful and witty but not mean. if someone asks how they look, be nice and encouraging with some sass. if its a selfie, compliment them genuinely. keep it natural and friendly. ${
                         isGroup ? "everyones watching" : "just you two"
                       }. NEVER use quotation marks`
+                  : niceUser
+                  ? `${contextPrefix}${senderName}: ${messageText}. respond friendly and helpful. NO swearing. be natural`
                   : owner
-                  ? `${senderName} mentioned you. hes your creator so dont be TOO mean but still bratty. like youre annoyed but secretly care. text naturally. NEVER use quotation marks or quotes`
-                  : `${senderName} mentioned you: ${messageText}. ${
-                      isGroup ? "everyones watching" : "just you two"
-                    }. text back witty sharp and dismissive. sound like a real person texting not a robot. be short and brutal. NEVER use quotation marks or quotes`;
+                  ? `${contextPrefix}${senderName} said: ${messageText}. sarcastic. 5-10 words max. swear if u want`
+                  : `${contextPrefix}${senderName} said: ${messageText}. ${isGroup ? "group" : "dm"}. sarcastic. 5-10 words. swear if annoyed`;
+
+                console.log(
+                  `🎭 Context mode: ${
+                    niceUser ? "NICE USER (friendly)" : "REGULAR (sarcastic)"
+                  } for ${senderName}`
+                );
+                console.log(
+                  `\n📝 Context sent to LLM (mention):\n${context.substring(
+                    0,
+                    400
+                  )}...\n`
+                );
 
                 response = await llmService.generateContextualResponse(
                   prompt,
                   context,
-                  { senderName, isOwner: owner, mood: "sarcastic" },
+                  {
+                    senderName,
+                    isOwner: owner,
+                    mood: niceUser ? "friendly" : "sarcastic",
+                  },
                   imageBase64
                 );
               }
 
               if (response) {
-                // Remove any quotes from the response
-                response = response.replace(/["""'']/g, "");
+                // Clean up response - remove quotes always, emojis and hashtags only for non-nice users
+                response = response.replace(/["""'']/g, ""); // Remove quotes
+                response = response.replace(/#\w+/g, ""); // Remove hashtags always
+                
+                // Only remove emojis for non-nice users
+                if (!niceUser) {
+                  response = response.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ""); // Remove emojis
+                }
+                
+                response = response.trim(); // Clean whitespace
 
                 // Quote the original message when replying
-                await sock.sendMessage(
+                const sentMsg = await sock.sendMessage(
                   chatJid,
                   { text: response },
                   { quoted: message }
                 );
-                console.log(`✅ Mention/Reply response sent\n`);
+
+                // Store bot's response in context with messageId
+                const messageId = sentMsg?.key?.id;
+                addMessageToContext(chatJid, "Eden", response, true, messageId);
+
+                // Capture bot's LID from sent message in groups
+                if (isGroup && sentMsg?.key?.participant && !botLid) {
+                  botLid = sentMsg.key.participant;
+                  console.log(
+                    `💾 Captured bot LID from sent message: ${botLid}`
+                  );
+                }
+
+                console.log(
+                  `✅ Mention/Reply response sent (msgId: ${messageId})\n`
+                );
               } else {
                 console.log(`⚠️ LLM returned no response\n`);
               }
@@ -1407,6 +1599,14 @@ async function connectToWhatsApp() {
     setTimeout(() => connectToWhatsApp(), 10000);
   }
 }
+
+// Clean old messages every hour
+setInterval(() => {
+  console.log('🧹 Cleaning old messages from database...');
+  messageStore.cleanOldMessages();
+  const stats = messageStore.getStats();
+  console.log(`💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`);
+}, 60 * 60 * 1000); // 1 hour
 
 // Initialize the bot
 console.log("🚀 Starting Eden Bot with Baileys...");

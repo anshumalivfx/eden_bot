@@ -22,20 +22,24 @@ class StickerService {
     }
   }
 
-  async addStickerMetadata(webpBuffer, packname = "Fuck Off", author = "Eden's Sarcasm 😈") {
+  async addStickerMetadata(
+    webpBuffer,
+    packname = "Fuck Off",
+    author = "Eden's Sarcasm 😈"
+  ) {
     try {
       const img = new Image();
       await img.load(webpBuffer);
-      
+
       const exifData = {
         "sticker-pack-id": "com.eden.stickers",
         "sticker-pack-name": packname,
-        "sticker-pack-publisher": author
+        "sticker-pack-publisher": author,
       };
-      
+
       const exifJson = JSON.stringify(exifData);
       img.exif = exifJson;
-      
+
       return await img.save(null);
     } catch (error) {
       console.error("Error adding sticker metadata:", error);
