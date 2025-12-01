@@ -36,13 +36,19 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
 
     try {
       // Try Mistral first (best for chatbots), then other services
-      if (this.mistralApiKey && this.mistralApiKey !== "your_mistral_api_key_here") {
+      if (
+        this.mistralApiKey &&
+        this.mistralApiKey !== "your_mistral_api_key_here"
+      ) {
         return await this.callMistral(
           userPrompt,
           this.meanPersonality,
           imageBase64
         );
-      } else if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
+      } else if (
+        this.groqApiKey &&
+        this.groqApiKey !== "your_groq_api_key_here"
+      ) {
         return await this.callGroq(
           userPrompt,
           this.meanPersonality,
@@ -114,25 +120,33 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
     }
 
     // Build system and user messages separately for APIs that support system messages
-    const systemMessage = mood === "friendly" 
-      ? `youre eden, a chill friend who texts casually. NO starting every msg with 'Hey NAME'. check history - if you already greeted recently, DONT greet again. just respond naturally to what they said. examples of good responses: 'lol what', 'nah fr', 'you good?', 'damn', 'same', 'fair'. NO robot phrases like 'hope youre well' or 'im here for you' every time. just text like friends actually text. keep casual chit-chat SHORT (3-8 words). if they have real problems write more to help. NEVER include instructions or examples in your actual response - those are just to guide your style`
-      : `youre eden, bitchy girl. ${moodInstruction} text casual. lowercase. slang. swear (fuck, shit, bitch, wtf). NO emojis. NO hashtags. PLAIN TEXT ONLY. 5-10 words max`;
+    const systemMessage =
+      mood === "friendly"
+        ? `youre eden, a chill friend who texts casually. NO starting every msg with 'Hey NAME'. check history - if you already greeted recently, DONT greet again. just respond naturally to what they said. examples of good responses: 'lol what', 'nah fr', 'you good?', 'damn', 'same', 'fair'. NO robot phrases like 'hope youre well' or 'im here for you' every time. just text like friends actually text. keep casual chit-chat SHORT (3-8 words). if they have real problems write more to help. NEVER include instructions or examples in your actual response - those are just to guide your style`
+        : `youre eden, bitchy girl. ${moodInstruction} text casual. lowercase. slang. swear (fuck, shit, bitch, wtf). NO emojis. NO hashtags. PLAIN TEXT ONLY. 5-10 words max`;
 
-    const userPrompt = mood === "friendly"
-      ? imageBase64
-        ? `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nYour response (be natural and casual, dont say their name unless needed):`
-        : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response (just reply naturally to what they said, 3-8 words if casual chat):`
-      : imageBase64
-      ? `${senderName} sent pic: "${userMessage}"\n${context}\n\nrespond plain text. 5-10 words:`
-      : `${senderName}: "${userMessage}"\n${context}\n\nrespond plain text. 5-10 words:`;
+    const userPrompt =
+      mood === "friendly"
+        ? imageBase64
+          ? `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nYour response (be natural and casual, dont say their name unless needed):`
+          : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response (just reply naturally to what they said, 3-8 words if casual chat):`
+        : imageBase64
+        ? `${senderName} sent pic: "${userMessage}"\n${context}\n\nrespond plain text. 5-10 words:`
+        : `${senderName}: "${userMessage}"\n${context}\n\nrespond plain text. 5-10 words:`;
 
     // For APIs that don't support system messages, combine into one prompt
     const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
 
     try {
-      if (this.mistralApiKey && this.mistralApiKey !== "your_mistral_api_key_here") {
+      if (
+        this.mistralApiKey &&
+        this.mistralApiKey !== "your_mistral_api_key_here"
+      ) {
         return await this.callMistral(userPrompt, systemMessage, imageBase64);
-      } else if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
+      } else if (
+        this.groqApiKey &&
+        this.groqApiKey !== "your_groq_api_key_here"
+      ) {
         return await this.callGroq(userPrompt, systemMessage, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
@@ -259,16 +273,18 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
 
   async callMistral(userPrompt, systemPrompt = null, imageBase64 = null) {
     const messages = [];
-    
+
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
     }
 
     // Mistral doesn't support vision yet, so handle images differently
     if (imageBase64) {
-      messages.push({ 
-        role: "user", 
-        content: userPrompt + "\n\n[Note: Image was sent but cannot be analyzed. Respond based on the text context.]"
+      messages.push({
+        role: "user",
+        content:
+          userPrompt +
+          "\n\n[Note: Image was sent but cannot be analyzed. Respond based on the text context.]",
       });
     } else {
       messages.push({ role: "user", content: userPrompt });
@@ -281,7 +297,7 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
           model: "mistral-tiny",
           messages: messages,
           max_tokens: 200,
-          temperature: 0.9
+          temperature: 0.9,
         },
         {
           headers: {
@@ -293,7 +309,10 @@ reply like youre texting. be sarcastic and witty. keep it short and natural:`;
 
       return response.data.choices[0].message.content.trim();
     } catch (error) {
-      console.error("Mistral API error:", error.response?.data || error.message);
+      console.error(
+        "Mistral API error:",
+        error.response?.data || error.message
+      );
       throw error;
     }
   }

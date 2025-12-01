@@ -115,7 +115,8 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
 
   return contextMessages
     .map(
-      (m) => `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`
+      (m) =>
+        `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`
     )
     .join("\n");
 }
@@ -682,7 +683,14 @@ async function connectToWhatsApp() {
           const isBot = msg.key.fromMe;
           const messageId = msg.key.id;
 
-          messageStore.addMessage(chatId, senderName, content, isBot, messageId, senderJid);
+          messageStore.addMessage(
+            chatId,
+            senderName,
+            content,
+            isBot,
+            messageId,
+            senderJid
+          );
         }
       }
 
@@ -690,7 +698,9 @@ async function connectToWhatsApp() {
       messageStore.cleanOldMessages();
 
       const stats = messageStore.getStats();
-      console.log(`💾 Message store: ${stats.totalMessages} messages in ${stats.totalChats} chats`);
+      console.log(
+        `💾 Message store: ${stats.totalMessages} messages in ${stats.totalChats} chats`
+      );
     });
 
     // Store new messages as they arrive
@@ -732,7 +742,14 @@ async function connectToWhatsApp() {
                 msg.pushName || senderJid?.split("@")[0] || "Unknown";
               const messageId = msg.key.id;
 
-              messageStore.addMessage(chatId, senderName, content, false, messageId, senderJid);
+              messageStore.addMessage(
+                chatId,
+                senderName,
+                content,
+                false,
+                messageId,
+                senderJid
+              );
             }
           }
         }
@@ -857,7 +874,11 @@ async function connectToWhatsApp() {
                 msg.reply(text, quotedMsg, mentions),
               // Add method to get messages from store
               getStoredMessages: (limit) => {
-                return messageStore.getContext(msg.groupId || msg.userId, null, limit);
+                return messageStore.getContext(
+                  msg.groupId || msg.userId,
+                  null,
+                  limit
+                );
               },
               getQuotedMessage: async () => {
                 const contextInfo =
@@ -1456,7 +1477,9 @@ async function connectToWhatsApp() {
                   ? `${contextPrefix}${senderName}: ${messageText}. you said: ${quotedText}. respond like you text friends. be nice and helpful. NO swearing`
                   : owner
                   ? `${contextPrefix}${senderName} said: ${messageText}. be sarcastic. 5-10 words. examples: 'bruh what', 'lol ok', 'wtf dude'. swear sometimes`
-                  : `${contextPrefix}${senderName} said: ${messageText}. ${isGroup ? "group" : "dm"}. sarcastic. 5-10 words. examples: 'lol ok', 'cool story', 'and?'. swear if annoyed`;
+                  : `${contextPrefix}${senderName} said: ${messageText}. ${
+                      isGroup ? "group" : "dm"
+                    }. sarcastic. 5-10 words. examples: 'lol ok', 'cool story', 'and?'. swear if annoyed`;
 
                 console.log(
                   `🎭 Context mode: ${
@@ -1506,7 +1529,9 @@ async function connectToWhatsApp() {
                   ? `${contextPrefix}${senderName}: ${messageText}. respond friendly and helpful. NO swearing. be natural`
                   : owner
                   ? `${contextPrefix}${senderName} said: ${messageText}. sarcastic. 5-10 words max. swear if u want`
-                  : `${contextPrefix}${senderName} said: ${messageText}. ${isGroup ? "group" : "dm"}. sarcastic. 5-10 words. swear if annoyed`;
+                  : `${contextPrefix}${senderName} said: ${messageText}. ${
+                      isGroup ? "group" : "dm"
+                    }. sarcastic. 5-10 words. swear if annoyed`;
 
                 console.log(
                   `🎭 Context mode: ${
@@ -1536,12 +1561,15 @@ async function connectToWhatsApp() {
                 // Clean up response - remove quotes always, emojis and hashtags only for non-nice users
                 response = response.replace(/["""'']/g, ""); // Remove quotes
                 response = response.replace(/#\w+/g, ""); // Remove hashtags always
-                
+
                 // Only remove emojis for non-nice users
                 if (!niceUser) {
-                  response = response.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ""); // Remove emojis
+                  response = response.replace(
+                    /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
+                    ""
+                  ); // Remove emojis
                 }
-                
+
                 response = response.trim(); // Clean whitespace
 
                 // Quote the original message when replying
@@ -1602,10 +1630,12 @@ async function connectToWhatsApp() {
 
 // Clean old messages every hour
 setInterval(() => {
-  console.log('🧹 Cleaning old messages from database...');
+  console.log("🧹 Cleaning old messages from database...");
   messageStore.cleanOldMessages();
   const stats = messageStore.getStats();
-  console.log(`💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`);
+  console.log(
+    `💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`
+  );
 }, 60 * 60 * 1000); // 1 hour
 
 // Initialize the bot

@@ -36,14 +36,16 @@ class StickerService {
         "sticker-pack-id": stickerPackId,
         "sticker-pack-name": stickerPackName,
         "sticker-pack-publisher": stickerPackPublisher,
-        "android-app-store-link": "https://play.google.com/store/apps/details?id=com.anshbot.stickers",
-        "ios-app-store-link": "https://apps.apple.com/app/anshbot-stickers/id123456789",
-        "emojis": ["😀", "😂", "❤️"],
-        "is-first-party-sticker": 0
+        "android-app-store-link":
+          "https://play.google.com/store/apps/details?id=com.anshbot.stickers",
+        "ios-app-store-link":
+          "https://apps.apple.com/app/anshbot-stickers/id123456789",
+        emojis: ["😀", "😂", "❤️"],
+        "is-first-party-sticker": 0,
       };
 
       const exifStr = JSON.stringify(exifData);
-      img.exif = Buffer.from(exifStr, 'utf-8');
+      img.exif = Buffer.from(exifStr, "utf-8");
 
       return await img.save(null);
     } catch (error) {
@@ -229,7 +231,20 @@ class StickerService {
     });
   }
 
-  getStickerQuotes() {
+  getStickerQuotes(isNiceUser = false) {
+    if (isNiceUser) {
+      return [
+        "Here's your sticker! 🎨",
+        "Made you a sticker!",
+        "Your sticker is ready!",
+        "Got your sticker done! 💫",
+        "Here you go!",
+        "All set! 😊",
+        "Done! Hope you like it",
+        "There you go! ✨",
+      ];
+    }
+    
     return [
       "Oh great, another masterpiece. 🎨",
       "I've turned your image into something slightly less disappointing.",
@@ -242,8 +257,8 @@ class StickerService {
     ];
   }
 
-  getRandomStickerQuote() {
-    const quotes = this.getStickerQuotes();
+  getRandomStickerQuote(isNiceUser = false) {
+    const quotes = this.getStickerQuotes(isNiceUser);
     return quotes[Math.floor(Math.random() * quotes.length)];
   }
 
@@ -454,7 +469,20 @@ class StickerService {
     });
   }
 
-  getTextStickerQuotes() {
+  getTextStickerQuotes(isNiceUser = false) {
+    if (isNiceUser) {
+      return [
+        "Made your text into a sticker! 💬",
+        "Here's your quote sticker!",
+        "Text sticker ready! 📱",
+        "Got it done! 🎨",
+        "Your message sticker! 💭",
+        "Here you go! ✨",
+        "All done! 🖼️",
+        "Made this for you! 🎭",
+      ];
+    }
+    
     return [
       "I've turned your words into a sticker. Groundbreaking. 💬",
       "Here's your text in sticker form. Revolutionary technology at work. 🙄",
@@ -467,8 +495,8 @@ class StickerService {
     ];
   }
 
-  getRandomTextStickerQuote() {
-    const quotes = this.getTextStickerQuotes();
+  getRandomTextStickerQuote(isNiceUser = false) {
+    const quotes = this.getTextStickerQuotes(isNiceUser);
     return quotes[Math.floor(Math.random() * quotes.length)];
   }
 }

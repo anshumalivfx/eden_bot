@@ -547,7 +547,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async createSticker(args, message) {
-    const { senderName = "User" } = this.currentContext;
+    const { senderName = "User", isNiceUser = false } = this.currentContext;
 
     try {
       let targetMessage = message;
@@ -562,9 +562,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Determine what type of sticker to create
       if (targetMessage.hasMedia) {
         // Create sticker from media (image/gif/video)
-        await message.reply(
-          "🎨 Eden is begrudgingly processing your media into a sticker... This better be worth it."
-        );
+        const processingMsg = isNiceUser
+          ? "🎨 Making your sticker!"
+          : "🎨 Eden is begrudgingly processing your media into a sticker... This better be worth it.";
+        await message.reply(processingMsg);
 
         const { buffer, mimetype, filename } =
           await this.stickerService.downloadMedia(targetMessage);
@@ -591,17 +592,21 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         }
 
         // Send sticker with Baileys with proper metadata
+        const packname = isNiceUser ? "Eden's Stickers" : "Fuck Off";
+        const author = isNiceUser ? "Eden 💫" : "Eden's Sarcasm 😈";
+        
         await message.reply({
           sticker: stickerBuffer,
-          packname: "Fuck Off",
-          author: "Eden's Sarcasm 😈",
+          packname: packname,
+          author: author,
         });
-        return this.stickerService.getRandomStickerQuote();
+        return this.stickerService.getRandomStickerQuote(isNiceUser);
       } else if (targetMessage.body && targetMessage.body.trim()) {
         // Create text sticker from message content
-        await message.reply(
-          "💬 Eden is reluctantly turning your words into a sticker... This better be quotable."
-        );
+        const textProcessingMsg = isNiceUser
+          ? "💬 Making your text sticker!"
+          : "💬 Eden is reluctantly turning your words into a sticker... This better be quotable.";
+        await message.reply(textProcessingMsg);
 
         const messageText = targetMessage.body.trim();
         const quoteSender = isReply
@@ -615,12 +620,15 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         );
 
         // Send text sticker with Baileys with proper metadata
+        const packname = isNiceUser ? "Eden's Stickers" : "Fuck Off";
+        const author = isNiceUser ? "Eden 💫" : "Eden's Sarcasm 😈";
+        
         await message.reply({
           sticker: stickerBuffer,
-          packname: "Fuck Off",
-          author: "Eden's Sarcasm 😈",
+          packname: packname,
+          author: author,
         });
-        return this.stickerService.getRandomTextStickerQuote();
+        return this.stickerService.getRandomTextStickerQuote(isNiceUser);
       } else {
         // No media or text to work with
         if (isReply) {

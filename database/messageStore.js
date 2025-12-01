@@ -1,9 +1,9 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const Database = require("better-sqlite3");
+const path = require("path");
+const fs = require("fs");
 
 class MessageStore {
-  constructor(dbPath = './database/messages.db') {
+  constructor(dbPath = "./database/messages.db") {
     // Ensure database directory exists
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
@@ -12,8 +12,8 @@ class MessageStore {
 
     // Initialize database
     this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL'); // Better performance
-    
+    this.db.pragma("journal_mode = WAL"); // Better performance
+
     this.initTables();
   }
 
@@ -38,14 +38,23 @@ class MessageStore {
       CREATE INDEX IF NOT EXISTS idx_message_id ON messages(message_id);
     `);
 
-    console.log('✅ SQLite message store initialized');
+    console.log("✅ SQLite message store initialized");
   }
 
   // Add a message to the database
-  addMessage(chatId, senderName, message, isBot = false, messageId = null, senderJid = null) {
+  addMessage(
+    chatId,
+    senderName,
+    message,
+    isBot = false,
+    messageId = null,
+    senderJid = null
+  ) {
     // Check if message already exists (prevent duplicates)
     if (messageId) {
-      const existing = this.db.prepare('SELECT id FROM messages WHERE message_id = ? AND chat_id = ?').get(messageId, chatId);
+      const existing = this.db
+        .prepare("SELECT id FROM messages WHERE message_id = ? AND chat_id = ?")
+        .get(messageId, chatId);
       if (existing) {
         return; // Message already stored, skip
       }
@@ -57,9 +66,17 @@ class MessageStore {
     `);
 
     try {
-      stmt.run(chatId, senderName, senderJid, message, isBot ? 1 : 0, messageId, Date.now());
+      stmt.run(
+        chatId,
+        senderName,
+        senderJid,
+        message,
+        isBot ? 1 : 0,
+        messageId,
+        Date.now()
+      );
     } catch (error) {
-      console.error('Error adding message to database:', error);
+      console.error("Error adding message to database:", error);
     }
   }
 
@@ -82,7 +99,15 @@ class MessageStore {
         ORDER BY timestamp DESC
         LIMIT ?
       `;
-      params = [chatId, targetUser, targetUser, chatId, targetUser, targetUser, limit];
+      params = [
+        chatId,
+        targetUser,
+        targetUser,
+        chatId,
+        targetUser,
+        targetUser,
+        limit,
+      ];
     } else {
       // Get all recent messages, deduplicated
       query = `
@@ -117,27 +142,33 @@ class MessageStore {
     `);
 
     // Get all unique chat IDs
-    const chats = this.db.prepare('SELECT DISTINCT chat_id FROM messages').all();
-    
+    const chats = this.db
+      .prepare("SELECT DISTINCT chat_id FROM messages")
+      .all();
+
     for (const { chat_id } of chats) {
       try {
         stmt.run(chat_id, chat_id);
       } catch (error) {
-        console.error('Error cleaning old messages:', error);
+        console.error("Error cleaning old messages:", error);
       }
     }
   }
 
   // Get stats
   getStats() {
-    const totalMessages = this.db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
-    const totalChats = this.db.prepare('SELECT COUNT(DISTINCT chat_id) as count FROM messages').get().count;
+    const totalMessages = this.db
+      .prepare("SELECT COUNT(*) as count FROM messages")
+      .get().count;
+    const totalChats = this.db
+      .prepare("SELECT COUNT(DISTINCT chat_id) as count FROM messages")
+      .get().count;
     return { totalMessages, totalChats };
   }
 
   // Remove duplicate messages (keep oldest entry for each unique message)
   removeDuplicates(chatId = null) {
-    const query = chatId 
+    const query = chatId
       ? `DELETE FROM messages 
          WHERE id NOT IN (
            SELECT MIN(id) FROM messages 
@@ -149,11 +180,15 @@ class MessageStore {
            SELECT MIN(id) FROM messages 
            GROUP BY message, sender_name, timestamp
          )`;
-    
+
     const params = chatId ? [chatId, chatId] : [];
     const stmt = this.db.prepare(query);
     const result = stmt.run(...params);
-    console.log(`🗑️ Removed ${result.changes} duplicate messages${chatId ? ` from ${chatId}` : ''}`);
+    console.log(
+      `🗑️ Removed ${result.changes} duplicate messages${
+        chatId ? ` from ${chatId}` : ""
+      }`
+    );
     return result.changes;
   }
 
