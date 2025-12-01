@@ -1270,6 +1270,10 @@ async function connectToWhatsApp() {
             }
 
             try {
+              // Check if sender is a nice user
+              const senderJid = message.key.participant || message.key.remoteJid;
+              const niceUser = isNiceUser(senderJid);
+              
               const response = await commandHandler.handleCommand(
                 command,
                 messageAdapter,
@@ -1277,6 +1281,7 @@ async function connectToWhatsApp() {
                   senderName,
                   isOwner: owner,
                   mood: "sarcastic",
+                  isNiceUser: niceUser,
                 }
               );
 

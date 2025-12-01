@@ -190,7 +190,20 @@ class VoiceService {
   /**
    * Get Eden's sassy responses for voice commands
    */
-  getVoiceResponses() {
+  getVoiceResponses(isNiceUser = false) {
+    if (isNiceUser) {
+      return [
+        "🎤 Making your voice message!",
+        "🗣️ Got it! Creating your audio",
+        "🎵 Your voice message is ready!",
+        "📢 All set!",
+        "🎪 Voice message done!",
+        "🎙️ Here's your audio!",
+        "🗯️ Made it for you!",
+        "🎬 Your message is ready!",
+      ];
+    }
+    
     return [
       "🎤 Fine, I'll make this boring message sound interesting... somehow.",
       "🗣️ Oh great, now I'm a voice actor too? The things I do for you people...",

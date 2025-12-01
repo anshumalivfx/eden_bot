@@ -91,6 +91,7 @@ class CommandHandler {
       senderName = "User",
       isOwner = false,
       mood = "sarcastic",
+      isNiceUser = false,
     } = context;
 
     // Add context to command execution
@@ -98,6 +99,7 @@ class CommandHandler {
       senderName,
       isOwner,
       mood,
+      isNiceUser,
       message,
       originalCommand: cmd,
     };
@@ -111,7 +113,58 @@ class CommandHandler {
   }
 
   async showHelp() {
-    const { isOwner = false, senderName = "User" } = this.currentContext;
+    const { isOwner = false, senderName = "User", isNiceUser = false } = this.currentContext;
+
+    if (isNiceUser) {
+      return `🤖 *Eden's Commands*
+
+Hi! I'm Eden - your friendly AI assistant! 😊
+
+*Basic Commands:*
+- \`-help\` or \`-h\` - Show this command list
+- \`-ask [question]\` or \`-a [question]\` - Ask me anything
+- \`-joke\` or \`-j\` - Hear a joke
+- \`-compliment [person]\` - Get a genuine compliment
+- \`-advice [topic]\` - Get helpful advice
+- \`-fact\` - Learn an interesting fact
+- \`-quote\` - Get an inspirational quote
+- \`-story\` - Hear a short story
+- \`-weather\` - Get weather commentary
+- \`-fortune\` - Get your fortune told
+- \`-excuse [situation]\` - Generate a creative excuse
+- \`-mood\` - Check my current mood
+- \`-rate [thing]\` - Rate something
+
+*Media Commands:*
+- \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
+- \`-voice [text]\` or \`-v\` - Create voice message 🎤
+- \`-play [song name]\` - Download song from YouTube as MP3 🎵
+
+*🎨 Sticker Usage:*
+• Send media + \`-sticker\` = Media sticker
+• Reply to text + \`-sticker\` = Message box sticker  
+• Reply to media + \`-sticker\` = Media sticker
+
+*🎤 Voice Usage:*
+• \`-voice [text]\` = Speak your text
+• Reply to any message + \`-voice\` = Speak that message
+
+*🎵 Music Download:*
+• \`-play [song name]\` = Search & download from YouTube
+• Example: \`-play Tera hone laga hoon\`
+
+*💫 Interactions (with GIFs):*
+• \`-hug @person\` - Give someone a hug
+• \`-kiss @person\` - Kiss someone
+• \`-pat @person\` - Pat someone's head
+• \`-love @person\` - Show love to someone
+• \`-cuddle @person\` - Cuddle with someone
+
+*🎯 Mention Me:*
+Say "Eden" or "@Eden" and I'll respond!
+
+Feel free to ask me anything! 💫`;
+    }
 
     const ownerNote = isOwner
       ? `\n🔑 *Special Owner Commands for ${senderName}:*\nYou get slightly less mean responses! (Lucky you...)`
@@ -275,6 +328,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async tellJoke(args) {
+    const { isNiceUser = false } = this.currentContext;
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        "Tell a funny joke",
+        "Tell a genuinely funny, lighthearted joke. Be friendly and fun.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
     return await this.llmService.generateJoke();
   }
 
@@ -431,9 +492,20 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async savageMode(args) {
+    const { isNiceUser = false } = this.currentContext;
     const message = args.join(" ");
     if (!message) {
-      return "Savage mode activated, but you gave me nothing to work with. Peak intelligence right there. 😤";
+      return isNiceUser
+        ? "What should I respond to? 😊"
+        : "Savage mode activated, but you gave me nothing to work with. Peak intelligence right there. 😤";
+    }
+
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        message,
+        "Respond in a witty, playful way. Be clever and fun but not mean.",
+        { ...this.currentContext, mood: "friendly" }
+      );
     }
 
     return await this.llmService.generateMeanResponse(
@@ -443,12 +515,25 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async rateStupidity(args) {
+    const { isNiceUser = false } = this.currentContext;
     const thing = args.join(" ");
     if (!thing) {
-      return "You want me to rate something's stupidity but didn't tell me what? I'll rate your request: 10/10 for irony. 📊";
+      return isNiceUser
+        ? "What should I rate? 😊"
+        : "You want me to rate something's stupidity but didn't tell me what? I'll rate your request: 10/10 for irony. 📊";
     }
 
     const rating = Math.floor(Math.random() * 10) + 1;
+    
+    if (isNiceUser) {
+      const response = await this.llmService.generateContextualResponse(
+        `Give your thoughts on "${thing}"`,
+        `Rate it ${rating}/10. Be friendly and helpful in your assessment.`,
+        { ...this.currentContext, mood: "friendly" }
+      );
+      return `📊 *Rating for "${thing}":* ${rating}/10\n\n${response}`;
+    }
+
     const response = await this.llmService.generateMeanResponse(
       `Rate "${thing}" on a stupidity scale of 1-10`,
       `The rating is ${rating}/10`
@@ -458,20 +543,35 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async checkMood() {
-    const { mood = "sarcastic", senderName = "User" } = this.currentContext;
+    const { mood = "sarcastic", senderName = "User", isNiceUser = false } = this.currentContext;
     const moodEmojis = {
       sarcastic: "🙄",
       savage: "😈",
       playful: "😏",
       annoyed: "😤",
       dramatic: "🎭",
+      friendly: "😊",
     };
+
+    if (isNiceUser) {
+      return `${moodEmojis["friendly"]} I'm feeling great! How are you? 😊`;
+    }
 
     return `${moodEmojis[mood]} I'm currently feeling **${mood}**, ${senderName}. Hope that helps you calibrate your expectations.`;
   }
 
   async fakeCompliment(args) {
+    const { isNiceUser = false } = this.currentContext;
     const target = args.join(" ") || this.currentContext.senderName || "you";
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        `Give a genuine compliment to ${target}`,
+        "Give a sincere, kind compliment. Be warm and friendly.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       `Give a backhanded compliment to ${target}`,
       "Make it sound nice at first but clearly sarcastic. Be clever.",
@@ -480,9 +580,20 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async giveAdvice(args) {
+    const { isNiceUser = false } = this.currentContext;
     const topic = args.join(" ");
     if (!topic) {
-      return "You want advice but didn't tell me about what? Here's free advice: be more specific. 🤦‍♀️";
+      return isNiceUser
+        ? "What do you need advice about? 😊"
+        : "You want advice but didn't tell me about what? Here's free advice: be more specific. 🤦‍♀️";
+    }
+
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        `Give helpful advice about ${topic}`,
+        "Give genuine, thoughtful advice. Be supportive and encouraging.",
+        { ...this.currentContext, mood: "friendly" }
+      );
     }
 
     return await this.llmService.generateContextualResponse(
@@ -493,6 +604,16 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async shareFact() {
+    const { isNiceUser = false } = this.currentContext;
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        "Share an interesting fact",
+        "Share a cool, interesting fact in a friendly, educational way. Make it fun to learn.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       "Share an interesting fact",
       "Share a fact but present it in a sarcastic way that makes the listener feel dumb for not knowing it.",
@@ -501,6 +622,16 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async shareQuote() {
+    const { isNiceUser = false } = this.currentContext;
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        "Share an inspirational quote",
+        "Share a genuinely uplifting quote with positive commentary. Be encouraging and warm.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       "Share an inspirational quote",
       "Share a quote but add your own sarcastic commentary that completely undermines the inspiration.",
@@ -509,6 +640,16 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async tellStory() {
+    const { isNiceUser = false } = this.currentContext;
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        "Tell a very short story",
+        "Tell a brief, fun story (2-3 sentences) with a positive or amusing ending.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       "Tell a very short story",
       "Tell a brief, sarcastic story (2-3 sentences) that has a mean but funny twist.",
@@ -517,7 +658,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async weatherSarcasm(args) {
+    const { isNiceUser = false } = this.currentContext;
     const location = args.join(" ") || "your location";
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        `Comment on the weather in ${location}`,
+        "Make friendly, light commentary about weather. Be cheerful and conversational.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       `Comment on the weather in ${location}`,
       "Make sarcastic commentary about weather. You don't need to give actual weather info, just be sarcastic about weather in general.",
@@ -526,6 +677,16 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async fortuneTelling() {
+    const { isNiceUser = false } = this.currentContext;
+    
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        "Tell someone's fortune",
+        "Give an optimistic, encouraging fortune. Be mystical and positive.",
+        { ...this.currentContext, mood: "friendly" }
+      );
+    }
+    
     return await this.llmService.generateContextualResponse(
       "Tell someone's fortune",
       "Give a fortune that's hilariously pessimistic but in a funny way. Be dramatic and sarcastic.",
@@ -534,9 +695,20 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async generateExcuse(args) {
+    const { isNiceUser = false } = this.currentContext;
     const situation = args.join(" ");
     if (!situation) {
-      return "You want an excuse but won't tell me for what? Here's one: 'I was too lazy to be specific.' 🤷‍♀️";
+      return isNiceUser
+        ? "What situation do you need an excuse for? 😊"
+        : "You want an excuse but won't tell me for what? Here's one: 'I was too lazy to be specific.' 🤷‍♀️";
+    }
+
+    if (isNiceUser) {
+      return await this.llmService.generateContextualResponse(
+        `Generate a creative excuse for ${situation}`,
+        "Create a clever, lighthearted excuse. Make it fun and believable.",
+        { ...this.currentContext, mood: "friendly" }
+      );
     }
 
     return await this.llmService.generateContextualResponse(
@@ -680,7 +852,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
             personality = args[0].toLowerCase();
           }
         } else {
-          return "I can't speak non-text messages, genius. Reply to a TEXT message! 🙄";
+          const { isNiceUser = false } = this.currentContext;
+          return isNiceUser
+            ? "Please reply to a text message! 😊"
+            : "I can't speak non-text messages, genius. Reply to a TEXT message! 🙄";
         }
       } else if (args.length > 0) {
         // Use provided text
@@ -701,11 +876,15 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       }
 
       if (!textToSpeak.trim()) {
-        return "What am I supposed to say? Air? Give me some actual text! 💨";
+        const { isNiceUser = false } = this.currentContext;
+        return isNiceUser
+          ? "What should I say? 😊"
+          : "What am I supposed to say? Air? Give me some actual text! 💨";
       }
 
       // Get random sassy response
-      const responses = this.voiceService.getVoiceResponses();
+      const { isNiceUser = false } = this.currentContext;
+      const responses = this.voiceService.getVoiceResponses(isNiceUser);
       const response = responses[Math.floor(Math.random() * responses.length)];
 
       // Create the voice message
@@ -760,6 +939,18 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   getVoiceErrorMessage() {
+    const { isNiceUser = false } = this.currentContext;
+    
+    if (isNiceUser) {
+      const errorResponses = [
+        "Oops! Voice generation failed. Try again? 🎤",
+        "Something went wrong with the voice message. Want to try again? 😊",
+        "Voice creation failed. Let me try again!",
+        "Audio creation had an error. Try once more? 🎵",
+      ];
+      return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+    
     const errorResponses = [
       "Well, that didn't work. Your text broke my voice box. Congratulations! 🎤💥",
       "Voice generation failed. Maybe try with something less ear-torturing? 🙉",
@@ -950,15 +1141,19 @@ ${ending}`;
       const query = args.join(" ");
 
       if (!query || query.trim().length === 0) {
-        return "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
+        const { isNiceUser = false } = this.currentContext;
+        return isNiceUser
+          ? "What song should I download? 😊\n\nUsage: `-play Tera hone laga hoon`"
+          : "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
       }
 
-      const { senderName = "User" } = this.currentContext;
+      const { senderName = "User", isNiceUser = false } = this.currentContext;
 
       // Send initial response
-      await message.reply(
-        `🔍 Fine, searching for "${query}"... This better be worth my time.`
-      );
+      const searchMsg = isNiceUser
+        ? `🔍 Searching for "${query}"...`
+        : `🔍 Fine, searching for "${query}"... This better be worth my time.`;
+      await message.reply(searchMsg);
 
       // Search and download
       const result = await this.youtubeService.searchAndDownload(query);
@@ -966,7 +1161,7 @@ ${ending}`;
       // Prepare media with Baileys
       const fs = require("fs");
       const audioData = fs.readFileSync(result.filepath);
-      const sassyQuote = this.youtubeService.getRandomYouTubeQuote();
+      const sassyQuote = this.youtubeService.getRandomYouTubeQuote(isNiceUser);
 
       // Send thumbnail if available
       console.log("📸 Thumbnail check:", {
@@ -1018,22 +1213,36 @@ ${ending}`;
       console.error("Play music error:", error);
 
       if (error.message.includes("yt-dlp not installed")) {
-        return "Ugh, I can't download music without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
+        return isNiceUser
+          ? "I need yt-dlp to download music! 😊\n\nInstall it:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp"
+          : "Ugh, I can't download music without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
       }
 
       if (
         error.message.includes("ffmpeg not found") ||
         error.message.includes("ffprobe")
       ) {
-        return "I need ffmpeg to convert videos to MP3, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
+        return isNiceUser
+          ? "I need ffmpeg to convert videos! 😊\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again!"
+          : "I need ffmpeg to convert videos to MP3, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
       }
 
       if (error.message.includes("Could not find video")) {
-        return `Couldn't find "${args.join(
-          " "
-        )}" on YouTube. Maybe try spelling it correctly? 🤔`;
+        return isNiceUser
+          ? `Couldn't find "${args.join(" ")}" on YouTube. Try a different search? 😊`
+          : `Couldn't find "${args.join(" ")}" on YouTube. Maybe try spelling it correctly? 🤔`;
       }
 
+      if (isNiceUser) {
+        const errorResponses = [
+          "Download failed! Want to try again? 😊",
+          "Something went wrong. Try once more?",
+          "Error downloading. Let's try another song? 🎵",
+          "Oops! Download failed. Try again?",
+        ];
+        return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+      }
+      
       const errorResponses = [
         "Well that didn't work. YouTube's probably judging your music taste too. 🙄",
         "Download failed. Even the internet doesn't want you to have this song. 💀",

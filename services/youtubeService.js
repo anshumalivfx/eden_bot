@@ -233,7 +233,20 @@ class YouTubeService {
   /**
    * Get sassy response for YouTube command
    */
-  getRandomYouTubeQuote() {
+  getRandomYouTubeQuote(isNiceUser = false) {
+    if (isNiceUser) {
+      const quotes = [
+        "Here's your music! 🎵",
+        "Downloaded! Enjoy! 🎧",
+        "Your song is ready! 🎶",
+        "Got it for you! 💫",
+        "Here you go! 🎵",
+        "All set! Enjoy the music! 🎶",
+        "Downloaded! Hope you like it! 🎧",
+      ];
+      return quotes[Math.floor(Math.random() * quotes.length)];
+    }
+    
     const quotes = [
       "Here's your music. You're welcome. 🎵",
       "Downloaded. Try not to play it on repeat... oh who am I kidding. 🙄",
