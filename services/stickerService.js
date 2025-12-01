@@ -22,36 +22,11 @@ class StickerService {
     }
   }
 
+  // EXIF metadata causes WhatsApp to reject stickers with download errors
+  // Stickers work fine without it - WhatsApp handles them as regular stickers
   async addStickerMetadata(webpBuffer) {
-    try {
-      const img = new Image();
-      await img.load(webpBuffer);
-
-      const stickerPackId = "com.anshbot.stickers";
-      const stickerPackName = "Ansh Bot Stickers";
-      const stickerPackPublisher = "Ansh Bot";
-
-      // Create proper EXIF JSON format for WhatsApp stickers (Android & iOS compatible)
-      const exifData = {
-        "sticker-pack-id": stickerPackId,
-        "sticker-pack-name": stickerPackName,
-        "sticker-pack-publisher": stickerPackPublisher,
-        "android-app-store-link":
-          "https://play.google.com/store/apps/details?id=com.anshbot.stickers",
-        "ios-app-store-link":
-          "https://apps.apple.com/app/anshbot-stickers/id123456789",
-        emojis: ["😀", "😂", "❤️"],
-        "is-first-party-sticker": 0,
-      };
-
-      const exifStr = JSON.stringify(exifData);
-      img.exif = Buffer.from(exifStr, "utf-8");
-
-      return await img.save(null);
-    } catch (error) {
-      console.error("Error adding sticker metadata:", error);
-      return webpBuffer; // Return original if metadata fails
-    }
+    // Return buffer unchanged - no EXIF metadata needed
+    return webpBuffer;
   }
 
   async createStickerFromImage(imageBuffer, filename = "sticker") {
