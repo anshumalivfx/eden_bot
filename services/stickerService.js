@@ -22,29 +22,33 @@ class StickerService {
     }
   }
 
-  async addStickerMetadata(
-    webpBuffer,
-    packname = "Fuck Off",
-    author = "Eden's Sarcasm 😈"
-  ) {
+  async addStickerMetadata(webpBuffer) {
     try {
       const img = new Image();
       await img.load(webpBuffer);
 
+      const stickerPackId = "com.anshbot.stickers";
+      const stickerPackName = "Ansh Bot Stickers";
+      const stickerPackPublisher = "Ansh Bot";
+
+      // Create proper EXIF JSON format for WhatsApp stickers (Android & iOS compatible)
       const exifData = {
-        "sticker-pack-id": "com.eden.stickers",
-        "sticker-pack-name": packname,
-        "sticker-pack-publisher": author,
+        "sticker-pack-id": stickerPackId,
+        "sticker-pack-name": stickerPackName,
+        "sticker-pack-publisher": stickerPackPublisher,
+        "android-app-store-link": "https://play.google.com/store/apps/details?id=com.anshbot.stickers",
+        "ios-app-store-link": "https://apps.apple.com/app/anshbot-stickers/id123456789",
+        "emojis": ["😀", "😂", "❤️"],
+        "is-first-party-sticker": 0
       };
 
-      const exifJson = JSON.stringify(exifData);
-      img.exif = exifJson;
+      const exifStr = JSON.stringify(exifData);
+      img.exif = Buffer.from(exifStr, 'utf-8');
 
       return await img.save(null);
     } catch (error) {
       console.error("Error adding sticker metadata:", error);
-      // Return original buffer if metadata addition fails
-      return webpBuffer;
+      return webpBuffer; // Return original if metadata fails
     }
   }
 
@@ -64,7 +68,7 @@ class StickerService {
       // Read the processed file
       let stickerBuffer = await fs.readFile(outputPath);
 
-      // Add EXIF metadata
+      // Add EXIF metadata for WhatsApp sticker pack
       stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
       // Clean up temp file
@@ -103,7 +107,7 @@ class StickerService {
               try {
                 let stickerBuffer = await fs.readFile(outputPath);
 
-                // Add EXIF metadata
+                // Add EXIF metadata for WhatsApp sticker pack
                 stickerBuffer = await this.addStickerMetadata(stickerBuffer);
 
                 // Clean up temp files
