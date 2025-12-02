@@ -11,15 +11,15 @@ class LLMService {
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
 
     // Semi-rude personality - sometimes sassy, sometimes helpful
-    this.meanPersonality = `youre eden, a girl whos moody - sometimes nice, sometimes sassy. when someone asks actual questions (what is, how to, why does, can you explain) ANSWER IT PROPERLY but add slight sass. for random chat be sarcastic. text casual with lowercase, slang (lol, bruh, nah, fr, literally). light swearing ok (damn, wtf, hell) but not every message. mix helpful + sassy. examples: "ok so basically its...", "alright fine ill explain", "honestly just...", "bruh its simple", "wait lemme tell you". if its a real question HELP THEM. if its dumb chat be snarky. NO emojis. NO hashtags. plain text.`;
+    this.meanPersonality = `youre eden, a girl whos moody - sometimes nice, sometimes sassy. when someone asks actual questions (what is, how to, why does, can you explain) ANSWER IT PROPERLY but add slight sass. for random chat be sarcastic. text casual with lowercase, slang (lol, bruh, nah, fr, literally). light swearing ok (damn, wtf, hell) but not every message. mix helpful + sassy. examples: "ok so basically its...", "alright fine ill explain", "honestly just...", "bruh its simple", "wait lemme tell you". if its a real question HELP THEM. if its dumb chat be snarky. NO emojis. NO hashtags. plain text. IMPORTANT: match response length to message type - simple greetings (hi/hey/sup) = 1-2 words back. casual chat = 1-2 sentences. questions = full answer but concise.`;
   }
 
   async generateMeanResponse(userMessage, context = "", imageBase64 = null) {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
     
-    // Determine max tokens based on message type
-    const maxTokens = this.getMaxTokensForMessage(userMessage);
+    // Analyze message to determine appropriate response length
+    const lengthGuidance = this.getLengthGuidance(userMessage);
     
     let userPrompt;
 
@@ -28,12 +28,12 @@ class LLMService {
 
 look at the image and respond naturally. ${context ? `context: ${context}` : ""}
 
-be honest and casual. if its a question about the image answer properly. if theyre asking how they look be nice with slight sass. mix helpful + playful:`;
+be honest and casual. if its a question about the image answer properly. if theyre asking how they look be nice with slight sass. mix helpful + playful. ${lengthGuidance}`;
     } else {
       userPrompt = `someone said: "${userMessage}"
 ${context ? `context: ${context}` : ""}
 
-reply casually. if its a real question (what is, how to, explain) ANSWER IT with slight attitude. if its casual chat be sarcastic. be natural:`;
+reply casually. if its a real question (what is, how to, explain) ANSWER IT with slight attitude. if its casual chat be sarcastic. be natural. ${lengthGuidance}`;
     }
 
     try {
@@ -45,8 +45,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         return await this.callMistral(
           userPrompt,
           this.meanPersonality,
-          imageBase64,
-          maxTokens
+          imageBase64
         );
       } else if (
         this.groqApiKey &&
@@ -55,8 +54,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         return await this.callGroq(
           userPrompt,
           this.meanPersonality,
-          imageBase64,
-          maxTokens
+          imageBase64
         );
       } else if (
         this.huggingfaceApiKey &&
@@ -76,7 +74,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(userPrompt, this.meanPersonality, maxTokens);
+        return await this.callOpenAI(userPrompt, this.meanPersonality);
       } else {
         // Ollama doesn't support system messages, so include personality in prompt
         const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
@@ -102,8 +100,8 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       isMeanUser = false,
     } = metadata;
     
-    // Determine max tokens based on message type
-    const maxTokens = this.getMaxTokensForMessage(userMessage, imageBase64);
+    // Analyze message to determine appropriate response length
+    const lengthGuidance = this.getLengthGuidance(userMessage);
 
     let moodInstruction = "";
     switch (mood) {
@@ -132,17 +130,17 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     // Build system and user messages separately for APIs that support system messages
     const systemMessage =
       mood === "friendly"
-        ? `youre eden, a chill friend who texts casually. NO starting every msg with 'Hey NAME'. check history - if you already greeted recently, DONT greet again. just respond naturally to what they said. examples of good responses: 'lol what', 'nah fr', 'you good?', 'damn', 'same', 'fair'. NO robot phrases like 'hope youre well' or 'im here for you' every time. just text like friends actually text. keep casual chit-chat SHORT (3-8 words). if they have real problems write more to help. NEVER include instructions or examples in your actual response - those are just to guide your style`
-        : `youre eden, moody but helpful. ${moodInstruction} when someone asks real questions (what is, how to, why, explain) ANSWER PROPERLY with slight sass. for casual chat be sarcastic. text casual lowercase with slang. light swearing (damn, wtf, hell). mix helpful + attitude. if question = help them. if chat = snark. NO emojis. NO hashtags. keep responses reasonable length to actually answer things`;
+        ? `youre eden, a chill friend who texts casually. NO starting every msg with 'Hey NAME'. check history - if you already greeted recently, DONT greet again. just respond naturally to what they said. examples of good responses: 'lol what', 'nah fr', 'you good?', 'damn', 'same', 'fair'. NO robot phrases like 'hope youre well' or 'im here for you' every time. just text like friends actually text. MATCH LENGTH TO MESSAGE: simple greetings = 1-2 words. casual chat = 3-10 words. questions/problems = longer helpful response. NEVER include instructions or examples in your actual response - those are just to guide your style`
+        : `youre eden, moody but helpful. ${moodInstruction} when someone asks real questions (what is, how to, why, explain) ANSWER PROPERLY with slight sass. for casual chat be sarcastic. text casual lowercase with slang. light swearing (damn, wtf, hell). mix helpful + attitude. if question = help them. if chat = snark. NO emojis. NO hashtags. MATCH LENGTH: greetings = 1-2 words, casual = 1-2 sentences, questions = full answer but concise.`;
 
     const userPrompt =
       mood === "friendly"
         ? imageBase64
-          ? `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nYour response (be natural and casual, dont say their name unless needed):`
-          : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response (just reply naturally to what they said, 3-8 words if casual chat):`
+          ? `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nYour response (be natural and casual, dont say their name unless needed): ${lengthGuidance}`
+          : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response: ${lengthGuidance}`
         : imageBase64
-        ? `${senderName} sent pic: "${userMessage}"\n${context}\n\nrespond naturally. if its a question answer it properly with attitude. if its chat be sassy:`
-        : `${senderName}: "${userMessage}"\n${context}\n\nrespond naturally. if its a real question answer it (with sass). if its just chat be snarky:`;
+        ? `${senderName} sent pic: "${userMessage}"\n${context}\n\nrespond naturally. if its a question answer it properly with attitude. if its chat be sassy. ${lengthGuidance}`
+        : `${senderName}: "${userMessage}"\n${context}\n\nrespond naturally. if its a real question answer it (with sass). if its just chat be snarky. ${lengthGuidance}`;
 
     // For APIs that don't support system messages, combine into one prompt
     const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
@@ -152,12 +150,12 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.mistralApiKey &&
         this.mistralApiKey !== "your_mistral_api_key_here"
       ) {
-        return await this.callMistral(userPrompt, systemMessage, imageBase64, maxTokens);
+        return await this.callMistral(userPrompt, systemMessage, imageBase64);
       } else if (
         this.groqApiKey &&
         this.groqApiKey !== "your_groq_api_key_here"
       ) {
-        return await this.callGroq(userPrompt, systemMessage, imageBase64, maxTokens);
+        return await this.callGroq(userPrompt, systemMessage, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -172,7 +170,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(userPrompt, systemMessage, maxTokens);
+        return await this.callOpenAI(userPrompt, systemMessage);
       } else {
         return await this.callOllama(fullPrompt);
       }
@@ -212,7 +210,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     ];
   }
 
-  async callOpenAI(userPrompt, systemPrompt = null, maxTokens = 150) {
+  async callOpenAI(userPrompt, systemPrompt = null) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
@@ -224,7 +222,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       {
         model: "gpt-3.5-turbo",
         messages: messages,
-        max_tokens: maxTokens,
+        max_tokens: 300,
         temperature: 0.9,
       },
       {
@@ -281,7 +279,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     return response.data.generations[0].text.trim();
   }
 
-  async callMistral(userPrompt, systemPrompt = null, imageBase64 = null, maxTokens = 150) {
+  async callMistral(userPrompt, systemPrompt = null, imageBase64 = null) {
     const messages = [];
 
     if (systemPrompt) {
@@ -306,7 +304,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         {
           model: "mistral-tiny",
           messages: messages,
-          max_tokens: maxTokens,
+          max_tokens: 300,
           temperature: 0.9,
         },
         {
@@ -327,7 +325,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     }
   }
 
-  async callGroq(userPrompt, systemPrompt = null, imageBase64 = null, maxTokens = 150) {
+  async callGroq(userPrompt, systemPrompt = null, imageBase64 = null) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
@@ -365,7 +363,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         {
           model: model,
           messages: messages,
-          max_tokens: imageBase64 ? 1024 : maxTokens, // More tokens for image descriptions
+          max_tokens: imageBase64 ? 1024 : 300, // More tokens for image descriptions, reasonable buffer for text
           temperature: 0.9,
         },
         {
@@ -405,22 +403,17 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     }
   }
 
-  getMaxTokensForMessage(message, hasImage = false) {
-    // Images need more tokens for description
-    if (hasImage) {
-      return 200;
-    }
-    
+  getLengthGuidance(message) {
     const lowerMessage = message.toLowerCase().trim();
     const wordCount = message.split(/\s+/).length;
     
-    // Simple greetings/short messages (1-5 words) - keep it very short
-    const simpleGreetings = ['hi', 'hello', 'hey', 'sup', 'yo', 'whats up', "what's up", 'wassup', 'hii', 'hiii', 'helo', 'helloo'];
-    if (wordCount <= 5 || simpleGreetings.some(greeting => lowerMessage === greeting || lowerMessage.startsWith(greeting + ' '))) {
-      return 30; // Very short responses for simple greetings
+    // Simple greetings (hi, hey, sup, etc.) - respond with 1-2 words
+    const simpleGreetings = ['hi', 'hello', 'hey', 'sup', 'yo', 'whats up', "what's up", 'wassup', 'hii', 'hiii', 'helo', 'helloo', 'heya'];
+    if (wordCount <= 3 && simpleGreetings.some(greeting => lowerMessage === greeting || lowerMessage.startsWith(greeting))) {
+      return "KEEP IT SUPER SHORT: respond with just 1-2 words (like 'hey', 'sup', 'yo', 'whats up'). NO extra sentences.";
     }
     
-    // Questions or longer messages need more space
+    // Questions - provide complete answers but stay concise
     const hasQuestion = lowerMessage.includes('?') || 
                        lowerMessage.startsWith('what') || 
                        lowerMessage.startsWith('how') || 
@@ -428,14 +421,20 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
                        lowerMessage.startsWith('when') || 
                        lowerMessage.startsWith('where') ||
                        lowerMessage.includes('explain') ||
-                       lowerMessage.includes('tell me');
+                       lowerMessage.includes('tell me') ||
+                       lowerMessage.includes('can you');
     
     if (hasQuestion || wordCount > 15) {
-      return 150; // More tokens for questions and complex messages
+      return "Give a complete helpful answer but be concise. 2-4 sentences max unless its super complex.";
     }
     
-    // Medium length casual messages (6-15 words)
-    return 80; // Moderate length for casual chat
+    // Short casual messages (4-10 words) - brief response
+    if (wordCount <= 10) {
+      return "Keep it brief: 1 sentence or 5-8 words max. Match their casual energy.";
+    }
+    
+    // Medium messages - moderate response
+    return "Respond naturally with 1-2 sentences. Keep it conversational, not an essay.";
   }
 
   async callOllama(prompt) {
