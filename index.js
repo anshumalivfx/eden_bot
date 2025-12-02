@@ -24,7 +24,9 @@ try {
   const data = fs.readFileSync(niceUsersPath, "utf8");
   niceUsersConfig = JSON.parse(data);
   console.log(
-    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users and ${niceUsersConfig.meanUsers?.length || 0} mean users from config`
+    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users and ${
+      niceUsersConfig.meanUsers?.length || 0
+    } mean users from config`
   );
 } catch (error) {
   console.log("⚠️ No nice-users.json found, using default behavior");
@@ -1297,10 +1299,11 @@ async function connectToWhatsApp() {
 
             try {
               // Check if sender is a nice or mean user
-              const senderJid = message.key.participant || message.key.remoteJid;
+              const senderJid =
+                message.key.participant || message.key.remoteJid;
               const niceUser = isNiceUser(senderJid);
               const meanUser = isMeanUser(senderJid);
-              
+
               const response = await commandHandler.handleCommand(
                 command,
                 messageAdapter,
@@ -1526,7 +1529,11 @@ async function connectToWhatsApp() {
 
                 console.log(
                   `🎭 Context mode: ${
-                    niceUser ? "NICE USER (friendly)" : meanUser ? "MEAN USER (SAVAGE)" : "REGULAR (sarcastic)"
+                    niceUser
+                      ? "NICE USER (friendly)"
+                      : meanUser
+                      ? "MEAN USER (SAVAGE)"
+                      : "REGULAR (sarcastic)"
                   } for ${senderName}`
                 );
                 console.log(
@@ -1542,7 +1549,11 @@ async function connectToWhatsApp() {
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser ? "friendly" : meanUser ? "savage" : "sarcastic",
+                    mood: niceUser
+                      ? "friendly"
+                      : meanUser
+                      ? "savage"
+                      : "sarcastic",
                     isMeanUser: meanUser,
                   },
                   imageBase64
@@ -1583,7 +1594,11 @@ async function connectToWhatsApp() {
 
                 console.log(
                   `🎭 Context mode: ${
-                    niceUser ? "NICE USER (friendly)" : meanUser ? "MEAN USER (SAVAGE)" : "REGULAR (sarcastic)"
+                    niceUser
+                      ? "NICE USER (friendly)"
+                      : meanUser
+                      ? "MEAN USER (SAVAGE)"
+                      : "REGULAR (sarcastic)"
                   } for ${senderName}`
                 );
                 console.log(
@@ -1599,7 +1614,11 @@ async function connectToWhatsApp() {
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser ? "friendly" : meanUser ? "savage" : "sarcastic",
+                    mood: niceUser
+                      ? "friendly"
+                      : meanUser
+                      ? "savage"
+                      : "sarcastic",
                     isMeanUser: meanUser,
                   },
                   imageBase64

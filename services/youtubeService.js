@@ -246,7 +246,7 @@ class YouTubeService {
       ];
       return quotes[Math.floor(Math.random() * quotes.length)];
     }
-    
+
     const quotes = [
       "Here's your music. You're welcome. 🎵",
       "Downloaded. Try not to play it on repeat... oh who am I kidding. 🙄",

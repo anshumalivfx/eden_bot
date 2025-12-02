@@ -17,14 +17,16 @@ class LLMService {
   async generateMeanResponse(userMessage, context = "", imageBase64 = null) {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
+    
+    // Determine max tokens based on message type
+    const maxTokens = this.getMaxTokensForMessage(userMessage);
+    
     let userPrompt;
 
     if (imageBase64) {
       userPrompt = `someone sent an image and said: "${userMessage}"
 
-look at the image and respond naturally. ${
-        context ? `context: ${context}` : ""
-      }
+look at the image and respond naturally. ${context ? `context: ${context}` : ""}
 
 be honest and casual. if its a question about the image answer properly. if theyre asking how they look be nice with slight sass. mix helpful + playful:`;
     } else {
@@ -43,7 +45,8 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         return await this.callMistral(
           userPrompt,
           this.meanPersonality,
-          imageBase64
+          imageBase64,
+          maxTokens
         );
       } else if (
         this.groqApiKey &&
@@ -52,7 +55,8 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         return await this.callGroq(
           userPrompt,
           this.meanPersonality,
-          imageBase64
+          imageBase64,
+          maxTokens
         );
       } else if (
         this.huggingfaceApiKey &&
@@ -72,7 +76,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(userPrompt, this.meanPersonality);
+        return await this.callOpenAI(userPrompt, this.meanPersonality, maxTokens);
       } else {
         // Ollama doesn't support system messages, so include personality in prompt
         const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
@@ -97,6 +101,9 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       isRandom = false,
       isMeanUser = false,
     } = metadata;
+    
+    // Determine max tokens based on message type
+    const maxTokens = this.getMaxTokensForMessage(userMessage, imageBase64);
 
     let moodInstruction = "";
     switch (mood) {
@@ -145,12 +152,12 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.mistralApiKey &&
         this.mistralApiKey !== "your_mistral_api_key_here"
       ) {
-        return await this.callMistral(userPrompt, systemMessage, imageBase64);
+        return await this.callMistral(userPrompt, systemMessage, imageBase64, maxTokens);
       } else if (
         this.groqApiKey &&
         this.groqApiKey !== "your_groq_api_key_here"
       ) {
-        return await this.callGroq(userPrompt, systemMessage, imageBase64);
+        return await this.callGroq(userPrompt, systemMessage, imageBase64, maxTokens);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -165,7 +172,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(userPrompt, systemMessage);
+        return await this.callOpenAI(userPrompt, systemMessage, maxTokens);
       } else {
         return await this.callOllama(fullPrompt);
       }
@@ -205,7 +212,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     ];
   }
 
-  async callOpenAI(userPrompt, systemPrompt = null) {
+  async callOpenAI(userPrompt, systemPrompt = null, maxTokens = 150) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
@@ -217,7 +224,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       {
         model: "gpt-3.5-turbo",
         messages: messages,
-        max_tokens: 150,
+        max_tokens: maxTokens,
         temperature: 0.9,
       },
       {
@@ -274,7 +281,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     return response.data.generations[0].text.trim();
   }
 
-  async callMistral(userPrompt, systemPrompt = null, imageBase64 = null) {
+  async callMistral(userPrompt, systemPrompt = null, imageBase64 = null, maxTokens = 150) {
     const messages = [];
 
     if (systemPrompt) {
@@ -299,7 +306,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         {
           model: "mistral-tiny",
           messages: messages,
-          max_tokens: 200,
+          max_tokens: maxTokens,
           temperature: 0.9,
         },
         {
@@ -320,7 +327,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     }
   }
 
-  async callGroq(userPrompt, systemPrompt = null, imageBase64 = null) {
+  async callGroq(userPrompt, systemPrompt = null, imageBase64 = null, maxTokens = 150) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
@@ -358,7 +365,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         {
           model: model,
           messages: messages,
-          max_tokens: imageBase64 ? 1024 : 150, // More tokens for image descriptions
+          max_tokens: imageBase64 ? 1024 : maxTokens, // More tokens for image descriptions
           temperature: 0.9,
         },
         {
@@ -396,6 +403,39 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       }
       throw error;
     }
+  }
+
+  getMaxTokensForMessage(message, hasImage = false) {
+    // Images need more tokens for description
+    if (hasImage) {
+      return 200;
+    }
+    
+    const lowerMessage = message.toLowerCase().trim();
+    const wordCount = message.split(/\s+/).length;
+    
+    // Simple greetings/short messages (1-5 words) - keep it very short
+    const simpleGreetings = ['hi', 'hello', 'hey', 'sup', 'yo', 'whats up', "what's up", 'wassup', 'hii', 'hiii', 'helo', 'helloo'];
+    if (wordCount <= 5 || simpleGreetings.some(greeting => lowerMessage === greeting || lowerMessage.startsWith(greeting + ' '))) {
+      return 30; // Very short responses for simple greetings
+    }
+    
+    // Questions or longer messages need more space
+    const hasQuestion = lowerMessage.includes('?') || 
+                       lowerMessage.startsWith('what') || 
+                       lowerMessage.startsWith('how') || 
+                       lowerMessage.startsWith('why') || 
+                       lowerMessage.startsWith('when') || 
+                       lowerMessage.startsWith('where') ||
+                       lowerMessage.includes('explain') ||
+                       lowerMessage.includes('tell me');
+    
+    if (hasQuestion || wordCount > 15) {
+      return 150; // More tokens for questions and complex messages
+    }
+    
+    // Medium length casual messages (6-15 words)
+    return 80; // Moderate length for casual chat
   }
 
   async callOllama(prompt) {

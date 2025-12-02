@@ -219,7 +219,7 @@ class StickerService {
         "There you go! ✨",
       ];
     }
-    
+
     return [
       "Oh great, another masterpiece. 🎨",
       "I've turned your image into something slightly less disappointing.",
@@ -457,7 +457,7 @@ class StickerService {
         "Made this for you! 🎭",
       ];
     }
-    
+
     return [
       "I've turned your words into a sticker. Groundbreaking. 💬",
       "Here's your text in sticker form. Revolutionary technology at work. 🙄",
