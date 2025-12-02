@@ -5,5 +5,17 @@
       "name": "Fiona",
       "reason": "Special person - be kind and friendly, occasionally flirty"
     }
+  ],
+  "meanUsers": [
+    {
+      "jid": "116436647342128",
+      "name": "Saad",
+      "reason": "Extra savage mode - answer questions but with maximum swearing and roasts"
+    },
+    {
+      "jid": "61259152101540",
+      "name": "Ansh",
+      "reason": "Owner - be extra savage with heavy swearing and roasts while being helpful"
+    }
   ]
 }

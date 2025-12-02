@@ -18,13 +18,13 @@ const MessageStore = require("./database/messageStore");
 require("dotenv").config();
 
 // Load nice users configuration
-let niceUsersConfig = { niceUsers: [] };
+let niceUsersConfig = { niceUsers: [], meanUsers: [] };
 const niceUsersPath = path.join(__dirname, "nice-users.json");
 try {
   const data = fs.readFileSync(niceUsersPath, "utf8");
   niceUsersConfig = JSON.parse(data);
   console.log(
-    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users from config`
+    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users and ${niceUsersConfig.meanUsers?.length || 0} mean users from config`
   );
 } catch (error) {
   console.log("⚠️ No nice-users.json found, using default behavior");
@@ -45,11 +45,37 @@ function isNiceUser(jid) {
   return result;
 }
 
+// Helper to check if user should be treated extra mean
+function isMeanUser(jid) {
+  if (!jid || !niceUsersConfig.meanUsers) return false;
+  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
+  const result = niceUsersConfig.meanUsers.some((user) => {
+    const configNumber = user.jid.replace(/[^0-9]/g, "");
+    return (
+      numberPart.includes(configNumber) || configNumber.includes(numberPart)
+    );
+  });
+  console.log(`🔍 Mean user check: ${jid} -> ${numberPart} -> ${result}`);
+  return result;
+}
+
 // Helper to get nice user info
 function getNiceUserInfo(jid) {
   if (!jid) return null;
   const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
   return niceUsersConfig.niceUsers.find((user) => {
+    const configNumber = user.jid.replace(/[^0-9]/g, "");
+    return (
+      numberPart.includes(configNumber) || configNumber.includes(numberPart)
+    );
+  });
+}
+
+// Helper to get mean user info
+function getMeanUserInfo(jid) {
+  if (!jid || !niceUsersConfig.meanUsers) return null;
+  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
+  return niceUsersConfig.meanUsers.find((user) => {
     const configNumber = user.jid.replace(/[^0-9]/g, "");
     return (
       numberPart.includes(configNumber) || configNumber.includes(numberPart)
@@ -1270,9 +1296,10 @@ async function connectToWhatsApp() {
             }
 
             try {
-              // Check if sender is a nice user
+              // Check if sender is a nice or mean user
               const senderJid = message.key.participant || message.key.remoteJid;
               const niceUser = isNiceUser(senderJid);
+              const meanUser = isMeanUser(senderJid);
               
               const response = await commandHandler.handleCommand(
                 command,
@@ -1282,6 +1309,7 @@ async function connectToWhatsApp() {
                   isOwner: owner,
                   mood: "sarcastic",
                   isNiceUser: niceUser,
+                  isMeanUser: meanUser,
                 }
               );
 
@@ -1368,10 +1396,12 @@ async function connectToWhatsApp() {
             continue;
           }
 
-          // Check if sender is a nice user (special handling)
+          // Check if sender is a nice or mean user (special handling)
           const senderJid = message.key.participant || message.key.remoteJid;
           const niceUser = isNiceUser(senderJid);
           const niceUserInfo = getNiceUserInfo(senderJid);
+          const meanUser = isMeanUser(senderJid);
+          const meanUserInfo = getMeanUserInfo(senderJid);
 
           // Store incoming message in context with senderJid
           addMessageToContext(
@@ -1401,14 +1431,18 @@ async function connectToWhatsApp() {
               `🎯 ${mentioned ? "Mention" : "Reply"} detected: ${messageText}`
             );
             console.log(
-              `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}`
+              `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}${
+                meanUser ? " [MEAN USER - SAVAGE MODE]" : ""
+              }`
             );
 
             // Sometimes react to the message first
             if (Math.random() > 0.7) {
-              // Different reactions for nice users - cute and friendly
+              // Different reactions for different user types
               const reactions = niceUser
                 ? ["😊", "💕", "😘", "🥰", "✨", "💖"]
+                : meanUser
+                ? ["🖕", "💀", "🤡", "😒", "🙄", "🤢"]
                 : ["💀", "🙄", "😏", "💅", "👀"];
               const randomReaction =
                 reactions[Math.floor(Math.random() * reactions.length)];
@@ -1473,6 +1507,8 @@ async function connectToWhatsApp() {
                 const context = imageBase64
                   ? niceUser
                     ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
+                    : meanUser
+                    ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) sent pic. YOU HATE THIS GUY. be EXTRA savage. roast him HARD with HEAVY swearing (fuck, shit, bitch, ass, damn). still answer if its a question but with MAXIMUM attitude. examples: 'bruh what the fuck is this shit', 'are you fucking serious rn', 'bitch please this is garbage', 'damn ${senderName} you look like shit lmao'. be BRUTAL but funny`
                     : `${contextPrefix}${senderName} replied to you with an image. look at it and respond like a real person. be playful and genuine, not harsh. if its personal (like selfie), be encouraging. sound natural. ${
                         isGroup
                           ? "everyones watching in the group"
@@ -1480,6 +1516,8 @@ async function connectToWhatsApp() {
                       }. NEVER use quotation marks`
                   : niceUser
                   ? `${contextPrefix}${senderName}: ${messageText}. you said: ${quotedText}. respond like you text friends. be nice and helpful. NO swearing`
+                  : meanUser
+                  ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) said: ${messageText}. YOU HATE THIS GUY. be EXTRA mean with HEAVY swearing (fuck, shit, bitch, ass, bastard, damn). if its a question ANSWER IT but with SAVAGE roasts. examples: 'bitch the answer is xyz now fuck off', 'its called abc you dumb fuck', 'damn ${senderName} use your brain its shit but try'. BRUTAL + helpful = savage af`
                   : owner
                   ? `${contextPrefix}${senderName} said: ${messageText}. be sarcastic. 5-10 words. examples: 'bruh what', 'lol ok', 'wtf dude'. swear sometimes`
                   : `${contextPrefix}${senderName} said: ${messageText}. ${
@@ -1488,7 +1526,7 @@ async function connectToWhatsApp() {
 
                 console.log(
                   `🎭 Context mode: ${
-                    niceUser ? "NICE USER (friendly)" : "REGULAR (sarcastic)"
+                    niceUser ? "NICE USER (friendly)" : meanUser ? "MEAN USER (SAVAGE)" : "REGULAR (sarcastic)"
                   } for ${senderName}`
                 );
                 console.log(
@@ -1504,7 +1542,8 @@ async function connectToWhatsApp() {
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser ? "friendly" : "sarcastic",
+                    mood: niceUser ? "friendly" : meanUser ? "savage" : "sarcastic",
+                    isMeanUser: meanUser,
                   },
                   imageBase64
                 );
@@ -1527,11 +1566,15 @@ async function connectToWhatsApp() {
                 const context = imageBase64
                   ? niceUser
                     ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
+                    : meanUser
+                    ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) mentioned you with pic. YOU FUCKING HATE THIS GUY. roast him HARD with HEAVY swearing (fuck, shit, bitch, ass, bastard). if he asks about the pic ANSWER but be savage af. examples: 'bitch this looks like shit lmao', 'damn ${senderName} what the fuck is this', 'bruh are you fucking serious with this'. MAXIMUM ROASTS + answer if needed`
                     : `${contextPrefix}${senderName} sent you an image. look at it and respond like a real person texting. be playful and witty but not mean. if someone asks how they look, be nice and encouraging with some sass. if its a selfie, compliment them genuinely. keep it natural and friendly. ${
                         isGroup ? "everyones watching" : "just you two"
                       }. NEVER use quotation marks`
                   : niceUser
                   ? `${contextPrefix}${senderName}: ${messageText}. respond friendly and helpful. NO swearing. be natural`
+                  : meanUser
+                  ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) mentioned you: ${messageText}. YOU DESPISE THIS MOTHERFUCKER. be EXTRA savage with TONS of swearing (fuck, shit, bitch, ass, bastard, damn, hell). if its a question ANSWER IT but roast him while doing it. examples: 'the answer is xyz you dumb bitch', 'its called abc now fuck off ${senderName}', 'bruh its literally xyz how are you this stupid'. be HELPFUL + BRUTAL = savage king`
                   : owner
                   ? `${contextPrefix}${senderName} said: ${messageText}. sarcastic. 5-10 words max. swear if u want`
                   : `${contextPrefix}${senderName} said: ${messageText}. ${
@@ -1540,7 +1583,7 @@ async function connectToWhatsApp() {
 
                 console.log(
                   `🎭 Context mode: ${
-                    niceUser ? "NICE USER (friendly)" : "REGULAR (sarcastic)"
+                    niceUser ? "NICE USER (friendly)" : meanUser ? "MEAN USER (SAVAGE)" : "REGULAR (sarcastic)"
                   } for ${senderName}`
                 );
                 console.log(
@@ -1556,7 +1599,8 @@ async function connectToWhatsApp() {
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser ? "friendly" : "sarcastic",
+                    mood: niceUser ? "friendly" : meanUser ? "savage" : "sarcastic",
+                    isMeanUser: meanUser,
                   },
                   imageBase64
                 );
