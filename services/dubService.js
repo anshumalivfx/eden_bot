@@ -245,14 +245,22 @@ class DubService {
       
       await execAsync(command);
 
-      // Read generated audio file
-      const audioBuffer = fs.readFileSync(outputPath);
+      // Check if file was created
+      if (!fs.existsSync(outputPath)) {
+        throw new Error("Speech generation failed - file not created");
+      }
 
-      console.log(`✅ Generated ${(audioBuffer.length / 1024).toFixed(2)} KB speech`);
+      const stats = fs.statSync(outputPath);
+      console.log(`✅ Generated ${(stats.size / 1024).toFixed(2)} KB speech`);
 
       return {
-        buffer: audioBuffer,
-        filepath: outputPath
+        filepath: outputPath,
+        cleanup: () => {
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+            console.log(`🗑️ Cleaned up: ${outputPath}`);
+          }
+        }
       };
     } catch (error) {
       console.error("Error generating speech:", error);
@@ -295,8 +303,8 @@ class DubService {
       const speech = await this.generateSpeech(translatedText, targetLang);
 
       return {
-        audio: speech.buffer,
         filepath: speech.filepath,
+        cleanup: speech.cleanup,
         sourceLanguage: transcription.language,
         targetLanguage: targetLang,
         originalText: transcription.text,

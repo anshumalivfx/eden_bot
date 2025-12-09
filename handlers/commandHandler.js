@@ -1058,23 +1058,20 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Record usage after successful dub
       const usageResult = DubUsageStore.recordDubUsage(senderJid);
 
-      // Clean up the dubbed audio file after a delay
+      // Read the dubbed audio file
+      const fs = require("fs");
+      const dubbedAudio = fs.readFileSync(result.filepath);
+
+      // Clean up audio file after a delay
       setTimeout(() => {
-        if (result.filepath && require('fs').existsSync(result.filepath)) {
-          try {
-            require('fs').unlinkSync(result.filepath);
-            console.log('🗑️ Cleaned up dubbed audio file');
-          } catch (e) {
-            console.warn('Failed to clean up dubbed audio:', e.message);
-          }
-        }
-      }, 10000); // 10 second delay
+        result.cleanup();
+      }, 5000);
 
       // Success! Return dubbed audio
       return {
         text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by Piper TTS (Free)*`,
         media: {
-          audio: result.audio,
+          audio: dubbedAudio,
           mimetype: "audio/mpeg",
           ptt: true, // Send as voice note
         },
