@@ -17,7 +17,7 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 class DubService {
   constructor() {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    this.piperPath = path.join(__dirname, "../piper/piper");
+    this.piperPath = path.join(__dirname, "../piper/piper/piper");
     this.modelsPath = path.join(__dirname, "../piper-models");
     this.tempDir = path.join(__dirname, "../temp");
 
