@@ -1,18 +1,25 @@
 const axios = require("axios");
-const FormData = require("form-data");
 const fs = require("fs");
 const path = require("path");
+const { exec } = require("child_process");
+const { promisify } = require("util");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
+const Groq = require("groq-sdk");
+const { Translate } = require("@google-cloud/translate").v2;
 require("dotenv").config();
+
+const execAsync = promisify(exec);
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
 class DubService {
   constructor() {
-    this.apiKey = process.env.ELEVENLABS_API_KEY;
-    this.baseUrl = "https://api.elevenlabs.io/v1";
+    this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    this.translator = new Translate();
+    this.piperPath = path.join(__dirname, "../piper/piper");
+    this.modelsPath = path.join(__dirname, "../piper-models");
     this.tempDir = path.join(__dirname, "../temp");
 
     // Ensure temp directory exists
@@ -119,158 +126,136 @@ class DubService {
   }
 
   /**
-   * Create a dubbing project
-   * @param {string} audioFilePath - Path to audio file
-   * @param {string} targetLang - Target language code (e.g., 'hi', 'es')
-   * @param {string} sourceLang - Source language code (default: 'auto')
-   * @returns {Promise<{dubbing_id: string, expected_duration_sec: number}>}
+   * Piper voice model mapping for different languages
    */
-  async createDubbing(audioFilePath, targetLang, sourceLang = "auto") {
+  getPiperModel(langCode) {
+    const models = {
+      en: "en_US-lessac-medium",
+      hi: "hi_IN-ravidas-medium",
+      es: "es_ES-davefx-medium",
+      fr: "fr_FR-siwis-medium",
+      de: "de_DE-thorsten-medium",
+      it: "it_IT-riccardo-x_low",
+      pt: "pt_BR-faber-medium",
+      ru: "ru_RU-dmitri-medium",
+      ja: "ja_JP-natasha-medium",
+      ko: "ko_KR-keonhee-x_low",
+      zh: "zh_CN-huayan-medium",
+      ar: "ar_JO-kareem-medium",
+      tr: "tr_TR-fettah-medium",
+      pl: "pl_PL-darkman-medium",
+      nl: "nl_NL-mls-medium",
+      sv: "sv_SE-nst-medium",
+      da: "da_DK-talesyntese-medium",
+      fi: "fi_FI-harri-medium",
+      no: "no_NO-talesyntese-medium",
+      cs: "cs_CZ-jirka-medium",
+      el: "el_GR-rapunzelina-low",
+      hu: "hu_HU-anna-medium",
+      ro: "ro_RO-mihai-medium",
+      uk: "uk_UA-ukrainian_tts-medium",
+      id: "id_ID-fitra-medium",
+      ms: "ms_MY-yasmin-medium",
+      th: "th_TH-kmutt-medium",
+      vi: "vi_VN-25hours-single-low",
+    };
+    return models[langCode] || models["en"];
+  }
+
+  /**
+   * Transcribe audio to text using Groq Whisper
+   * @param {string} audioFilePath - Path to audio file
+   * @returns {Promise<{text: string, language: string}>}
+   */
+  async transcribeAudio(audioFilePath) {
     try {
-      if (!this.apiKey || this.apiKey === "your_elevenlabs_api_key_here") {
-        throw new Error(
-          "ElevenLabs API key not configured. Add ELEVENLABS_API_KEY to .env file"
-        );
-      }
-
-      // Validate target language
-      const targetLanguage = this.validateLanguage(targetLang);
-      if (!targetLanguage) {
-        throw new Error(
-          `Unsupported target language: ${targetLang}. Use language codes like: en, hi, es, fr, de, ja, ko, ar, pt, ru, it, zh`
-        );
-      }
-
-      // Create form data
-      const form = new FormData();
-      form.append("file", fs.createReadStream(audioFilePath));
-      form.append("target_lang", targetLanguage.code);
-      form.append("source_lang", sourceLang);
-      form.append("mode", "automatic");
-      form.append("num_speakers", "0"); // Auto-detect speakers
-      form.append("watermark", "true"); // Required for free tier
-
-      console.log(
-        `🎬 Creating dubbing project: auto → ${targetLanguage.name}`
-      );
-
-      const response = await axios.post(`${this.baseUrl}/dubbing`, form, {
-        headers: {
-          "xi-api-key": this.apiKey,
-          ...form.getHeaders(),
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
+      console.log("🎤 Transcribing audio with Groq Whisper...");
+      
+      const transcription = await this.groq.audio.transcriptions.create({
+        file: fs.createReadStream(audioFilePath),
+        model: "whisper-large-v3",
+        response_format: "verbose_json",
       });
 
-      console.log(
-        `✅ Dubbing project created: ${response.data.dubbing_id} (expected: ${response.data.expected_duration_sec}s)`
-      );
-
-      return response.data;
+      console.log(`✅ Transcribed: "${transcription.text.substring(0, 50)}..." (${transcription.language})`);
+      
+      return {
+        text: transcription.text,
+        language: transcription.language,
+      };
     } catch (error) {
-      console.error("Error creating dubbing:", error.response?.data || error);
-      throw new Error(
-        error.response?.data?.detail?.message ||
-          error.message ||
-          "Failed to create dubbing project"
-      );
+      console.error("Error transcribing audio:", error);
+      throw new Error("Failed to transcribe audio");
     }
   }
 
   /**
-   * Check dubbing status
-   * @param {string} dubbingId - Dubbing project ID
-   * @returns {Promise<{status: string, target_languages: string[], error?: string}>}
-   */
-  async getDubbingStatus(dubbingId) {
-    try {
-      const response = await axios.get(
-        `${this.baseUrl}/dubbing/${dubbingId}`,
-        {
-          headers: {
-            "xi-api-key": this.apiKey,
-          },
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error(
-        "Error checking dubbing status:",
-        error.response?.data || error
-      );
-      throw new Error("Failed to check dubbing status");
-    }
-  }
-
-  /**
-   * Wait for dubbing to complete with polling
-   * @param {string} dubbingId - Dubbing project ID
-   * @param {number} maxWaitTime - Maximum wait time in milliseconds (default: 120000 = 2 minutes)
-   * @returns {Promise<{status: string, target_languages: string[]}>}
-   */
-  async waitForDubbing(dubbingId, maxWaitTime = 120000) {
-    const startTime = Date.now();
-    const pollInterval = 3000; // Check every 3 seconds
-
-    while (Date.now() - startTime < maxWaitTime) {
-      const status = await this.getDubbingStatus(dubbingId);
-
-      console.log(`⏳ Dubbing status: ${status.status}`);
-
-      if (status.status === "dubbed") {
-        console.log("✅ Dubbing complete!");
-        return status;
-      } else if (status.status === "failed") {
-        throw new Error(
-          `Dubbing failed: ${status.error || "Unknown error"}`
-        );
-      }
-
-      // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-    }
-
-    throw new Error("Dubbing timeout - took too long to complete");
-  }
-
-  /**
-   * Download dubbed audio file
-   * @param {string} dubbingId - Dubbing project ID
+   * Translate text using Google Translate
+   * @param {string} text - Text to translate
    * @param {string} targetLang - Target language code
+   * @returns {Promise<string>} - Translated text
+   */
+  async translateText(text, targetLang) {
+    try {
+      console.log(`🌐 Translating to ${targetLang}...`);
+      
+      const [translation] = await this.translator.translate(text, targetLang);
+      
+      console.log(`✅ Translated: "${translation.substring(0, 50)}..."`);
+      
+      return translation;
+    } catch (error) {
+      console.error("Error translating text:", error);
+      throw new Error("Failed to translate text");
+    }
+  }
+
+  /**
+   * Generate speech using Piper TTS
+   * @param {string} text - Text to speak
+   * @param {string} langCode - Language code
    * @returns {Promise<Buffer>} - Audio buffer
    */
-  async downloadDubbedAudio(dubbingId, targetLang) {
+  async generateSpeech(text, langCode) {
     try {
-      // ElevenLabs download endpoint format
-      const downloadUrl = `${this.baseUrl}/dubbing/${dubbingId}/audio/${targetLang}`;
+      const model = this.getPiperModel(langCode);
+      const modelPath = path.join(this.modelsPath, `${model}.onnx`);
+      const configPath = path.join(this.modelsPath, `${model}.onnx.json`);
+      
+      // Check if model exists
+      if (!fs.existsSync(modelPath)) {
+        throw new Error(
+          `Piper model not found: ${model}. Run setup-piper.sh to download models.`
+        );
+      }
 
-      console.log(`📥 Downloading dubbed audio: ${downloadUrl}`);
+      console.log(`🗣️ Generating speech with Piper (${model})...`);
 
-      const response = await axios.get(downloadUrl, {
-        headers: {
-          "xi-api-key": this.apiKey,
-        },
-        responseType: "arraybuffer",
-      });
+      const timestamp = Date.now();
+      const outputPath = path.join(this.tempDir, `speech_${timestamp}.wav`);
 
-      console.log(
-        `✅ Downloaded ${(response.data.length / 1024).toFixed(2)} KB`
-      );
+      // Run Piper TTS
+      const command = `echo "${text.replace(/"/g, '\\"')}" | ${this.piperPath} -m ${modelPath} -c ${configPath} -f ${outputPath}`;
+      
+      await execAsync(command);
 
-      return Buffer.from(response.data);
+      // Read generated audio file
+      const audioBuffer = fs.readFileSync(outputPath);
+      
+      // Clean up
+      fs.unlinkSync(outputPath);
+
+      console.log(`✅ Generated ${(audioBuffer.length / 1024).toFixed(2)} KB speech`);
+
+      return audioBuffer;
     } catch (error) {
-      console.error(
-        "Error downloading dubbed audio:",
-        error.response?.data || error
-      );
-      throw new Error("Failed to download dubbed audio");
+      console.error("Error generating speech:", error);
+      throw new Error(`Failed to generate speech: ${error.message}`);
     }
   }
 
   /**
-   * Main dubbing workflow
+   * Main dubbing workflow with Piper TTS
    * @param {Buffer} audioBuffer - Original audio buffer
    * @param {string} targetLang - Target language code
    * @returns {Promise<{audio: Buffer, sourceLanguage: string, targetLanguage: string}>}
@@ -279,27 +264,28 @@ class DubService {
     let convertedFilePath = null;
 
     try {
-      // Step 1: Convert audio to compatible format
+      // Step 1: Convert audio to WAV for Whisper
       console.log("🔄 Converting audio format...");
-      convertedFilePath = await this.convertAudioFormat(audioBuffer, "mp3");
+      convertedFilePath = await this.convertAudioFormat(audioBuffer, "wav");
 
-      // Step 2: Create dubbing project
-      const dubbing = await this.createDubbing(convertedFilePath, targetLang);
+      // Step 2: Transcribe audio to text
+      const transcription = await this.transcribeAudio(convertedFilePath);
 
-      // Step 3: Wait for dubbing to complete
-      const status = await this.waitForDubbing(dubbing.dubbing_id);
-
-      // Step 4: Download dubbed audio
-      const dubbedAudio = await this.downloadDubbedAudio(
-        dubbing.dubbing_id,
+      // Step 3: Translate text to target language
+      const translatedText = await this.translateText(
+        transcription.text,
         targetLang
       );
 
+      // Step 4: Generate speech in target language
+      const speechBuffer = await this.generateSpeech(translatedText, targetLang);
+
       return {
-        audio: dubbedAudio,
-        sourceLanguage: status.source_language || "auto",
+        audio: speechBuffer,
+        sourceLanguage: transcription.language,
         targetLanguage: targetLang,
-        dubbingId: dubbing.dubbing_id,
+        originalText: transcription.text,
+        translatedText: translatedText,
       };
     } finally {
       // Clean up converted file

@@ -6,3 +6,12 @@ session/
 .env
 .DS_Store
 baileys_auth/
+
+# Piper TTS files
+piper/
+piper-models/
+*.onnx
+*.onnx.json
+
+# Dubbing database
+dub-usage.json

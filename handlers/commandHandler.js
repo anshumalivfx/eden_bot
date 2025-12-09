@@ -233,7 +233,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-dub\` or \`-dub en\` = English (default)
 • \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
 • 5 dubs per day limit • 29+ languages supported
-• Powered by ElevenLabs AI • Aliases: \`-d\`
+• Powered by Piper TTS (Free & Open Source) • Aliases: \`-d\`
 
 *🎵 Music Download:*
 • \`-play [song name]\` = Search & download from YouTube
@@ -1060,7 +1060,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Success! Return dubbed audio
       return {
-        text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by ElevenLabs AI*`,
+        text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by Piper TTS (Free)*`,
         media: {
           audio: result.audio,
           mimetype: "audio/mpeg",
@@ -1072,17 +1072,19 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       console.error("Dubbing error:", error);
       
       // Parse error messages
-      if (error.message.includes("API key not configured")) {
-        return "❌ Voice dubbing is not configured. Contact the bot owner!";
+      if (error.message.includes("Piper model not found")) {
+        return "❌ *Piper models not installed!*\n\nRun this command on your server:\n```bash\n./setup-piper.sh\n```\n\nThis will download the voice models (~500MB). Contact bot owner if issue persists!";
+      } else if (error.message.includes("GROQ") || error.message.includes("transcribe")) {
+        return "❌ *Transcription failed!*\n\nCheck GROQ_API_KEY in .env file. Get free key at: console.groq.com/keys";
+      } else if (error.message.includes("translate")) {
+        return "❌ *Translation failed!*\n\nGoogle Translate API error. Try again in a moment!";
       } else if (error.message.includes("Unsupported")) {
         return `❌ ${error.message}`;
-      } else if (error.message.includes("timeout")) {
-        return "⏳ Dubbing took too long! Try with a shorter voice message (under 2 minutes).";
       } else if (error.message.includes("already in")) {
         return error.message;
       }
       
-      return `❌ Dubbing failed: ${error.message}\n\nTry again or use a different voice message!`;
+      return `❌ Dubbing failed: ${error.message}\n\nTry again or contact bot owner if this persists!`;
     }
   }
 
