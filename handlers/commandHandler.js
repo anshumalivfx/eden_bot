@@ -1117,7 +1117,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
       const engineBranding =
         ttsEngine === "elevenlabs"
-          ? "Powered by ElevenLabs (Multilingual)"
+          ? "Powered by ElevenLabs (AI Dubbing with Voice Cloning)"
           : "Powered by Piper TTS (Free & Unlimited)";
 
       // Success! Return dubbed audio

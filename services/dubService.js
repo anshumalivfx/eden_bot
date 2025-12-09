@@ -228,90 +228,107 @@ class DubService {
   }
 
   /**
-   * Get multilingual voice ID based on language
-   */
-  getMultilingualVoiceId(langCode) {
-    // ElevenLabs multilingual voices
-    const voices = {
-      en: "pNInz6obpgDQGcFmaJgB", // Adam - multilingual
-      es: "pNInz6obpgDQGcFmaJgB", // Adam
-      fr: "pNInz6obpgDQGcFmaJgB", // Adam
-      de: "pNInz6obpgDQGcFmaJgB", // Adam
-      it: "pNInz6obpgDQGcFmaJgB", // Adam
-      pt: "pNInz6obpgDQGcFmaJgB", // Adam
-      hi: "pNInz6obpgDQGcFmaJgB", // Adam
-      ja: "pNInz6obpgDQGcFmaJgB", // Adam
-      zh: "pNInz6obpgDQGcFmaJgB", // Adam
-      ar: "pNInz6obpgDQGcFmaJgB", // Adam
-    };
-    return voices[langCode] || voices["en"];
-  }
-
-  /**
-   * Generate speech using ElevenLabs Text-to-Speech
-   * Note: True voice cloning requires Professional/Enterprise tier
+   * Create dubbing project with ElevenLabs Dubbing API
+   * This API automatically dubs audio to another language with voice cloning
+   * Available on FREE tier!
    */
   async generateSpeechElevenLabs(text, langCode, originalAudioPath) {
     try {
-      console.log(`🗣️ Generating speech with ElevenLabs...`);
+      console.log(`🗣️ Creating dubbing with ElevenLabs (with voice cloning)...`);
       
-      const voiceId = this.getMultilingualVoiceId(langCode);
-      const url = `${this.elevenLabsBaseUrl}/text-to-speech/${voiceId}`;
-
-      const response = await axios.post(
-        url,
-        {
-          text: text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.0,
-            use_speaker_boost: true,
-          },
+      const FormData = require("form-data");
+      const form = new FormData();
+      
+      // Upload the source audio file
+      form.append("file", fs.createReadStream(originalAudioPath));
+      form.append("target_lang", langCode); // Target language code
+      form.append("mode", "automatic"); // Automatic dubbing mode
+      form.append("num_speakers", 1); // Single speaker
+      
+      // Step 1: Create dubbing project
+      const createUrl = `${this.elevenLabsBaseUrl}/dubbing`;
+      
+      console.log(`📤 Uploading audio for dubbing...`);
+      const createResponse = await axios.post(createUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "xi-api-key": this.elevenLabsApiKey,
         },
-        {
+      });
+
+      const dubbingId = createResponse.data.dubbing_id;
+      console.log(`✅ Dubbing project created: ${dubbingId}`);
+      
+      // Step 2: Poll for completion
+      console.log(`⏳ Waiting for dubbing to complete...`);
+      const metadataUrl = `${this.elevenLabsBaseUrl}/dubbing/${dubbingId}`;
+      
+      let attempts = 0;
+      const maxAttempts = 60; // 60 attempts = 5 minutes max
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+        
+        const statusResponse = await axios.get(metadataUrl, {
           headers: {
             "xi-api-key": this.elevenLabsApiKey,
-            "Content-Type": "application/json",
           },
-          responseType: "arraybuffer",
+        });
+        
+        const status = statusResponse.data.status;
+        console.log(`📊 Dubbing status: ${status}`);
+        
+        if (status === "dubbed") {
+          // Step 3: Download the dubbed audio
+          console.log(`⬇️ Downloading dubbed audio...`);
+          const audioUrl = `${this.elevenLabsBaseUrl}/dubbing/${dubbingId}/audio/${langCode}`;
+          
+          const audioResponse = await axios.get(audioUrl, {
+            headers: {
+              "xi-api-key": this.elevenLabsApiKey,
+            },
+            responseType: "arraybuffer",
+          });
+          
+          const timestamp = Date.now();
+          const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
+          
+          fs.writeFileSync(outputPath, audioResponse.data);
+          
+          const stats = fs.statSync(outputPath);
+          console.log(`✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`);
+          
+          return {
+            filepath: outputPath,
+            cleanup: () => {
+              if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+                console.log(`🗑️ Cleaned up: ${outputPath}`);
+              }
+            },
+          };
+        } else if (status === "dubbing_failed") {
+          throw new Error("Dubbing failed on ElevenLabs server");
         }
-      );
-
-      const timestamp = Date.now();
-      const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
-
-      fs.writeFileSync(outputPath, response.data);
-
-      const stats = fs.statSync(outputPath);
-      console.log(
-        `✅ Generated speech: ${(stats.size / 1024).toFixed(2)} KB`
-      );
-
-      return {
-        filepath: outputPath,
-        cleanup: () => {
-          if (fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
-            console.log(`🗑️ Cleaned up: ${outputPath}`);
-          }
-        },
-      };
+        
+        attempts++;
+      }
+      
+      throw new Error("Dubbing timeout - took too long to complete");
+      
     } catch (error) {
-      console.error("ElevenLabs error:", error.response?.data || error.message);
+      console.error("ElevenLabs dubbing error:", error.response?.data || error.message);
 
       if (error.response?.status === 401) {
         throw new Error("Invalid ElevenLabs API key");
       } else if (error.response?.status === 429) {
         throw new Error("ElevenLabs rate limit exceeded");
       } else if (error.response?.status === 400) {
-        throw new Error(
-          "Speech generation failed - check text content"
-        );
+        const errorMsg = error.response?.data?.detail?.message || "Bad request";
+        throw new Error(`Dubbing failed: ${errorMsg}`);
       }
 
-      throw new Error(`ElevenLabs TTS failed: ${error.message}`);
+      throw new Error(`ElevenLabs dubbing failed: ${error.message}`);
     }
   }  /**
    * Generate speech using Piper TTS (local)
@@ -444,46 +461,71 @@ class DubService {
     let convertedFilePath = null;
 
     try {
-      // Step 1: Convert audio to WAV for Whisper
+      // Step 1: Convert audio to appropriate format
       console.log("🔄 Converting audio format...");
       convertedFilePath = await this.convertAudioFormat(audioBuffer, "wav");
 
-      // Step 2: Transcribe audio to text
-      const transcription = await this.transcribeAudio(convertedFilePath);
+      if (this.ttsEngine === "elevenlabs") {
+        // ElevenLabs Dubbing API handles everything: transcription, translation, and dubbing with voice cloning
+        console.log("🎬 Using ElevenLabs Dubbing API (includes voice cloning)...");
+        
+        const speech = await this.generateSpeechElevenLabs(
+          null, // Not needed - ElevenLabs does transcription internally
+          targetLang,
+          convertedFilePath
+        );
 
-      // Step 3: Translate text to target language
-      const translatedText = await this.translateText(
-        transcription.text,
-        targetLang
-      );
-
-      // Step 4: Generate speech in target language
-      // Pass original audio path for ElevenLabs voice cloning
-      const speech = await this.generateSpeech(
-        translatedText,
-        targetLang,
-        convertedFilePath
-      );
-
-      return {
-        filepath: speech.filepath,
-        cleanup: () => {
-          // Cleanup both generated speech and converted file
-          speech.cleanup();
-          if (convertedFilePath && fs.existsSync(convertedFilePath)) {
-            try {
-              fs.unlinkSync(convertedFilePath);
-              console.log(`🗑️ Cleaned up: ${convertedFilePath}`);
-            } catch (e) {
-              console.warn("Failed to clean up converted file:", e.message);
+        return {
+          filepath: speech.filepath,
+          cleanup: () => {
+            speech.cleanup();
+            if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+              try {
+                fs.unlinkSync(convertedFilePath);
+                console.log(`🗑️ Cleaned up: ${convertedFilePath}`);
+              } catch (e) {
+                console.warn("Failed to clean up converted file:", e.message);
+              }
             }
-          }
-        },
-        sourceLanguage: transcription.language,
-        targetLanguage: targetLang,
-        originalText: transcription.text,
-        translatedText: translatedText,
-      };
+          },
+          sourceLanguage: "auto", // ElevenLabs auto-detects
+          targetLanguage: targetLang,
+          originalText: "(auto-transcribed by ElevenLabs)",
+          translatedText: "(auto-translated by ElevenLabs)",
+        };
+      } else {
+        // Piper workflow: Manual transcription → translation → synthesis
+        // Step 2: Transcribe audio to text
+        const transcription = await this.transcribeAudio(convertedFilePath);
+
+        // Step 3: Translate text to target language
+        const translatedText = await this.translateText(
+          transcription.text,
+          targetLang
+        );
+
+        // Step 4: Generate speech in target language
+        const speech = await this.generateSpeechPiper(translatedText, targetLang);
+
+        return {
+          filepath: speech.filepath,
+          cleanup: () => {
+            speech.cleanup();
+            if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+              try {
+                fs.unlinkSync(convertedFilePath);
+                console.log(`🗑️ Cleaned up: ${convertedFilePath}`);
+              } catch (e) {
+                console.warn("Failed to clean up converted file:", e.message);
+              }
+            }
+          },
+          sourceLanguage: transcription.language,
+          targetLanguage: targetLang,
+          originalText: transcription.text,
+          translatedText: translatedText,
+        };
+      }
     } catch (error) {
       // Clean up on error
       if (convertedFilePath && fs.existsSync(convertedFilePath)) {
