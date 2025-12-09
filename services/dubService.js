@@ -222,52 +222,39 @@ class DubService {
   }
 
   /**
-   * Get ElevenLabs voice ID for language
+   * Generate speech using ElevenLabs Voice Cloning (Speech-to-Speech)
+   * This preserves the original speaker's voice characteristics
    */
-  getElevenLabsVoiceId(langCode) {
-    const voices = {
-      en: "21m00Tcm4TlvDq8ikWAM", // Rachel
-      es: "VR6AewLTigWG4xSOukaG", // Arnold (Spanish)
-      fr: "ThT5KcBeYPX3keUQqHPh", // Dorothy (French)
-      de: "TxGEqnHWrfWFTfGW9XjX", // Josh (German)
-      it: "pNInz6obpgDQGcFmaJgB", // Adam (Italian)
-      pt: "yoZ06aMxZJJ28mfd3POQ", // Sam (Portuguese)
-      hi: "21m00Tcm4TlvDq8ikWAM", // Default to Rachel for unsupported
-      ja: "21m00Tcm4TlvDq8ikWAM",
-      zh: "21m00Tcm4TlvDq8ikWAM",
-      ar: "21m00Tcm4TlvDq8ikWAM",
-    };
-    return voices[langCode] || voices["en"];
-  }
-
-  /**
-   * Generate speech using ElevenLabs API
-   */
-  async generateSpeechElevenLabs(text, langCode) {
+  async generateSpeechElevenLabs(text, langCode, originalAudioPath) {
     try {
-      console.log(`🗣️ Generating speech with ElevenLabs...`);
+      console.log(`🗣️ Generating cloned speech with ElevenLabs...`);
       
-      const voiceId = this.getElevenLabsVoiceId(langCode);
-      const url = `${this.elevenLabsBaseUrl}/text-to-speech/${voiceId}`;
+      // Use ElevenLabs Speech-to-Speech API for voice cloning
+      // This takes the original audio and generates new speech that preserves voice characteristics
+      const FormData = require('form-data');
+      const form = new FormData();
+      
+      form.append('text', text);
+      form.append('model_id', 'eleven_multilingual_sts_v2'); // Speech-to-Speech model
+      form.append('audio', fs.createReadStream(originalAudioPath));
+      
+      // Voice settings for cloning
+      const voiceSettings = {
+        stability: 0.5,
+        similarity_boost: 0.8,
+        use_speaker_boost: true
+      };
+      form.append('voice_settings', JSON.stringify(voiceSettings));
 
-      const response = await axios.post(
-        url,
-        {
-          text: text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-          },
+      const url = `${this.elevenLabsBaseUrl}/speech-to-speech/stream`;
+
+      const response = await axios.post(url, form, {
+        headers: {
+          ...form.getHeaders(),
+          "xi-api-key": this.elevenLabsApiKey,
         },
-        {
-          headers: {
-            "xi-api-key": this.elevenLabsApiKey,
-            "Content-Type": "application/json",
-          },
-          responseType: "arraybuffer",
-        }
-      );
+        responseType: "arraybuffer",
+      });
 
       const timestamp = Date.now();
       const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
@@ -275,7 +262,7 @@ class DubService {
       fs.writeFileSync(outputPath, response.data);
       
       const stats = fs.statSync(outputPath);
-      console.log(`✅ Generated speech: ${(stats.size / 1024).toFixed(2)} KB`);
+      console.log(`✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`);
 
       return {
         filepath: outputPath,
@@ -293,9 +280,11 @@ class DubService {
         throw new Error("Invalid ElevenLabs API key");
       } else if (error.response?.status === 429) {
         throw new Error("ElevenLabs rate limit exceeded");
+      } else if (error.response?.status === 400) {
+        throw new Error("Voice cloning failed - audio may be too short or poor quality");
       }
       
-      throw new Error(`ElevenLabs TTS failed: ${error.message}`);
+      throw new Error(`ElevenLabs voice cloning failed: ${error.message}`);
     }
   }
 
@@ -398,11 +387,15 @@ class DubService {
    * Generate speech using selected TTS engine
    * @param {string} text - Text to speak
    * @param {string} langCode - Language code
+   * @param {string} originalAudioPath - Path to original audio (for ElevenLabs voice cloning)
    * @returns {Promise<{filepath: string, cleanup: Function}>}
    */
-  async generateSpeech(text, langCode) {
+  async generateSpeech(text, langCode, originalAudioPath = null) {
     if (this.ttsEngine === "elevenlabs") {
-      return await this.generateSpeechElevenLabs(text, langCode);
+      if (!originalAudioPath) {
+        throw new Error("Original audio path required for ElevenLabs voice cloning");
+      }
+      return await this.generateSpeechElevenLabs(text, langCode, originalAudioPath);
     } else {
       return await this.generateSpeechPiper(text, langCode);
     }
@@ -412,7 +405,7 @@ class DubService {
    * Main dubbing workflow
    * @param {Buffer} audioBuffer - Original audio buffer
    * @param {string} targetLang - Target language code
-   * @returns {Promise<{audio: Buffer, sourceLanguage: string, targetLanguage: string}>}
+   * @returns {Promise<{filepath: string, cleanup: Function, sourceLanguage: string, targetLanguage: string, originalText: string, translatedText: string}>}
    */
   async dubVoiceMessage(audioBuffer, targetLang) {
     let convertedFilePath = null;
@@ -432,18 +425,30 @@ class DubService {
       );
 
       // Step 4: Generate speech in target language
-      const speech = await this.generateSpeech(translatedText, targetLang);
+      // Pass original audio path for ElevenLabs voice cloning
+      const speech = await this.generateSpeech(translatedText, targetLang, convertedFilePath);
 
       return {
         filepath: speech.filepath,
-        cleanup: speech.cleanup,
+        cleanup: () => {
+          // Cleanup both generated speech and converted file
+          speech.cleanup();
+          if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+            try {
+              fs.unlinkSync(convertedFilePath);
+              console.log(`🗑️ Cleaned up: ${convertedFilePath}`);
+            } catch (e) {
+              console.warn("Failed to clean up converted file:", e.message);
+            }
+          }
+        },
         sourceLanguage: transcription.language,
         targetLanguage: targetLang,
         originalText: transcription.text,
         translatedText: translatedText,
       };
-    } finally {
-      // Clean up converted file
+    } catch (error) {
+      // Clean up on error
       if (convertedFilePath && fs.existsSync(convertedFilePath)) {
         try {
           fs.unlinkSync(convertedFilePath);
@@ -451,6 +456,7 @@ class DubService {
           console.warn("Failed to clean up converted file:", e.message);
         }
       }
+      throw error;
     }
   }
 
