@@ -247,13 +247,13 @@ class DubService {
 
       // Read generated audio file
       const audioBuffer = fs.readFileSync(outputPath);
-      
-      // Clean up
-      fs.unlinkSync(outputPath);
 
       console.log(`✅ Generated ${(audioBuffer.length / 1024).toFixed(2)} KB speech`);
 
-      return audioBuffer;
+      return {
+        buffer: audioBuffer,
+        filepath: outputPath
+      };
     } catch (error) {
       console.error("Error generating speech:", error);
       
@@ -292,10 +292,11 @@ class DubService {
       );
 
       // Step 4: Generate speech in target language
-      const speechBuffer = await this.generateSpeech(translatedText, targetLang);
+      const speech = await this.generateSpeech(translatedText, targetLang);
 
       return {
-        audio: speechBuffer,
+        audio: speech.buffer,
+        filepath: speech.filepath,
         sourceLanguage: transcription.language,
         targetLanguage: targetLang,
         originalText: transcription.text,
