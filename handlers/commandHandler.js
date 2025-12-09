@@ -1005,16 +1005,18 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         return `🎙️ *Voice Message Dubbing*\n\nReply to a voice message with:\n-dub [language]\n\nExamples:\n• -dub → English (default)\n• -dub hi → Hindi\n• -dub fr → French\n• -dub es → Spanish\n\nSupported languages: ${DubService.formatSupportedLanguages()}`;
       }
 
-      const quotedMsg = await message.getQuotedMessage();
+      // Get the actual Baileys message structure to check for audio
+      const contextInfo = message.raw?.message?.extendedTextMessage?.contextInfo;
+      const quotedMessage = contextInfo?.quotedMessage;
       
-      // Check if quoted message is audio/voice
-      const hasAudio = quotedMsg.message?.audioMessage || 
-                      quotedMsg.message?.ptt || 
-                      quotedMsg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.audioMessage;
+      // Check if quoted message is audio/voice (PTT or regular audio)
+      const hasAudio = quotedMessage?.audioMessage || quotedMessage?.pttMessage;
       
       if (!hasAudio) {
         return "❌ Please reply to a *voice message* or audio file!";
       }
+      
+      const quotedMsg = await message.getQuotedMessage();
 
       // Check rate limit
       const usageCheck = DubUsageStore.canUserDub(senderJid);
@@ -1026,10 +1028,20 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const processingMsg = `🎬 Dubbing to *${language.name}*...\n⏳ This may take 15-30 seconds\n\n📊 ${usageCheck.used}/${DubUsageStore.maxDubsPerDay} dubs used today`;
 
       // Download the audio from quoted message
+      // Create a proper Baileys message object for download
+      const quotedMsgObj = {
+        key: {
+          remoteJid: message.from,
+          fromMe: contextInfo.participant === message.raw.key.remoteJid,
+          id: contextInfo.stanzaId,
+        },
+        message: quotedMessage,
+      };
+
       const { downloadMediaMessage } = require("@whiskeysockets/baileys");
       console.log("📥 Downloading voice message...");
       const audioBuffer = await downloadMediaMessage(
-        quotedMsg,
+        quotedMsgObj,
         "buffer",
         {}
       );
