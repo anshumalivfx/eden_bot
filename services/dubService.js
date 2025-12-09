@@ -6,7 +6,7 @@ const { promisify } = require("util");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
 const Groq = require("groq-sdk");
-const { Translate } = require("@google-cloud/translate").v2;
+const translate = require("@vitalets/google-translate-api");
 require("dotenv").config();
 
 const execAsync = promisify(exec);
@@ -17,7 +17,6 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 class DubService {
   constructor() {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    this.translator = new Translate();
     this.piperPath = path.join(__dirname, "../piper/piper");
     this.modelsPath = path.join(__dirname, "../piper-models");
     this.tempDir = path.join(__dirname, "../temp");
@@ -190,7 +189,7 @@ class DubService {
   }
 
   /**
-   * Translate text using Google Translate
+   * Translate text using free Google Translate API
    * @param {string} text - Text to translate
    * @param {string} targetLang - Target language code
    * @returns {Promise<string>} - Translated text
@@ -199,11 +198,11 @@ class DubService {
     try {
       console.log(`🌐 Translating to ${targetLang}...`);
       
-      const [translation] = await this.translator.translate(text, targetLang);
+      const result = await translate(text, { to: targetLang });
       
-      console.log(`✅ Translated: "${translation.substring(0, 50)}..."`);
+      console.log(`✅ Translated: "${result.text.substring(0, 50)}..."`);
       
-      return translation;
+      return result.text;
     } catch (error) {
       console.error("Error translating text:", error);
       throw new Error("Failed to translate text");
