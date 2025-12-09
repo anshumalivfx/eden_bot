@@ -4,7 +4,6 @@ const YouTubeService = require("../services/youtubeService");
 const InteractionService = require("../services/interactionService");
 const PetService = require("../services/petService");
 const DubService = require("../services/dubService");
-const DubUsageStore = require("../database/dubUsageStore");
 
 class CommandHandler {
   constructor(llmService) {
@@ -1018,15 +1017,6 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       
       const quotedMsg = await message.getQuotedMessage();
 
-      // Check rate limit
-      const usageCheck = DubUsageStore.canUserDub(senderJid);
-      if (!usageCheck.allowed) {
-        return `⏳ You've used all *${DubUsageStore.maxDubsPerDay} dubs* for today!\n\n🔄 Daily limit resets at midnight.\nCome back tomorrow to dub more voice messages! 🎙️`;
-      }
-
-      // Send processing message
-      const processingMsg = `🎬 Dubbing to *${language.name}*...\n⏳ This may take 15-30 seconds\n\n📊 ${usageCheck.used}/${DubUsageStore.maxDubsPerDay} dubs used today`;
-
       // Download the audio from quoted message
       // Create a proper Baileys message object for download
       const quotedMsgObj = {
@@ -1055,9 +1045,6 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Process dubbing (this will take a while)
       const result = await DubService.dubVoiceMessage(audioBuffer, targetLang);
 
-      // Record usage after successful dub
-      const usageResult = DubUsageStore.recordDubUsage(senderJid);
-
       // Read the dubbed audio file
       const fs = require("fs");
       const dubbedAudio = fs.readFileSync(result.filepath);
@@ -1069,7 +1056,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Success! Return dubbed audio
       return {
-        text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by Piper TTS (Free)*`,
+        text: `✅ *Dubbed to ${language.name}!*\n\n*Powered by Piper TTS (Free & Unlimited)*`,
         media: {
           audio: dubbedAudio,
           mimetype: "audio/ogg; codecs=opus",
