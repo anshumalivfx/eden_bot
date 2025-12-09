@@ -17,6 +17,16 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 class DubService {
   constructor() {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    
+    // TTS Engine Selection (set in .env)
+    // Options: "piper" (free, local) or "elevenlabs" (paid, cloud)
+    this.ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
+    
+    // ElevenLabs API setup
+    this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+    this.elevenLabsBaseUrl = "https://api.elevenlabs.io/v1";
+    
+    // Piper TTS setup
     this.piperPath = path.join(__dirname, "../piper/piper/piper");
     this.modelsPath = path.join(__dirname, "../piper-models");
     this.tempDir = path.join(__dirname, "../temp");
@@ -25,6 +35,8 @@ class DubService {
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
+    
+    console.log(`🎙️ Dub Service initialized with TTS Engine: ${this.ttsEngine.toUpperCase()}`);
 
     // Language code mapping (ISO 639-1) with country flags
     this.languageMap = {
@@ -210,12 +222,90 @@ class DubService {
   }
 
   /**
-   * Generate speech using Piper TTS
+   * Get ElevenLabs voice ID for language
+   */
+  getElevenLabsVoiceId(langCode) {
+    const voices = {
+      en: "21m00Tcm4TlvDq8ikWAM", // Rachel
+      es: "VR6AewLTigWG4xSOukaG", // Arnold (Spanish)
+      fr: "ThT5KcBeYPX3keUQqHPh", // Dorothy (French)
+      de: "TxGEqnHWrfWFTfGW9XjX", // Josh (German)
+      it: "pNInz6obpgDQGcFmaJgB", // Adam (Italian)
+      pt: "yoZ06aMxZJJ28mfd3POQ", // Sam (Portuguese)
+      hi: "21m00Tcm4TlvDq8ikWAM", // Default to Rachel for unsupported
+      ja: "21m00Tcm4TlvDq8ikWAM",
+      zh: "21m00Tcm4TlvDq8ikWAM",
+      ar: "21m00Tcm4TlvDq8ikWAM",
+    };
+    return voices[langCode] || voices["en"];
+  }
+
+  /**
+   * Generate speech using ElevenLabs API
+   */
+  async generateSpeechElevenLabs(text, langCode) {
+    try {
+      console.log(`🗣️ Generating speech with ElevenLabs...`);
+      
+      const voiceId = this.getElevenLabsVoiceId(langCode);
+      const url = `${this.elevenLabsBaseUrl}/text-to-speech/${voiceId}`;
+
+      const response = await axios.post(
+        url,
+        {
+          text: text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+          },
+        },
+        {
+          headers: {
+            "xi-api-key": this.elevenLabsApiKey,
+            "Content-Type": "application/json",
+          },
+          responseType: "arraybuffer",
+        }
+      );
+
+      const timestamp = Date.now();
+      const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
+      
+      fs.writeFileSync(outputPath, response.data);
+      
+      const stats = fs.statSync(outputPath);
+      console.log(`✅ Generated speech: ${(stats.size / 1024).toFixed(2)} KB`);
+
+      return {
+        filepath: outputPath,
+        cleanup: () => {
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+            console.log(`🗑️ Cleaned up: ${outputPath}`);
+          }
+        }
+      };
+    } catch (error) {
+      console.error("ElevenLabs error:", error.response?.data || error.message);
+      
+      if (error.response?.status === 401) {
+        throw new Error("Invalid ElevenLabs API key");
+      } else if (error.response?.status === 429) {
+        throw new Error("ElevenLabs rate limit exceeded");
+      }
+      
+      throw new Error(`ElevenLabs TTS failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate speech using Piper TTS (local)
    * @param {string} text - Text to speak
    * @param {string} langCode - Language code
-   * @returns {Promise<Buffer>} - Audio buffer
+   * @returns {Promise<{filepath: string, cleanup: Function}>}
    */
-  async generateSpeech(text, langCode) {
+  async generateSpeechPiper(text, langCode) {
     try {
       const model = this.getPiperModel(langCode);
       const modelPath = path.join(this.modelsPath, `${model}.onnx`);
@@ -305,7 +395,21 @@ class DubService {
   }
 
   /**
-   * Main dubbing workflow with Piper TTS
+   * Generate speech using selected TTS engine
+   * @param {string} text - Text to speak
+   * @param {string} langCode - Language code
+   * @returns {Promise<{filepath: string, cleanup: Function}>}
+   */
+  async generateSpeech(text, langCode) {
+    if (this.ttsEngine === "elevenlabs") {
+      return await this.generateSpeechElevenLabs(text, langCode);
+    } else {
+      return await this.generateSpeechPiper(text, langCode);
+    }
+  }
+
+  /**
+   * Main dubbing workflow
    * @param {Buffer} audioBuffer - Original audio buffer
    * @param {string} targetLang - Target language code
    * @returns {Promise<{audio: Buffer, sourceLanguage: string, targetLanguage: string}>}

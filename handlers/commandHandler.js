@@ -1112,12 +1112,18 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         result.cleanup();
       }, 5000);
 
+      // Determine TTS engine branding
+      const ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
+      const engineBranding = ttsEngine === "elevenlabs" 
+        ? "Powered by ElevenLabs" 
+        : "Powered by Piper TTS (Free & Unlimited)";
+
       // Success! Return dubbed audio
       return {
-        text: `✅ *Dubbed to ${language.name}!*\n\n*Powered by Piper TTS (Free & Unlimited)*`,
+        text: `✅ *Dubbed to ${language.name}!*\n\n*${engineBranding}*`,
         media: {
           audio: dubbedAudio,
-          mimetype: "audio/ogg; codecs=opus",
+          mimetype: ttsEngine === "elevenlabs" ? "audio/mpeg" : "audio/ogg; codecs=opus",
           ptt: true, // Send as voice note
         },
       };
