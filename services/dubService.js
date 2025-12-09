@@ -221,6 +221,13 @@ class DubService {
       const modelPath = path.join(this.modelsPath, `${model}.onnx`);
       const configPath = path.join(this.modelsPath, `${model}.onnx.json`);
       
+      // Check if Piper binary exists and is executable
+      if (!fs.existsSync(this.piperPath)) {
+        throw new Error(
+          `Piper binary not found at ${this.piperPath}. Run setup-piper.sh to install.`
+        );
+      }
+
       // Check if model exists
       if (!fs.existsSync(modelPath)) {
         throw new Error(
@@ -249,6 +256,14 @@ class DubService {
       return audioBuffer;
     } catch (error) {
       console.error("Error generating speech:", error);
+      
+      // Provide helpful error message for permission denied
+      if (error.message.includes("Permission denied")) {
+        throw new Error(
+          `Piper binary not executable. Run: chmod +x piper/piper`
+        );
+      }
+      
       throw new Error(`Failed to generate speech: ${error.message}`);
     }
   }

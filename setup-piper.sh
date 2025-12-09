@@ -58,11 +58,14 @@ if [ ! -f "piper" ]; then
     curl -L "$PIPER_URL" -o piper.tar.gz
     tar -xzf piper.tar.gz
     rm piper.tar.gz
-    chmod +x piper
     echo "✅ Piper binary installed"
 else
     echo "✅ Piper binary already exists"
 fi
+
+# Ensure executable permissions
+chmod +x piper
+echo "✅ Piper binary is executable"
 
 cd ../piper-models
 
