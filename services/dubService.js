@@ -6,7 +6,7 @@ const { promisify } = require("util");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
 const Groq = require("groq-sdk");
-const translate = require("@vitalets/google-translate-api");
+const googleTranslate = require("@vitalets/google-translate-api");
 require("dotenv").config();
 
 const execAsync = promisify(exec);
@@ -198,7 +198,7 @@ class DubService {
     try {
       console.log(`🌐 Translating to ${targetLang}...`);
       
-      const result = await translate(text, { to: targetLang });
+      const result = await googleTranslate.translate(text, { to: targetLang });
       
       console.log(`✅ Translated: "${result.text.substring(0, 50)}..."`);
       
