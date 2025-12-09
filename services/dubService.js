@@ -148,7 +148,7 @@ class DubService {
       form.append("source_lang", sourceLang);
       form.append("mode", "automatic");
       form.append("num_speakers", "0"); // Auto-detect speakers
-      form.append("watermark", "false");
+      form.append("watermark", "true"); // Required for free tier
 
       console.log(
         `🎬 Creating dubbing project: auto → ${targetLanguage.name}`
