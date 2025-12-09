@@ -1072,7 +1072,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by Piper TTS (Free)*`,
         media: {
           audio: dubbedAudio,
-          mimetype: "audio/mpeg",
+          mimetype: "audio/ogg; codecs=opus",
           ptt: true, // Send as voice note
         },
       };

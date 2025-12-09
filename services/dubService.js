@@ -238,27 +238,55 @@ class DubService {
       console.log(`🗣️ Generating speech with Piper (${model})...`);
 
       const timestamp = Date.now();
-      const outputPath = path.join(this.tempDir, `speech_${timestamp}.wav`);
+      const wavPath = path.join(this.tempDir, `speech_${timestamp}.wav`);
+      const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
 
-      // Run Piper TTS
-      const command = `echo "${text.replace(/"/g, '\\"')}" | ${this.piperPath} -m ${modelPath} -c ${configPath} -f ${outputPath}`;
+      // Run Piper TTS to generate WAV
+      const command = `echo "${text.replace(/"/g, '\\"')}" | ${this.piperPath} -m ${modelPath} -c ${configPath} -f ${wavPath}`;
       
       await execAsync(command);
 
-      // Check if file was created
-      if (!fs.existsSync(outputPath)) {
+      // Check if WAV file was created
+      if (!fs.existsSync(wavPath)) {
         throw new Error("Speech generation failed - file not created");
       }
 
-      const stats = fs.statSync(outputPath);
-      console.log(`✅ Generated ${(stats.size / 1024).toFixed(2)} KB speech`);
+      console.log(`✅ Generated WAV speech`);
+
+      // Convert WAV to OGG (Opus) for WhatsApp compatibility
+      console.log(`🔄 Converting to OGG...`);
+      
+      await new Promise((resolve, reject) => {
+        ffmpeg(wavPath)
+          .toFormat('ogg')
+          .audioCodec('libopus')
+          .audioChannels(1)
+          .audioFrequency(16000) // 16kHz for voice
+          .audioBitrate('32k')
+          .on('end', () => {
+            console.log(`✅ Converted to OGG`);
+            resolve();
+          })
+          .on('error', (err) => {
+            reject(new Error(`FFmpeg conversion failed: ${err.message}`));
+          })
+          .save(oggPath);
+      });
+
+      // Clean up WAV file
+      if (fs.existsSync(wavPath)) {
+        fs.unlinkSync(wavPath);
+      }
+
+      const stats = fs.statSync(oggPath);
+      console.log(`✅ Final audio: ${(stats.size / 1024).toFixed(2)} KB`);
 
       return {
-        filepath: outputPath,
+        filepath: oggPath,
         cleanup: () => {
-          if (fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
-            console.log(`🗑️ Cleaned up: ${outputPath}`);
+          if (fs.existsSync(oggPath)) {
+            fs.unlinkSync(oggPath);
+            console.log(`🗑️ Cleaned up: ${oggPath}`);
           }
         }
       };
