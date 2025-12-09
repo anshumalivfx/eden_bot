@@ -17,15 +17,15 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 class DubService {
   constructor() {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    
+
     // TTS Engine Selection (set in .env)
     // Options: "piper" (free, local) or "elevenlabs" (paid, cloud)
     this.ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
-    
+
     // ElevenLabs API setup
     this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     this.elevenLabsBaseUrl = "https://api.elevenlabs.io/v1";
-    
+
     // Piper TTS setup
     this.piperPath = path.join(__dirname, "../piper/piper/piper");
     this.modelsPath = path.join(__dirname, "../piper-models");
@@ -35,8 +35,10 @@ class DubService {
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
-    
-    console.log(`🎙️ Dub Service initialized with TTS Engine: ${this.ttsEngine.toUpperCase()}`);
+
+    console.log(
+      `🎙️ Dub Service initialized with TTS Engine: ${this.ttsEngine.toUpperCase()}`
+    );
 
     // Language code mapping (ISO 639-1) with country flags
     this.languageMap = {
@@ -181,15 +183,19 @@ class DubService {
   async transcribeAudio(audioFilePath) {
     try {
       console.log("🎤 Transcribing audio with Groq Whisper...");
-      
+
       const transcription = await this.groq.audio.transcriptions.create({
         file: fs.createReadStream(audioFilePath),
         model: "whisper-large-v3",
         response_format: "verbose_json",
       });
 
-      console.log(`✅ Transcribed: "${transcription.text.substring(0, 50)}..." (${transcription.language})`);
-      
+      console.log(
+        `✅ Transcribed: "${transcription.text.substring(0, 50)}..." (${
+          transcription.language
+        })`
+      );
+
       return {
         text: transcription.text,
         language: transcription.language,
@@ -209,11 +215,11 @@ class DubService {
   async translateText(text, targetLang) {
     try {
       console.log(`🌐 Translating to ${targetLang}...`);
-      
+
       const result = await googleTranslate.translate(text, { to: targetLang });
-      
+
       console.log(`✅ Translated: "${result.text.substring(0, 50)}..."`);
-      
+
       return result.text;
     } catch (error) {
       console.error("Error translating text:", error);
@@ -229,24 +235,28 @@ class DubService {
     try {
       console.log(`🗣️ Generating cloned speech with ElevenLabs...`);
       
-      // Use ElevenLabs Speech-to-Speech API for voice cloning
-      // This takes the original audio and generates new speech that preserves voice characteristics
-      const FormData = require('form-data');
+      // ElevenLabs Speech-to-Speech API
+      // Uses a preset voice ID but the input audio influences the output
+      // For true voice cloning, we use the "Adam" voice with high similarity boost
+      const voiceId = "pNInz6obpgDQGcFmaJgB"; // Adam voice - multilingual
+      
+      const FormData = require("form-data");
       const form = new FormData();
-      
-      form.append('text', text);
-      form.append('model_id', 'eleven_multilingual_sts_v2'); // Speech-to-Speech model
-      form.append('audio', fs.createReadStream(originalAudioPath));
-      
-      // Voice settings for cloning
+
+      form.append("text", text);
+      form.append("model_id", "eleven_multilingual_sts_v2"); // Speech-to-Speech model
+      form.append("audio", fs.createReadStream(originalAudioPath));
+
+      // Voice settings for maximum voice similarity
       const voiceSettings = {
         stability: 0.5,
-        similarity_boost: 0.8,
-        use_speaker_boost: true
+        similarity_boost: 0.95, // Maximum similarity to input audio
+        use_speaker_boost: true,
       };
-      form.append('voice_settings', JSON.stringify(voiceSettings));
+      form.append("voice_settings", JSON.stringify(voiceSettings));
 
-      const url = `${this.elevenLabsBaseUrl}/speech-to-speech/stream`;
+      // Correct endpoint: /v1/speech-to-speech/{voice_id}
+      const url = `${this.elevenLabsBaseUrl}/speech-to-speech/${voiceId}`;
 
       const response = await axios.post(url, form, {
         headers: {
@@ -258,11 +268,13 @@ class DubService {
 
       const timestamp = Date.now();
       const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
-      
+
       fs.writeFileSync(outputPath, response.data);
-      
+
       const stats = fs.statSync(outputPath);
-      console.log(`✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`);
+      console.log(
+        `✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`
+      );
 
       return {
         filepath: outputPath,
@@ -271,24 +283,28 @@ class DubService {
             fs.unlinkSync(outputPath);
             console.log(`🗑️ Cleaned up: ${outputPath}`);
           }
-        }
+        },
       };
     } catch (error) {
       console.error("ElevenLabs error:", error.response?.data || error.message);
-      
+
       if (error.response?.status === 401) {
         throw new Error("Invalid ElevenLabs API key");
       } else if (error.response?.status === 429) {
         throw new Error("ElevenLabs rate limit exceeded");
+      } else if (error.response?.status === 404) {
+        throw new Error(
+          "ElevenLabs Speech-to-Speech not available - check API subscription"
+        );
       } else if (error.response?.status === 400) {
-        throw new Error("Voice cloning failed - audio may be too short or poor quality");
+        throw new Error(
+          "Voice cloning failed - audio may be too short or poor quality"
+        );
       }
-      
+
       throw new Error(`ElevenLabs voice cloning failed: ${error.message}`);
     }
-  }
-
-  /**
+  }  /**
    * Generate speech using Piper TTS (local)
    * @param {string} text - Text to speak
    * @param {string} langCode - Language code
@@ -299,7 +315,7 @@ class DubService {
       const model = this.getPiperModel(langCode);
       const modelPath = path.join(this.modelsPath, `${model}.onnx`);
       const configPath = path.join(this.modelsPath, `${model}.onnx.json`);
-      
+
       // Check if Piper binary exists and is executable
       if (!fs.existsSync(this.piperPath)) {
         throw new Error(
@@ -321,8 +337,10 @@ class DubService {
       const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
 
       // Run Piper TTS to generate WAV
-      const command = `echo "${text.replace(/"/g, '\\"')}" | ${this.piperPath} -m ${modelPath} -c ${configPath} -f ${wavPath}`;
-      
+      const command = `echo "${text.replace(/"/g, '\\"')}" | ${
+        this.piperPath
+      } -m ${modelPath} -c ${configPath} -f ${wavPath}`;
+
       await execAsync(command);
 
       // Check if WAV file was created
@@ -334,19 +352,19 @@ class DubService {
 
       // Convert WAV to OGG (Opus) for WhatsApp compatibility
       console.log(`🔄 Converting to OGG...`);
-      
+
       await new Promise((resolve, reject) => {
         ffmpeg(wavPath)
-          .toFormat('ogg')
-          .audioCodec('libopus')
+          .toFormat("ogg")
+          .audioCodec("libopus")
           .audioChannels(1)
           .audioFrequency(16000) // 16kHz for voice
-          .audioBitrate('32k')
-          .on('end', () => {
+          .audioBitrate("32k")
+          .on("end", () => {
             console.log(`✅ Converted to OGG`);
             resolve();
           })
-          .on('error', (err) => {
+          .on("error", (err) => {
             reject(new Error(`FFmpeg conversion failed: ${err.message}`));
           })
           .save(oggPath);
@@ -367,18 +385,18 @@ class DubService {
             fs.unlinkSync(oggPath);
             console.log(`🗑️ Cleaned up: ${oggPath}`);
           }
-        }
+        },
       };
     } catch (error) {
       console.error("Error generating speech:", error);
-      
+
       // Provide helpful error message for permission denied
       if (error.message.includes("Permission denied")) {
         throw new Error(
           `Piper binary not executable. Run: chmod +x piper/piper`
         );
       }
-      
+
       throw new Error(`Failed to generate speech: ${error.message}`);
     }
   }
@@ -393,9 +411,15 @@ class DubService {
   async generateSpeech(text, langCode, originalAudioPath = null) {
     if (this.ttsEngine === "elevenlabs") {
       if (!originalAudioPath) {
-        throw new Error("Original audio path required for ElevenLabs voice cloning");
+        throw new Error(
+          "Original audio path required for ElevenLabs voice cloning"
+        );
       }
-      return await this.generateSpeechElevenLabs(text, langCode, originalAudioPath);
+      return await this.generateSpeechElevenLabs(
+        text,
+        langCode,
+        originalAudioPath
+      );
     } else {
       return await this.generateSpeechPiper(text, langCode);
     }
@@ -426,7 +450,11 @@ class DubService {
 
       // Step 4: Generate speech in target language
       // Pass original audio path for ElevenLabs voice cloning
-      const speech = await this.generateSpeech(translatedText, targetLang, convertedFilePath);
+      const speech = await this.generateSpeech(
+        translatedText,
+        targetLang,
+        convertedFilePath
+      );
 
       return {
         filepath: speech.filepath,
