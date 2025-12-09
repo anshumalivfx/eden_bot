@@ -944,6 +944,52 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     }
   }
 
+  getDubHelpMessage() {
+    return `🎙️ *Voice Message Dubbing - Available Languages*
+
+*Usage:* Reply to a voice message with:
+\`-dub [language code]\`
+
+*🌍 Supported Languages:*
+
+🇺🇸 *en* - English (US)
+🇮🇳 *hi* - Hindi
+🇪🇸 *es* - Spanish
+🇫🇷 *fr* - French
+🇩🇪 *de* - German
+🇮🇹 *it* - Italian
+🇧🇷 *pt* - Portuguese (Brazil)
+🇷🇺 *ru* - Russian
+🇯🇵 *ja* - Japanese
+🇰🇷 *ko* - Korean
+🇨🇳 *zh* - Chinese
+🇸🇦 *ar* - Arabic
+🇹🇷 *tr* - Turkish
+🇵🇱 *pl* - Polish
+🇳🇱 *nl* - Dutch
+🇸🇪 *sv* - Swedish
+🇩🇰 *da* - Danish
+🇫🇮 *fi* - Finnish
+🇳🇴 *no* - Norwegian
+🇨🇿 *cs* - Czech
+🇬🇷 *el* - Greek
+🇭🇺 *hu* - Hungarian
+🇷🇴 *ro* - Romanian
+🇺🇦 *uk* - Ukrainian
+🇮🇩 *id* - Indonesian
+🇲🇾 *ms* - Malay
+🇹🇭 *th* - Thai
+🇻🇳 *vi* - Vietnamese
+
+*📝 Examples:*
+• Reply to voice + \`-dub\` → English (default)
+• Reply to voice + \`-dub hi\` → Hindi
+• Reply to voice + \`-dub es\` → Spanish
+• Reply to voice + \`-dub pt\` → Portuguese (Brazil)
+
+✨ *Powered by Piper TTS (Free & Unlimited)*`;
+  }
+
   getVoiceHelpMessage() {
     const personalities = this.voiceService.getVoicePersonalities();
     let help = "🎤 **Eden's Voice Theater Commands:**\n\n";
@@ -990,18 +1036,23 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       const { senderName = "User", senderJid = "" } = this.currentContext;
       
+      // Check for help command
+      if (args[0]?.toLowerCase() === "help") {
+        return this.getDubHelpMessage();
+      }
+      
       // Parse language argument (default to English)
       const targetLang = args[0]?.toLowerCase() || "en";
       
       // Validate language
       const language = DubService.validateLanguage(targetLang);
       if (!language) {
-        return `❌ Unsupported language code: *${targetLang}*\n\nUse: -dub [language code]\nExamples: -dub en (English), -dub hi (Hindi), -dub fr (French)\n\nSupported: ${DubService.formatSupportedLanguages()}`;
+        return `❌ Unsupported language code: *${targetLang}*\n\n💡 Use *-dub help* to see all available languages and examples!`;
       }
 
       // Check if replying to a voice message
       if (!message.hasQuotedMsg) {
-        return `🎙️ *Voice Message Dubbing*\n\nReply to a voice message with:\n-dub [language]\n\nExamples:\n• -dub → English (default)\n• -dub hi → Hindi\n• -dub fr → French\n• -dub es → Spanish\n\nSupported languages: ${DubService.formatSupportedLanguages()}`;
+        return `🎙️ *Voice Message Dubbing*\n\nReply to a voice message with:\n-dub [language]\n\nExamples:\n• -dub → English (default)\n• -dub hi → Hindi 🇮🇳\n• -dub fr → French 🇫🇷\n• -dub es → Spanish 🇪🇸\n\n💡 Use *-dub help* for all languages!`;
       }
 
       // Get the actual Baileys message structure to check for audio
@@ -1016,6 +1067,13 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       }
       
       const quotedMsg = await message.getQuotedMessage();
+
+      // React with country flag
+      try {
+        await message.react(language.flag);
+      } catch (e) {
+        console.warn("Failed to react with flag:", e.message);
+      }
 
       // Download the audio from quoted message
       // Create a proper Baileys message object for download
