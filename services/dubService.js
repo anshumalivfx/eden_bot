@@ -130,7 +130,7 @@ class DubService {
   getPiperModel(langCode) {
     const models = {
       en: "en_US-lessac-medium",
-      hi: "hi_IN-ravidas-medium",
+      hi: "hi_IN-rohan-medium",
       es: "es_ES-davefx-medium",
       fr: "fr_FR-siwis-medium",
       de: "de_DE-thorsten-medium",

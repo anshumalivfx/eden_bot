@@ -104,7 +104,7 @@ download_model() {
 # Download essential models
 # Format: download_model "MODEL_NAME" "Display Name" "lang/lang_COUNTRY" "voice" "quality"
 download_model "en_US-lessac-medium" "English (US)" "en/en_US" "lessac" "medium"
-download_model "hi_IN-ravidas-medium" "Hindi" "hi/hi_IN" "ravidas" "medium"
+download_model "hi_IN-rohan-medium" "Hindi" "hi/hi_IN" "rohan" "medium"
 download_model "es_ES-davefx-medium" "Spanish" "es/es_ES" "davefx" "medium"
 download_model "fr_FR-siwis-medium" "French" "fr/fr_FR" "siwis" "medium"
 download_model "de_DE-thorsten-medium" "German" "de/de_DE" "thorsten" "medium"
