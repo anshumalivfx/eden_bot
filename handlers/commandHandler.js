@@ -3,6 +3,8 @@ const VoiceService = require("../services/voiceService");
 const YouTubeService = require("../services/youtubeService");
 const InteractionService = require("../services/interactionService");
 const PetService = require("../services/petService");
+const DubService = require("../services/dubService");
+const DubUsageStore = require("../database/dubUsageStore");
 
 class CommandHandler {
   constructor(llmService) {
@@ -48,6 +50,8 @@ class CommandHandler {
       v: this.createVoice.bind(this), // Short alias for voice
       speak: this.createVoice.bind(this),
       tts: this.createVoice.bind(this), // Text-to-speech alias
+      dub: this.dubVoiceMessage.bind(this),
+      d: this.dubVoiceMessage.bind(this), // Short alias for dub
       play: this.playMusic.bind(this),
       song: this.playMusic.bind(this), // Alias for play
       music: this.playMusic.bind(this), // Alias for play
@@ -153,6 +157,12 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 • \`-voice [text]\` = Speak your text
 • Reply to any message + \`-voice\` = Speak that message
 
+*🎙️ Voice Dubbing (NEW!):*
+• Reply to voice + \`-dub [lang]\` = Dub to another language
+• \`-dub\` = English (default)
+• \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
+• 5 dubs/day limit • 29+ languages supported
+
 *🎵 Music Download:*
 • \`-play [song name]\` = Search & download from YouTube
 • Example: \`-play Tera hone laga hoon\`
@@ -217,6 +227,13 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • Reply to any message + \`-voice\` = Speak that message
 • Personalities: sarcastic, dramatic, robot, posh, excited, sleepy
 • Aliases: \`-v\`, \`-speak\`, \`-tts\`
+
+*🎙️ Voice Dubbing (NEW!):*
+• Reply to voice + \`-dub [lang]\` = Dub to another language with voice cloning
+• \`-dub\` or \`-dub en\` = English (default)
+• \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
+• 5 dubs per day limit • 29+ languages supported
+• Powered by ElevenLabs AI • Aliases: \`-d\`
 
 *🎵 Music Download:*
 • \`-play [song name]\` = Search & download from YouTube
@@ -968,6 +985,93 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     ];
 
     return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+  }
+
+  async dubVoiceMessage(args, message) {
+    try {
+      const { senderName = "User", senderJid = "" } = this.currentContext;
+      
+      // Parse language argument (default to English)
+      const targetLang = args[0]?.toLowerCase() || "en";
+      
+      // Validate language
+      const language = DubService.validateLanguage(targetLang);
+      if (!language) {
+        return `❌ Unsupported language code: *${targetLang}*\n\nUse: -dub [language code]\nExamples: -dub en (English), -dub hi (Hindi), -dub fr (French)\n\nSupported: ${DubService.formatSupportedLanguages()}`;
+      }
+
+      // Check if replying to a voice message
+      if (!message.hasQuotedMsg) {
+        return `🎙️ *Voice Message Dubbing*\n\nReply to a voice message with:\n-dub [language]\n\nExamples:\n• -dub → English (default)\n• -dub hi → Hindi\n• -dub fr → French\n• -dub es → Spanish\n\nSupported languages: ${DubService.formatSupportedLanguages()}`;
+      }
+
+      const quotedMsg = await message.getQuotedMessage();
+      
+      // Check if quoted message is audio/voice
+      const hasAudio = quotedMsg.message?.audioMessage || 
+                      quotedMsg.message?.ptt || 
+                      quotedMsg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.audioMessage;
+      
+      if (!hasAudio) {
+        return "❌ Please reply to a *voice message* or audio file!";
+      }
+
+      // Check rate limit
+      const usageCheck = DubUsageStore.canUserDub(senderJid);
+      if (!usageCheck.allowed) {
+        return `⏳ You've used all *${DubUsageStore.maxDubsPerDay} dubs* for today!\n\n🔄 Daily limit resets at midnight.\nCome back tomorrow to dub more voice messages! 🎙️`;
+      }
+
+      // Send processing message
+      const processingMsg = `🎬 Dubbing to *${language.name}*...\n⏳ This may take 15-30 seconds\n\n📊 ${usageCheck.used}/${DubUsageStore.maxDubsPerDay} dubs used today`;
+
+      // Download the audio from quoted message
+      const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+      console.log("📥 Downloading voice message...");
+      const audioBuffer = await downloadMediaMessage(
+        quotedMsg,
+        "buffer",
+        {}
+      );
+
+      if (!audioBuffer) {
+        return "❌ Failed to download voice message. Try again!";
+      }
+
+      console.log(`✅ Downloaded ${(audioBuffer.length / 1024).toFixed(2)} KB`);
+
+      // Process dubbing (this will take a while)
+      const result = await DubService.dubVoiceMessage(audioBuffer, targetLang);
+
+      // Record usage after successful dub
+      const usageResult = DubUsageStore.recordDubUsage(senderJid);
+
+      // Success! Return dubbed audio
+      return {
+        text: `✅ *Dubbed to ${language.name}!*\n\n🎙️ ${usageResult.remaining}/${DubUsageStore.maxDubsPerDay} dubs remaining today\n\n*Powered by ElevenLabs AI*`,
+        media: {
+          audio: result.audio,
+          mimetype: "audio/mpeg",
+          ptt: true, // Send as voice note
+        },
+      };
+
+    } catch (error) {
+      console.error("Dubbing error:", error);
+      
+      // Parse error messages
+      if (error.message.includes("API key not configured")) {
+        return "❌ Voice dubbing is not configured. Contact the bot owner!";
+      } else if (error.message.includes("Unsupported")) {
+        return `❌ ${error.message}`;
+      } else if (error.message.includes("timeout")) {
+        return "⏳ Dubbing took too long! Try with a shorter voice message (under 2 minutes).";
+      } else if (error.message.includes("already in")) {
+        return error.message;
+      }
+      
+      return `❌ Dubbing failed: ${error.message}\n\nTry again or use a different voice message!`;
+    }
   }
 
   async getMessageSenderName(message) {

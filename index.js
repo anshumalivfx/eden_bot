@@ -1309,6 +1309,7 @@ async function connectToWhatsApp() {
                 messageAdapter,
                 {
                   senderName,
+                  senderJid,
                   isOwner: owner,
                   mood: "sarcastic",
                   isNiceUser: niceUser,
