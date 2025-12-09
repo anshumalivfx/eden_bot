@@ -228,43 +228,56 @@ class DubService {
   }
 
   /**
-   * Generate speech using ElevenLabs Voice Cloning (Speech-to-Speech)
-   * This preserves the original speaker's voice characteristics
+   * Get multilingual voice ID based on language
+   */
+  getMultilingualVoiceId(langCode) {
+    // ElevenLabs multilingual voices
+    const voices = {
+      en: "pNInz6obpgDQGcFmaJgB", // Adam - multilingual
+      es: "pNInz6obpgDQGcFmaJgB", // Adam
+      fr: "pNInz6obpgDQGcFmaJgB", // Adam
+      de: "pNInz6obpgDQGcFmaJgB", // Adam
+      it: "pNInz6obpgDQGcFmaJgB", // Adam
+      pt: "pNInz6obpgDQGcFmaJgB", // Adam
+      hi: "pNInz6obpgDQGcFmaJgB", // Adam
+      ja: "pNInz6obpgDQGcFmaJgB", // Adam
+      zh: "pNInz6obpgDQGcFmaJgB", // Adam
+      ar: "pNInz6obpgDQGcFmaJgB", // Adam
+    };
+    return voices[langCode] || voices["en"];
+  }
+
+  /**
+   * Generate speech using ElevenLabs Text-to-Speech
+   * Note: True voice cloning requires Professional/Enterprise tier
    */
   async generateSpeechElevenLabs(text, langCode, originalAudioPath) {
     try {
-      console.log(`🗣️ Generating cloned speech with ElevenLabs...`);
+      console.log(`🗣️ Generating speech with ElevenLabs...`);
       
-      // ElevenLabs Speech-to-Speech API
-      // Uses a preset voice ID but the input audio influences the output
-      // For true voice cloning, we use the "Adam" voice with high similarity boost
-      const voiceId = "pNInz6obpgDQGcFmaJgB"; // Adam voice - multilingual
-      
-      const FormData = require("form-data");
-      const form = new FormData();
+      const voiceId = this.getMultilingualVoiceId(langCode);
+      const url = `${this.elevenLabsBaseUrl}/text-to-speech/${voiceId}`;
 
-      form.append("text", text);
-      form.append("model_id", "eleven_multilingual_sts_v2"); // Speech-to-Speech model
-      form.append("audio", fs.createReadStream(originalAudioPath));
-
-      // Voice settings for maximum voice similarity
-      const voiceSettings = {
-        stability: 0.5,
-        similarity_boost: 0.95, // Maximum similarity to input audio
-        use_speaker_boost: true,
-      };
-      form.append("voice_settings", JSON.stringify(voiceSettings));
-
-      // Correct endpoint: /v1/speech-to-speech/{voice_id}
-      const url = `${this.elevenLabsBaseUrl}/speech-to-speech/${voiceId}`;
-
-      const response = await axios.post(url, form, {
-        headers: {
-          ...form.getHeaders(),
-          "xi-api-key": this.elevenLabsApiKey,
+      const response = await axios.post(
+        url,
+        {
+          text: text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
         },
-        responseType: "arraybuffer",
-      });
+        {
+          headers: {
+            "xi-api-key": this.elevenLabsApiKey,
+            "Content-Type": "application/json",
+          },
+          responseType: "arraybuffer",
+        }
+      );
 
       const timestamp = Date.now();
       const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
@@ -273,7 +286,7 @@ class DubService {
 
       const stats = fs.statSync(outputPath);
       console.log(
-        `✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`
+        `✅ Generated speech: ${(stats.size / 1024).toFixed(2)} KB`
       );
 
       return {
@@ -292,17 +305,13 @@ class DubService {
         throw new Error("Invalid ElevenLabs API key");
       } else if (error.response?.status === 429) {
         throw new Error("ElevenLabs rate limit exceeded");
-      } else if (error.response?.status === 404) {
-        throw new Error(
-          "ElevenLabs Speech-to-Speech not available - check API subscription"
-        );
       } else if (error.response?.status === 400) {
         throw new Error(
-          "Voice cloning failed - audio may be too short or poor quality"
+          "Speech generation failed - check text content"
         );
       }
 
-      throw new Error(`ElevenLabs voice cloning failed: ${error.message}`);
+      throw new Error(`ElevenLabs TTS failed: ${error.message}`);
     }
   }  /**
    * Generate speech using Piper TTS (local)

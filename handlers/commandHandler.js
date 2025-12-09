@@ -1035,15 +1035,15 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   async dubVoiceMessage(args, message) {
     try {
       const { senderName = "User", senderJid = "" } = this.currentContext;
-      
+
       // Check for help command
       if (args[0]?.toLowerCase() === "help") {
         return this.getDubHelpMessage();
       }
-      
+
       // Parse language argument (default to English)
       const targetLang = args[0]?.toLowerCase() || "en";
-      
+
       // Validate language
       const language = DubService.validateLanguage(targetLang);
       if (!language) {
@@ -1056,16 +1056,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       }
 
       // Get the actual Baileys message structure to check for audio
-      const contextInfo = message.raw?.message?.extendedTextMessage?.contextInfo;
+      const contextInfo =
+        message.raw?.message?.extendedTextMessage?.contextInfo;
       const quotedMessage = contextInfo?.quotedMessage;
-      
+
       // Check if quoted message is audio/voice (PTT or regular audio)
       const hasAudio = quotedMessage?.audioMessage || quotedMessage?.pttMessage;
-      
+
       if (!hasAudio) {
         return "❌ Please reply to a *voice message* or audio file!";
       }
-      
+
       const quotedMsg = await message.getQuotedMessage();
 
       // React with country flag
@@ -1114,27 +1115,33 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Determine TTS engine branding
       const ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
-      const engineBranding = ttsEngine === "elevenlabs" 
-        ? "Powered by ElevenLabs (Voice Cloning)" 
-        : "Powered by Piper TTS (Free & Unlimited)";
+      const engineBranding =
+        ttsEngine === "elevenlabs"
+          ? "Powered by ElevenLabs (Multilingual)"
+          : "Powered by Piper TTS (Free & Unlimited)";
 
       // Success! Return dubbed audio
       return {
         text: `✅ *Dubbed to ${language.name}!*\n\n*${engineBranding}*`,
         media: {
           audio: dubbedAudio,
-          mimetype: ttsEngine === "elevenlabs" ? "audio/mpeg" : "audio/ogg; codecs=opus",
+          mimetype:
+            ttsEngine === "elevenlabs"
+              ? "audio/mpeg"
+              : "audio/ogg; codecs=opus",
           ptt: true, // Send as voice note
         },
       };
-
     } catch (error) {
       console.error("Dubbing error:", error);
-      
+
       // Parse error messages
       if (error.message.includes("Piper model not found")) {
         return "❌ *Piper models not installed!*\n\nRun this command on your server:\n```bash\n./setup-piper.sh\n```\n\nThis will download the voice models (~500MB). Contact bot owner if issue persists!";
-      } else if (error.message.includes("GROQ") || error.message.includes("transcribe")) {
+      } else if (
+        error.message.includes("GROQ") ||
+        error.message.includes("transcribe")
+      ) {
         return "❌ *Transcription failed!*\n\nCheck GROQ_API_KEY in .env file. Get free key at: console.groq.com/keys";
       } else if (error.message.includes("translate")) {
         return "❌ *Translation failed!*\n\nGoogle Translate API error. Try again in a moment!";
@@ -1143,7 +1150,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       } else if (error.message.includes("already in")) {
         return error.message;
       }
-      
+
       return `❌ Dubbing failed: ${error.message}\n\nTry again or contact bot owner if this persists!`;
     }
   }
