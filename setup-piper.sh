@@ -58,22 +58,22 @@ if [ ! -f "piper" ]; then
     curl -L "$PIPER_URL" -o piper.tar.gz
     tar -xzf piper.tar.gz
     rm piper.tar.gz
-    
-    # The archive may extract to a subdirectory, find and move the binary
-    if [ -f "piper/piper" ]; then
-        mv piper/piper ./piper
-        rm -rf piper
-    fi
-    
     echo "✅ Piper binary installed"
 else
     echo "✅ Piper binary already exists"
 fi
 
-# Ensure executable permissions (critical step)
-chmod +x piper
-ls -la piper
-echo "✅ Piper binary is executable"
+# Ensure executable permissions on the binary (critical step)
+# The binary might be at ./piper or ./piper/piper depending on archive structure
+if [ -f "piper/piper" ]; then
+    chmod +x piper/piper
+    ls -la piper/piper
+    echo "✅ Piper binary at piper/piper is executable"
+elif [ -f "piper" ]; then
+    chmod +x piper
+    ls -la piper
+    echo "✅ Piper binary at ./piper is executable"
+fi
 
 cd ../piper-models
 
