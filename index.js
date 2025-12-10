@@ -1291,8 +1291,8 @@ async function connectToWhatsApp() {
             };
 
             // Sometimes react to the command first (but skip -dub command as it has its own flag reaction)
-            const commandName = command.split(' ')[0].toLowerCase();
-            if (Math.random() > 0.6 && commandName !== 'dub') {
+            const commandName = command.split(" ")[0].toLowerCase();
+            if (Math.random() > 0.6 && commandName !== "dub") {
               const commandReactions = ["👀", "🙄", "😏", "💀", "🤔", "😒"];
               const randomReaction =
                 commandReactions[

@@ -234,21 +234,23 @@ class DubService {
    */
   async generateSpeechElevenLabs(text, langCode, originalAudioPath) {
     try {
-      console.log(`🗣️ Creating dubbing with ElevenLabs (with voice cloning)...`);
-      
+      console.log(
+        `🗣️ Creating dubbing with ElevenLabs (with voice cloning)...`
+      );
+
       const FormData = require("form-data");
       const form = new FormData();
-      
+
       // Upload the source audio file
       form.append("file", fs.createReadStream(originalAudioPath));
       form.append("target_lang", langCode); // Target language code
       form.append("mode", "automatic"); // Automatic dubbing mode
       form.append("num_speakers", 1); // Single speaker
       form.append("watermark", "true"); // Accept watermark (free tier)
-      
+
       // Step 1: Create dubbing project
       const createUrl = `${this.elevenLabsBaseUrl}/dubbing`;
-      
+
       console.log(`📤 Uploading audio for dubbing...`);
       const createResponse = await axios.post(createUrl, form, {
         headers: {
@@ -259,46 +261,48 @@ class DubService {
 
       const dubbingId = createResponse.data.dubbing_id;
       console.log(`✅ Dubbing project created: ${dubbingId}`);
-      
+
       // Step 2: Poll for completion
       console.log(`⏳ Waiting for dubbing to complete...`);
       const metadataUrl = `${this.elevenLabsBaseUrl}/dubbing/${dubbingId}`;
-      
+
       let attempts = 0;
       const maxAttempts = 60; // 60 attempts = 5 minutes max
-      
+
       while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-        
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+
         const statusResponse = await axios.get(metadataUrl, {
           headers: {
             "xi-api-key": this.elevenLabsApiKey,
           },
         });
-        
+
         const status = statusResponse.data.status;
         console.log(`📊 Dubbing status: ${status}`);
-        
+
         if (status === "dubbed") {
           // Step 3: Download the dubbed audio
           console.log(`⬇️ Downloading dubbed audio...`);
           const audioUrl = `${this.elevenLabsBaseUrl}/dubbing/${dubbingId}/audio/${langCode}`;
-          
+
           const audioResponse = await axios.get(audioUrl, {
             headers: {
               "xi-api-key": this.elevenLabsApiKey,
             },
             responseType: "arraybuffer",
           });
-          
+
           const timestamp = Date.now();
           const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
-          
+
           fs.writeFileSync(outputPath, audioResponse.data);
-          
+
           const stats = fs.statSync(outputPath);
-          console.log(`✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`);
-          
+          console.log(
+            `✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`
+          );
+
           return {
             filepath: outputPath,
             cleanup: () => {
@@ -311,14 +315,16 @@ class DubService {
         } else if (status === "dubbing_failed") {
           throw new Error("Dubbing failed on ElevenLabs server");
         }
-        
+
         attempts++;
       }
-      
+
       throw new Error("Dubbing timeout - took too long to complete");
-      
     } catch (error) {
-      console.error("ElevenLabs dubbing error:", error.response?.data || error.message);
+      console.error(
+        "ElevenLabs dubbing error:",
+        error.response?.data || error.message
+      );
 
       if (error.response?.status === 401) {
         throw new Error("Invalid ElevenLabs API key");
@@ -331,7 +337,8 @@ class DubService {
 
       throw new Error(`ElevenLabs dubbing failed: ${error.message}`);
     }
-  }  /**
+  }
+  /**
    * Generate speech using Piper TTS (local)
    * @param {string} text - Text to speak
    * @param {string} langCode - Language code
@@ -465,12 +472,17 @@ class DubService {
       // Step 1: Convert audio to appropriate format
       console.log("🔄 Converting audio format...");
       const formatForEngine = this.ttsEngine === "elevenlabs" ? "mp3" : "wav";
-      convertedFilePath = await this.convertAudioFormat(audioBuffer, formatForEngine);
+      convertedFilePath = await this.convertAudioFormat(
+        audioBuffer,
+        formatForEngine
+      );
 
       if (this.ttsEngine === "elevenlabs") {
         // ElevenLabs Dubbing API handles everything: transcription, translation, and dubbing with voice cloning
-        console.log("🎬 Using ElevenLabs Dubbing API (includes voice cloning)...");
-        
+        console.log(
+          "🎬 Using ElevenLabs Dubbing API (includes voice cloning)..."
+        );
+
         const speech = await this.generateSpeechElevenLabs(
           null, // Not needed - ElevenLabs does transcription internally
           targetLang,
@@ -507,7 +519,10 @@ class DubService {
         );
 
         // Step 4: Generate speech in target language
-        const speech = await this.generateSpeechPiper(translatedText, targetLang);
+        const speech = await this.generateSpeechPiper(
+          translatedText,
+          targetLang
+        );
 
         return {
           filepath: speech.filepath,
