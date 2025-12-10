@@ -17,23 +17,24 @@ class LLMService {
   async generateMeanResponse(userMessage, context = "", imageBase64 = null) {
     // For APIs that support system messages, we pass the personality separately
     // For APIs that don't, we include it in the prompt
-    
+
     // Analyze message to determine appropriate response length
     const lengthGuidance = this.getLengthGuidance(userMessage);
-    
+
     let userPrompt;
 
     if (imageBase64) {
       // Detect if it's likely a selfie or person photo
-      const isSelfie = userMessage.toLowerCase().includes('look') || 
-                      userMessage.toLowerCase().includes('selfie') || 
-                      userMessage.toLowerCase().includes('pic') ||
-                      userMessage.toLowerCase().includes('photo') ||
-                      userMessage.toLowerCase().includes('me') ||
-                      userMessage.toLowerCase().includes('how') ||
-                      userMessage.includes('?') ||
-                      userMessage.trim().length < 20; // Short messages with images often selfies
-      
+      const isSelfie =
+        userMessage.toLowerCase().includes("look") ||
+        userMessage.toLowerCase().includes("selfie") ||
+        userMessage.toLowerCase().includes("pic") ||
+        userMessage.toLowerCase().includes("photo") ||
+        userMessage.toLowerCase().includes("me") ||
+        userMessage.toLowerCase().includes("how") ||
+        userMessage.includes("?") ||
+        userMessage.trim().length < 20; // Short messages with images often selfies
+
       userPrompt = isSelfie
         ? `someone sent an image and said: "${userMessage}"
 
@@ -115,7 +116,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       isRandom = false,
       isMeanUser = false,
     } = metadata;
-    
+
     // Analyze message to determine appropriate response length
     const lengthGuidance = this.getLengthGuidance(userMessage);
 
@@ -150,15 +151,17 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         : `youre eden, moody but helpful. ${moodInstruction} when someone asks real questions (what is, how to, why, explain) ANSWER PROPERLY with slight sass. for casual chat be sarcastic. text casual lowercase with slang. light swearing (damn, wtf, hell). mix helpful + attitude. if question = help them. if chat = snark. NO emojis. NO hashtags. MATCH LENGTH: greetings = 1-2 words, casual = 1-2 sentences, questions = full answer but concise. CRITICAL: when people send selfies/photos of themselves, be GENUINELY NICE and compliment them - NO bitchy or mean comments about appearance ever.`;
 
     // Detect if it's likely a selfie or person photo
-    const isSelfie = imageBase64 && (userMessage.toLowerCase().includes('look') || 
-                    userMessage.toLowerCase().includes('selfie') || 
-                    userMessage.toLowerCase().includes('pic') ||
-                    userMessage.toLowerCase().includes('photo') ||
-                    userMessage.toLowerCase().includes('me') ||
-                    userMessage.toLowerCase().includes('how') ||
-                    userMessage.includes('?') ||
-                    userMessage.trim().length < 20);
-    
+    const isSelfie =
+      imageBase64 &&
+      (userMessage.toLowerCase().includes("look") ||
+        userMessage.toLowerCase().includes("selfie") ||
+        userMessage.toLowerCase().includes("pic") ||
+        userMessage.toLowerCase().includes("photo") ||
+        userMessage.toLowerCase().includes("me") ||
+        userMessage.toLowerCase().includes("how") ||
+        userMessage.includes("?") ||
+        userMessage.trim().length < 20);
+
     const userPrompt =
       mood === "friendly"
         ? imageBase64
@@ -436,33 +439,54 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
   getLengthGuidance(message) {
     const lowerMessage = message.toLowerCase().trim();
     const wordCount = message.split(/\s+/).length;
-    
+
     // Simple greetings (hi, hey, sup, etc.) - respond with 1-2 words
-    const simpleGreetings = ['hi', 'hello', 'hey', 'sup', 'yo', 'whats up', "what's up", 'wassup', 'hii', 'hiii', 'helo', 'helloo', 'heya'];
-    if (wordCount <= 3 && simpleGreetings.some(greeting => lowerMessage === greeting || lowerMessage.startsWith(greeting))) {
+    const simpleGreetings = [
+      "hi",
+      "hello",
+      "hey",
+      "sup",
+      "yo",
+      "whats up",
+      "what's up",
+      "wassup",
+      "hii",
+      "hiii",
+      "helo",
+      "helloo",
+      "heya",
+    ];
+    if (
+      wordCount <= 3 &&
+      simpleGreetings.some(
+        (greeting) =>
+          lowerMessage === greeting || lowerMessage.startsWith(greeting)
+      )
+    ) {
       return "KEEP IT SUPER SHORT: respond with just 1-2 words (like 'hey', 'sup', 'yo', 'whats up'). NO extra sentences.";
     }
-    
+
     // Questions - provide complete answers but stay concise
-    const hasQuestion = lowerMessage.includes('?') || 
-                       lowerMessage.startsWith('what') || 
-                       lowerMessage.startsWith('how') || 
-                       lowerMessage.startsWith('why') || 
-                       lowerMessage.startsWith('when') || 
-                       lowerMessage.startsWith('where') ||
-                       lowerMessage.includes('explain') ||
-                       lowerMessage.includes('tell me') ||
-                       lowerMessage.includes('can you');
-    
+    const hasQuestion =
+      lowerMessage.includes("?") ||
+      lowerMessage.startsWith("what") ||
+      lowerMessage.startsWith("how") ||
+      lowerMessage.startsWith("why") ||
+      lowerMessage.startsWith("when") ||
+      lowerMessage.startsWith("where") ||
+      lowerMessage.includes("explain") ||
+      lowerMessage.includes("tell me") ||
+      lowerMessage.includes("can you");
+
     if (hasQuestion || wordCount > 15) {
       return "Give a complete helpful answer but be concise. 2-4 sentences max unless its super complex.";
     }
-    
+
     // Short casual messages (4-10 words) - brief response
     if (wordCount <= 10) {
       return "Keep it brief: 1 sentence or 5-8 words max. Match their casual energy.";
     }
-    
+
     // Medium messages - moderate response
     return "Respond naturally with 1-2 sentences. Keep it conversational, not an essay.";
   }
