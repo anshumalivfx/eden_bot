@@ -28,23 +28,23 @@ class ImageService {
     this.defaultSeed = -1; // Random seed
 
     this.freeApis = {
-      // Pollinations AI - Free and no API key required
+      // Pollinations AI - Free and no API key required (PRIMARY)
       pollinations: {
         url: "https://image.pollinations.ai/prompt/",
         needsKey: false,
         method: "GET",
       },
 
-      // Hugging Face Inference API - Free tier
-      huggingface: {
-        url: "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
+      // Google Gemini 2.0 Flash - Free tier with API key (BACKUP)
+      gemini: {
+        url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
         needsKey: true,
         method: "POST",
       },
 
-      // DeepAI - Free tier (limited)
-      deepai: {
-        url: "https://api.deepai.org/api/text2img",
+      // Hugging Face Inference API - Free tier
+      huggingface: {
+        url: "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
         needsKey: true,
         method: "POST",
       },
@@ -83,6 +83,9 @@ class ImageService {
       switch (apiProvider) {
         case "pollinations":
           imageBuffer = await this.generateWithPollinations(enhancedPrompt);
+          break;
+        case "gemini":
+          imageBuffer = await this.generateWithGemini(enhancedPrompt);
           break;
         case "huggingface":
           imageBuffer = await this.generateWithHuggingFace(enhancedPrompt);
@@ -179,6 +182,7 @@ class ImageService {
         model = "flux",
         seed = this.defaultSeed,
         enhance = true,
+        provider = "pollinations", // Default to Pollinations
       } = options;
 
       // Clean and enhance prompt
@@ -187,15 +191,22 @@ class ImageService {
         finalPrompt = `${finalPrompt}, highly detailed, professional quality, sharp focus`;
       }
 
-      console.log(`📝 Text-to-Image: "${finalPrompt.substring(0, 80)}..."`);
+      console.log(`📝 Text-to-Image [${provider}]: "${finalPrompt.substring(0, 80)}..."`);
 
-      const buffer = await this.generateWithPollinations(finalPrompt, {
-        width,
-        height,
-        model,
-        seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
-        nologo: true,
-      });
+      // Select provider
+      let buffer;
+      if (provider === "gemini") {
+        buffer = await this.generateWithGemini(finalPrompt);
+      } else {
+        // Default to Pollinations
+        buffer = await this.generateWithPollinations(finalPrompt, {
+          width,
+          height,
+          model,
+          seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
+          nologo: true,
+        });
+      }
 
       // Save to temp file
       const filename = `text2img_${Date.now()}_${Math.random()
@@ -323,6 +334,73 @@ class ImageService {
       "flux-anime": "Anime/manga style",
       "flux-3d": "3D rendered style",
     };
+  }
+
+  /**
+   * Generate image using Google Gemini 2.0 Flash (FREE with API key)
+   */
+  async generateWithGemini(prompt) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "your_gemini_api_key_here") {
+      throw new Error(
+        "Gemini API key not configured. Get free key from https://aistudio.google.com/apikey"
+      );
+    }
+
+    try {
+      console.log("🔮 Generating with Gemini 2.0 Flash (FREE tier)...");
+
+      const response = await axios.post(
+        `${this.freeApis.gemini.url}?key=${apiKey}`,
+        {
+          contents: [
+            {
+              parts: [
+                {
+                  text: `Generate an image: ${prompt}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 1.0,
+            topP: 0.95,
+            topK: 40,
+            maxOutputTokens: 8192,
+          },
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 60000,
+        }
+      );
+
+      // Gemini 2.0 Flash returns inline image data
+      const imageData = response.data?.candidates?.[0]?.content?.parts?.find(
+        (part) => part.inlineData
+      );
+
+      if (!imageData || !imageData.inlineData) {
+        throw new Error("No image data returned from Gemini");
+      }
+
+      // Decode base64 image
+      const base64Image = imageData.inlineData.data;
+      return Buffer.from(base64Image, "base64");
+    } catch (error) {
+      if (error.response?.status === 429) {
+        throw new Error(
+          "Gemini rate limit reached. Try again in a few minutes or use Pollinations instead."
+        );
+      } else if (error.response?.status === 403) {
+        throw new Error(
+          "Invalid Gemini API key. Get a new one from https://aistudio.google.com/apikey"
+        );
+      }
+      throw new Error(`Gemini API error: ${error.message}`);
+    }
   }
 
   /**
@@ -591,7 +669,15 @@ class ImageService {
 *Model Usage:*
 \`-imagine [model:turbo] your prompt here\`
 
-*✨ Powered by Pollinations AI*`;
+*API Providers:*
+• **Pollinations** (default) - 100% FREE, unlimited
+• **Gemini** - Google Gemini 2.0 Flash (FREE tier)
+\`-imagine [provider:gemini] your prompt\`
+
+*Get FREE Gemini API Key:*
+https://aistudio.google.com/apikey
+
+*✨ Powered by Pollinations AI & Google Gemini*`;
   }
 
   /**

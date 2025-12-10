@@ -1894,6 +1894,14 @@ Provide a structured analysis with emojis.`;
         return `🎨 *AI Image Generation*\n\nUsage: \`-imagine [prompt]\`\n\nExample:\n\`-imagine a beautiful sunset over mountains\`\n\n💡 Use \`-imagine help\` for more info!`;
       }
 
+      // Extract provider if specified (e.g., [provider:gemini])
+      let provider = "pollinations"; // Default to Pollinations (100% free, no key)
+      const providerMatch = prompt.match(/\[provider:(\w+)\]/i);
+      if (providerMatch) {
+        provider = providerMatch[1].toLowerCase();
+        prompt = prompt.replace(providerMatch[0], "").trim();
+      }
+
       // Extract model if specified (e.g., [model:turbo])
       let model = "flux";
       const modelMatch = prompt.match(/\[model:(\w+(-\w+)?)\]/i);
@@ -1902,7 +1910,7 @@ Provide a structured analysis with emojis.`;
         prompt = prompt.replace(modelMatch[0], "").trim();
       }
 
-      console.log(`🎨 ${senderName} requested image: "${prompt.substring(0, 60)}..."`);
+      console.log(`🎨 ${senderName} requested image: "${prompt.substring(0, 60)}..." (Provider: ${provider}, Model: ${model})`);
 
       // Generate random sassy response
       const responses = ImageService.getImageResponses();
@@ -1912,13 +1920,32 @@ Provide a structured analysis with emojis.`;
       // Send initial reaction
       await message.reply(sassyResponse);
 
-      // Generate image
-      const result = await ImageService.textToImage(prompt, {
-        model,
-        enhance: true,
-        width: 1024,
-        height: 1024,
-      });
+      // Try primary provider first, fallback to Pollinations if it fails
+      let result;
+      try {
+        result = await ImageService.textToImage(prompt, {
+          model,
+          enhance: true,
+          width: 1024,
+          height: 1024,
+          provider, // Pass provider option
+        });
+      } catch (error) {
+        // If Gemini fails, fallback to Pollinations
+        if (provider === "gemini") {
+          console.log("⚠️ Gemini failed, falling back to Pollinations...");
+          await message.reply("⚠️ Gemini failed, using Pollinations instead...");
+          result = await ImageService.textToImage(prompt, {
+            model,
+            enhance: true,
+            width: 1024,
+            height: 1024,
+            provider: "pollinations",
+          });
+        } else {
+          throw error;
+        }
+      }
 
       // Read the image file
       const fs = require("fs");
