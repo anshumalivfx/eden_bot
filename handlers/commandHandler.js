@@ -4,6 +4,7 @@ const YouTubeService = require("../services/youtubeService");
 const InteractionService = require("../services/interactionService");
 const PetService = require("../services/petService");
 const DubService = require("../services/dubService");
+const ImageService = require("../services/imageService");
 
 class CommandHandler {
   constructor(llmService) {
@@ -85,6 +86,12 @@ class CommandHandler {
       analyze: this.analyzeChatSentiment.bind(this),
       sentiment: this.analyzeChatSentiment.bind(this),
       summary: this.analyzeChatSentiment.bind(this),
+      // Image generation commands
+      imagine: this.generateImage.bind(this),
+      img: this.generateImage.bind(this),
+      draw: this.generateImage.bind(this),
+      transform: this.transformImage.bind(this),
+      reimagine: this.transformImage.bind(this),
     };
   }
 
@@ -146,6 +153,8 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create voice message 🎤
 - \`-play [song name]\` - Download song from YouTube as MP3 🎵
+- \`-imagine [prompt]\` or \`-img\` - Generate AI image 🎨 (NEW!)
+- \`-transform [prompt]\` - Transform an image (reply to image) 🔄
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -211,6 +220,8 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create funny voice message (🎤)
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
+- \`-imagine [prompt]\` or \`-img\` - Generate AI image from text (🎨 NEW!)
+- \`-transform [prompt]\` - Transform an image with AI (reply to image) (🔄 NEW!)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-ping\` - Quick response check (am I alive?)
 - \`-sys\` - Show system information (🖥️)
@@ -233,6 +244,15 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
 • 5 dubs per day limit • 29+ languages supported
 • Powered by Piper TTS (Free & Open Source) • Aliases: \`-d\`
+
+*🎨 AI Image Generation (NEW!):*
+• \`-imagine [prompt]\` = Generate image from text
+• \`-img [prompt]\` = Short alias for imagine
+• \`-transform [prompt]\` = Transform an image (reply to image)
+• Models: flux, turbo, flux-realism, flux-anime, flux-3d
+• Example: \`-imagine a cyberpunk city at night\`
+• Use \`-imagine help\` for full guide
+• Powered by Pollinations AI (100% FREE & Unlimited!)
 
 *🎵 Music Download:*
 • \`-play [song name]\` = Search & download from YouTube
@@ -1853,6 +1873,166 @@ Provide a structured analysis with emojis.`;
     } catch (error) {
       console.error("Sentiment analysis error:", error);
       return `❌ Failed to analyze chat sentiment: ${error.message}`;
+    }
+  }
+
+  /**
+   * Generate image from text prompt (Text-to-Image)
+   */
+  async generateImage(args, message) {
+    try {
+      const { senderName = "User" } = this.currentContext;
+
+      // Check for help
+      if (args[0]?.toLowerCase() === "help") {
+        return ImageService.getHelpMessage();
+      }
+
+      // Get prompt
+      let prompt = args.join(" ").trim();
+      if (!prompt) {
+        return `🎨 *AI Image Generation*\n\nUsage: \`-imagine [prompt]\`\n\nExample:\n\`-imagine a beautiful sunset over mountains\`\n\n💡 Use \`-imagine help\` for more info!`;
+      }
+
+      // Extract model if specified (e.g., [model:turbo])
+      let model = "flux";
+      const modelMatch = prompt.match(/\[model:(\w+(-\w+)?)\]/i);
+      if (modelMatch) {
+        model = modelMatch[1].toLowerCase();
+        prompt = prompt.replace(modelMatch[0], "").trim();
+      }
+
+      console.log(`🎨 ${senderName} requested image: "${prompt.substring(0, 60)}..."`);
+
+      // Generate random sassy response
+      const responses = ImageService.getImageResponses();
+      const sassyResponse =
+        responses[Math.floor(Math.random() * responses.length)];
+
+      // Send initial reaction
+      await message.reply(sassyResponse);
+
+      // Generate image
+      const result = await ImageService.textToImage(prompt, {
+        model,
+        enhance: true,
+        width: 1024,
+        height: 1024,
+      });
+
+      // Read the image file
+      const fs = require("fs");
+      const imageBuffer = fs.readFileSync(result.filepath);
+
+      // Clean up after a delay
+      setTimeout(() => {
+        result.cleanup();
+      }, 5000);
+
+      // Return image with caption
+      return {
+        media: {
+          image: imageBuffer,
+          caption: `✨ *Generated Image*\n\n📝 Prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}\n🎨 Model: ${model}\n\n*Powered by Pollinations AI*`,
+        },
+      };
+    } catch (error) {
+      console.error("❌ Image generation error:", error);
+
+      // Check if it's NSFW content
+      if (error.message === "NSFW_CONTENT") {
+        const rejections = ImageService.getNSFWRejectionResponses();
+        return rejections[Math.floor(Math.random() * rejections.length)];
+      }
+
+      // General error
+      const errorResponses = ImageService.getImageErrorResponses();
+      return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+  }
+
+  /**
+   * Transform image based on prompt (Image-to-Image)
+   */
+  async transformImage(args, message) {
+    try {
+      const { senderName = "User" } = this.currentContext;
+
+      // Check for help
+      if (args[0]?.toLowerCase() === "help") {
+        return `🔄 *Image Transformation*\n\nReply to an image with:\n\`-transform [prompt]\`\n\nExample:\nReply to a photo: \`-transform make it look like an oil painting\`\n\n💡 The image will be transformed based on your prompt!`;
+      }
+
+      // Check if replying to a message with image
+      if (!message.hasQuotedMsg) {
+        return `🔄 *Image Transformation*\n\nPlease reply to an image with:\n\`-transform [your transformation prompt]\`\n\nExample:\n\`-transform make it anime style\``;
+      }
+
+      const quotedMsg = await message.getQuotedMessage();
+      if (!quotedMsg || !quotedMsg.hasMedia) {
+        return `❌ Please reply to a message that contains an image!`;
+      }
+
+      // Get prompt
+      const prompt = args.join(" ").trim();
+      if (!prompt) {
+        return `❌ Please provide a transformation prompt!\n\nExample: \`-transform make it look like a watercolor painting\``;
+      }
+
+      // Extract model if specified
+      let model = "flux";
+      let finalPrompt = prompt;
+      const modelMatch = prompt.match(/\[model:(\w+(-\w+)?)\]/i);
+      if (modelMatch) {
+        model = modelMatch[1].toLowerCase();
+        finalPrompt = prompt.replace(modelMatch[0], "").trim();
+      }
+
+      console.log(`🔄 ${senderName} transforming image: "${finalPrompt.substring(0, 60)}..."`);
+
+      // Download the image
+      const media = await quotedMsg.downloadMedia();
+      if (!media) {
+        return `❌ Failed to download the image. Try again!`;
+      }
+
+      // Send initial reaction
+      await message.reply(`🔄 Transforming your image... This might take a moment.`);
+
+      // Transform image
+      const result = await ImageService.imageToImage(media.buffer, finalPrompt, {
+        model,
+        width: 1024,
+        height: 1024,
+        strength: 0.7,
+      });
+
+      // Read the transformed image
+      const fs = require("fs");
+      const imageBuffer = fs.readFileSync(result.filepath);
+
+      // Clean up after a delay
+      setTimeout(() => {
+        result.cleanup();
+      }, 5000);
+
+      // Return transformed image
+      return {
+        media: {
+          image: imageBuffer,
+          caption: `✨ *Image Transformed*\n\n🔄 Transformation: ${finalPrompt.substring(0, 100)}${finalPrompt.length > 100 ? "..." : ""}\n🎨 Model: ${model}\n\n*Powered by Pollinations AI*`,
+        },
+      };
+    } catch (error) {
+      console.error("❌ Image transformation error:", error);
+
+      // Check if it's NSFW content
+      if (error.message === "NSFW_CONTENT") {
+        const rejections = ImageService.getNSFWRejectionResponses();
+        return rejections[Math.floor(Math.random() * rejections.length)];
+      }
+
+      return `❌ Failed to transform image: ${error.message}\n\nTry with a different prompt or image!`;
     }
   }
 }
