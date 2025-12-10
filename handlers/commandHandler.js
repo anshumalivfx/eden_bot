@@ -1960,21 +1960,32 @@ Provide a structured analysis with emojis.`;
 
       // Check for help
       if (args[0]?.toLowerCase() === "help") {
-        return `🔄 *Image Transformation*\n\nReply to an image with:\n\`-transform [prompt]\`\n\nExample:\nReply to a photo: \`-transform make it look like an oil painting\`\n\n💡 The image will be transformed based on your prompt!`;
+        return `🔄 *Image Transformation*\n\n*Method 1 - Reply to image:*\nReply to an image with:\n\`-transform [prompt]\`\n\n*Method 2 - Send image with command:*\nSend an image with caption:\n\`-transform [prompt]\`\n\nExample:\nReply to a photo: \`-transform make it look like an oil painting\`\nOr send image with: \`-transform anime style\`\n\n💡 The image will be transformed based on your prompt!`;
       }
 
-      // Check if replying to a message with image
-      if (!message.hasQuotedMsg) {
-        return `🔄 *Image Transformation*\n\nPlease reply to an image with:\n\`-transform [your transformation prompt]\`\n\nExample:\n\`-transform make it anime style\``;
+      let imageMedia = null;
+      let prompt = args.join(" ").trim();
+
+      // Method 1: Check if message itself has image (sent with caption)
+      if (message.hasMedia) {
+        console.log(`📸 Image sent with command caption`);
+        imageMedia = await message.downloadMedia();
+      }
+      // Method 2: Check if replying to a message with image
+      else if (message.hasQuotedMsg) {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg && quotedMsg.hasMedia) {
+          console.log(`📸 Replying to image`);
+          imageMedia = await quotedMsg.downloadMedia();
+        }
       }
 
-      const quotedMsg = await message.getQuotedMessage();
-      if (!quotedMsg || !quotedMsg.hasMedia) {
-        return `❌ Please reply to a message that contains an image!`;
+      // No image found
+      if (!imageMedia) {
+        return `🔄 *Image Transformation*\n\nPlease either:\n1️⃣ Reply to an image with: \`-transform [prompt]\`\n2️⃣ Send an image with caption: \`-transform [prompt]\`\n\nExample: \`-transform make it anime style\``;
       }
 
-      // Get prompt
-      const prompt = args.join(" ").trim();
+      // Check for prompt
       if (!prompt) {
         return `❌ Please provide a transformation prompt!\n\nExample: \`-transform make it look like a watercolor painting\``;
       }
@@ -1990,17 +2001,11 @@ Provide a structured analysis with emojis.`;
 
       console.log(`🔄 ${senderName} transforming image: "${finalPrompt.substring(0, 60)}..."`);
 
-      // Download the image
-      const media = await quotedMsg.downloadMedia();
-      if (!media) {
-        return `❌ Failed to download the image. Try again!`;
-      }
-
       // Send initial reaction
       await message.reply(`🔄 Transforming your image... This might take a moment.`);
 
       // Transform image
-      const result = await ImageService.imageToImage(media.buffer, finalPrompt, {
+      const result = await ImageService.imageToImage(imageMedia.buffer, finalPrompt, {
         model,
         width: 1024,
         height: 1024,
