@@ -244,6 +244,7 @@ class DubService {
       form.append("target_lang", langCode); // Target language code
       form.append("mode", "automatic"); // Automatic dubbing mode
       form.append("num_speakers", 1); // Single speaker
+      form.append("watermark", "true"); // Accept watermark (free tier)
       
       // Step 1: Create dubbing project
       const createUrl = `${this.elevenLabsBaseUrl}/dubbing`;
@@ -463,7 +464,8 @@ class DubService {
     try {
       // Step 1: Convert audio to appropriate format
       console.log("🔄 Converting audio format...");
-      convertedFilePath = await this.convertAudioFormat(audioBuffer, "wav");
+      const formatForEngine = this.ttsEngine === "elevenlabs" ? "mp3" : "wav";
+      convertedFilePath = await this.convertAudioFormat(audioBuffer, formatForEngine);
 
       if (this.ttsEngine === "elevenlabs") {
         // ElevenLabs Dubbing API handles everything: transcription, translation, and dubbing with voice cloning
