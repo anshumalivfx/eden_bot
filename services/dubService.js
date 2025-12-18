@@ -26,6 +26,9 @@ class DubService {
     // Options: "whisper-local" (on-device, unlimited) or "groq" (cloud, fast)
     this.transcriptionEngine = process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
 
+    // Python path (auto-detect venv or use system python3)
+    this.pythonPath = process.env.PYTHON_PATH || this.detectPythonPath();
+
     // ElevenLabs API setup
     this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     this.elevenLabsBaseUrl = "https://api.elevenlabs.io/v1";
@@ -45,6 +48,33 @@ class DubService {
     );
     console.log(`   📢 TTS Engine: ${this.ttsEngine.toUpperCase()}`);
     console.log(`   🎤 Transcription: ${this.transcriptionEngine.toUpperCase()}`);
+    console.log(`   🐍 Python Path: ${this.pythonPath}`);
+
+  /**
+   * Detect Python path (check for venv first, then system python3)
+   */
+  detectPythonPath() {
+    // Common venv locations
+    const venvPaths = [
+      path.join(process.cwd(), 'venv/bin/python3'),
+      path.join(process.cwd(), 'venv/bin/python'),
+      path.join(process.cwd(), '.venv/bin/python3'),
+      path.join(process.cwd(), '.venv/bin/python'),
+      '/home/pi/venv/bin/python3',
+      '/home/pi/.venv/bin/python3',
+    ];
+
+    // Check if any venv python exists
+    for (const venvPath of venvPaths) {
+      if (fs.existsSync(venvPath)) {
+        console.log(`   ✅ Found venv Python: ${venvPath}`);
+        return venvPath;
+      }
+    }
+
+    // Fallback to system python3
+    return 'python3';
+  }
 
     // Language code mapping (ISO 639-1) with country flags
     this.languageMap = {
@@ -261,7 +291,7 @@ class DubService {
       await this.convertToWav(audioFilePath, wavPath);
 
       // Run faster-whisper via Python (using 'tiny' model for Raspberry Pi)
-      const command = `python3 -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('tiny', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
+      const command = `${this.pythonPath} -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('tiny', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
 
       const { stdout, stderr } = await execAsync(command, {
         maxBuffer: 50 * 1024 * 1024, // 50MB buffer for long transcriptions
