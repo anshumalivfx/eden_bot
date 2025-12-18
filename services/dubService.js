@@ -50,32 +50,6 @@ class DubService {
     console.log(`   🎤 Transcription: ${this.transcriptionEngine.toUpperCase()}`);
     console.log(`   🐍 Python Path: ${this.pythonPath}`);
 
-  /**
-   * Detect Python path (check for venv first, then system python3)
-   */
-  detectPythonPath() {
-    // Common venv locations
-    const venvPaths = [
-      path.join(process.cwd(), 'venv/bin/python3'),
-      path.join(process.cwd(), 'venv/bin/python'),
-      path.join(process.cwd(), '.venv/bin/python3'),
-      path.join(process.cwd(), '.venv/bin/python'),
-      '/home/pi/venv/bin/python3',
-      '/home/pi/.venv/bin/python3',
-    ];
-
-    // Check if any venv python exists
-    for (const venvPath of venvPaths) {
-      if (fs.existsSync(venvPath)) {
-        console.log(`   ✅ Found venv Python: ${venvPath}`);
-        return venvPath;
-      }
-    }
-
-    // Fallback to system python3
-    return 'python3';
-  }
-
     // Language code mapping (ISO 639-1) with country flags
     this.languageMap = {
       en: { name: "English", code: "en", flag: "🇺🇸" },
@@ -247,6 +221,31 @@ class DubService {
         }
       });
     });
+  }
+
+  /**
+   * Detect Python path (check for venv first, then system python3)
+   */
+  detectPythonPath() {
+    // Common venv locations
+    const venvPaths = [
+      path.join(process.cwd(), 'venv/bin/python3'),
+      path.join(process.cwd(), 'venv/bin/python'),
+      path.join(process.cwd(), '.venv/bin/python3'),
+      path.join(process.cwd(), '.venv/bin/python'),
+      '/home/pi/venv/bin/python3',
+      '/home/pi/.venv/bin/python3',
+    ];
+
+    // Check if any venv python exists
+    for (const venvPath of venvPaths) {
+      if (fs.existsSync(venvPath)) {
+        return venvPath;
+      }
+    }
+
+    // Fallback to system python3
+    return 'python3';
   }
 
   /**
