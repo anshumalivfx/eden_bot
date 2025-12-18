@@ -22,6 +22,10 @@ class DubService {
     // Options: "piper" (free, local) or "elevenlabs" (paid, cloud)
     this.ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
 
+    // Transcription Engine Selection (set in .env)
+    // Options: "whisper-local" (on-device, unlimited) or "groq" (cloud, fast)
+    this.transcriptionEngine = process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
+
     // ElevenLabs API setup
     this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     this.elevenLabsBaseUrl = "https://api.elevenlabs.io/v1";
@@ -37,8 +41,10 @@ class DubService {
     }
 
     console.log(
-      `🎙️ Dub Service initialized with TTS Engine: ${this.ttsEngine.toUpperCase()}`
+      `🎙️ Dub Service initialized:`
     );
+    console.log(`   📢 TTS Engine: ${this.ttsEngine.toUpperCase()}`);
+    console.log(`   🎤 Transcription: ${this.transcriptionEngine.toUpperCase()}`);
 
     // Language code mapping (ISO 639-1) with country flags
     this.languageMap = {
@@ -176,13 +182,49 @@ class DubService {
   }
 
   /**
-   * Transcribe audio to text using Groq Whisper
+   * Transcribe audio to text using selected engine
    * @param {string} audioFilePath - Path to audio file
    * @returns {Promise<{text: string, language: string}>}
    */
   async transcribeAudio(audioFilePath) {
+    // Check audio duration to decide engine
+    const duration = await this.getAudioDuration(audioFilePath);
+    const durationMinutes = Math.floor(duration / 60);
+
+    console.log(`🎤 Audio duration: ${durationMinutes}m ${Math.floor(duration % 60)}s`);
+
+    // Use local Whisper for long files or if configured
+    if (this.transcriptionEngine === "whisper-local" || duration > 600) {
+      console.log(`📍 Using on-device Whisper (unlimited, no API limits)`);
+      return await this.transcribeWithWhisperLocal(audioFilePath);
+    } else {
+      console.log(`☁️ Using Groq Whisper (cloud, fast)`);
+      return await this.transcribeWithGroq(audioFilePath);
+    }
+  }
+
+  /**
+   * Get audio duration in seconds
+   */
+  async getAudioDuration(audioFilePath) {
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(audioFilePath, (err, metadata) => {
+        if (err) {
+          console.warn("Failed to get audio duration, using local Whisper");
+          resolve(9999); // Assume long file if probe fails
+        } else {
+          resolve(metadata.format.duration || 0);
+        }
+      });
+    });
+  }
+
+  /**
+   * Transcribe using Groq Whisper (cloud, fast but limited)
+   */
+  async transcribeWithGroq(audioFilePath) {
     try {
-      console.log("🎤 Transcribing audio with Groq Whisper...");
+      console.log("☁️ Transcribing with Groq Whisper...");
 
       const transcription = await this.groq.audio.transcriptions.create({
         file: fs.createReadStream(audioFilePath),
@@ -201,9 +243,76 @@ class DubService {
         language: transcription.language,
       };
     } catch (error) {
-      console.error("Error transcribing audio:", error);
-      throw new Error("Failed to transcribe audio");
+      console.error("❌ Groq transcription failed:", error.message);
+      console.log("🔄 Falling back to local Whisper...");
+      return await this.transcribeWithWhisperLocal(audioFilePath);
     }
+  }
+
+  /**
+   * Transcribe using local OpenAI Whisper (on-device, unlimited)
+   */
+  async transcribeWithWhisperLocal(audioFilePath) {
+    try {
+      console.log("🖥️ Transcribing with local Whisper (faster-whisper - 4x faster)...");
+
+      // Convert to WAV format for better compatibility
+      const wavPath = audioFilePath.replace(/\.[^.]+$/, "_temp.wav");
+      await this.convertToWav(audioFilePath, wavPath);
+
+      // Run faster-whisper via Python
+      const command = `python3 -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('base', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
+
+      const { stdout, stderr } = await execAsync(command, {
+        maxBuffer: 50 * 1024 * 1024, // 50MB buffer for long transcriptions
+      });
+
+      if (stderr && !stderr.includes("FP16")) {
+        console.warn("Whisper warnings:", stderr);
+      }
+
+      const result = JSON.parse(stdout.trim());
+
+      // Cleanup temp file
+      try {
+        fs.unlinkSync(wavPath);
+      } catch (e) {}
+
+      console.log(
+        `✅ Transcribed: "${result.text.substring(0, 50)}..." (${result.language})`
+      );
+
+      return {
+        text: result.text,
+        language: result.language,
+      };
+    } catch (error) {
+      console.error("❌ Local Whisper transcription failed:", error.message);
+
+      // If Whisper is not installed, provide helpful message
+      if (error.message.includes("No module named 'faster_whisper'")) {
+        throw new Error(
+          "faster-whisper not installed. Install with: pip3 install faster-whisper"
+        );
+      }
+
+      throw new Error(`Failed to transcribe audio: ${error.message}`);
+    }
+  }
+
+  /**
+   * Convert audio to WAV format
+   */
+  async convertToWav(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .toFormat("wav")
+        .audioFrequency(16000) // Whisper works best with 16kHz
+        .audioChannels(1) // Mono
+        .on("end", () => resolve(outputPath))
+        .on("error", reject)
+        .save(outputPath);
+    });
   }
 
   /**
