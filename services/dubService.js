@@ -260,8 +260,8 @@ class DubService {
       const wavPath = audioFilePath.replace(/\.[^.]+$/, "_temp.wav");
       await this.convertToWav(audioFilePath, wavPath);
 
-      // Run faster-whisper via Python
-      const command = `python3 -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('base', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
+      // Run faster-whisper via Python (using 'tiny' model for Raspberry Pi)
+      const command = `python3 -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('tiny', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
 
       const { stdout, stderr } = await execAsync(command, {
         maxBuffer: 50 * 1024 * 1024, // 50MB buffer for long transcriptions
