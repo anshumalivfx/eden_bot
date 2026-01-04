@@ -527,16 +527,37 @@ class DubService {
    * @returns {Promise<{filepath: string, cleanup: Function}>}
    */
   async generateSpeechAsyncLabs(text, langCode, originalAudioPath) {
+    let trimmedAudioPath = null;
+    
     try {
       console.log(`🗣️ Creating voice clone and dubbing with Async Labs...`);
 
-      // Step 1: Create instant voice clone from audio sample
-      console.log(`📤 Creating voice clone from audio sample...`);
+      // Step 1: Extract first 5 seconds of audio for cloning
+      console.log(`✂️ Extracting first 5 seconds for voice cloning...`);
+      const timestamp = Date.now();
+      trimmedAudioPath = path.join(this.tempDir, `clone_sample_${timestamp}.wav`);
+      
+      await new Promise((resolve, reject) => {
+        ffmpeg(originalAudioPath)
+          .setDuration(5) // Only first 5 seconds
+          .toFormat('wav')
+          .on('end', () => {
+            console.log(`✅ Extracted 5-second sample`);
+            resolve();
+          })
+          .on('error', (err) => {
+            reject(new Error(`Audio trimming failed: ${err.message}`));
+          })
+          .save(trimmedAudioPath);
+      });
+
+      // Step 2: Create voice clone from 5-second sample
+      console.log(`📤 Creating voice clone from 5-second sample...`);
       
       const FormData = require("form-data");
       const form = new FormData();
-      form.append("audio", fs.createReadStream(originalAudioPath));
-      form.append("name", `clone_${Date.now()}`);
+      form.append("audio", fs.createReadStream(trimmedAudioPath));
+      form.append("name", `clone_${timestamp}`);
 
       const cloneResponse = await axios.post(
         `${this.asyncLabsBaseUrl}/voices/clone`,
@@ -552,10 +573,17 @@ class DubService {
 
       const voiceId = cloneResponse.data.id;
       console.log(`✅ Voice cloned successfully: ${voiceId}`);
+      
+      // Clean up trimmed audio sample
+      if (fs.existsSync(trimmedAudioPath)) {
+        fs.unlinkSync(trimmedAudioPath);
+        trimmedAudioPath = null;
+      }
 
       // Step 2: Generate speech with cloned voice
       console.log(`🎵 Generating speech with cloned voice...`);
 
+      const ttsTimestamp = Date.now();
       const ttsResponse = await axios.post(
         `${this.asyncLabsBaseUrl}/text_to_speech/streaming`,
         {
@@ -582,9 +610,8 @@ class DubService {
       );
 
       // Step 3: Convert raw PCM to OGG for WhatsApp
-      const timestamp = Date.now();
-      const rawPath = path.join(this.tempDir, `speech_${timestamp}.raw`);
-      const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
+      const rawPath = path.join(this.tempDir, `speech_${ttsTimestamp}.raw`);
+      const oggPath = path.join(this.tempDir, `speech_${ttsTimestamp}.ogg`);
 
       // Write raw PCM data
       fs.writeFileSync(rawPath, ttsResponse.data);
@@ -631,6 +658,13 @@ class DubService {
         },
       };
     } catch (error) {
+      // Clean up trimmed audio if it still exists
+      if (trimmedAudioPath && fs.existsSync(trimmedAudioPath)) {
+        try {
+          fs.unlinkSync(trimmedAudioPath);
+        } catch (e) {}
+      }
+      
       console.error(
         "Async Labs TTS error:",
         error.response?.data || error.message
