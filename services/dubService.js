@@ -535,21 +535,22 @@ class DubService {
       
       const FormData = require("form-data");
       const form = new FormData();
-      form.append("audio_file", fs.createReadStream(originalAudioPath));
-      form.append("voice_name", `clone_${Date.now()}`);
+      form.append("audio", fs.createReadStream(originalAudioPath));
+      form.append("name", `clone_${Date.now()}`);
 
       const cloneResponse = await axios.post(
-        `${this.asyncLabsBaseUrl}/voices/instant_clone`,
+        `${this.asyncLabsBaseUrl}/voices/clone`,
         form,
         {
           headers: {
             ...form.getHeaders(),
-            "X-Api-Key": this.asyncLabsApiKey,
+            "x-api-key": this.asyncLabsApiKey,
+            "version": "v1",
           },
         }
       );
 
-      const voiceId = cloneResponse.data.voice_id;
+      const voiceId = cloneResponse.data.id;
       console.log(`✅ Voice cloned successfully: ${voiceId}`);
 
       // Step 2: Generate speech with cloned voice
@@ -573,7 +574,8 @@ class DubService {
         {
           headers: {
             "Content-Type": "application/json",
-            "X-Api-Key": this.asyncLabsApiKey,
+            "x-api-key": this.asyncLabsApiKey,
+            "version": "v1",
           },
           responseType: "arraybuffer",
         }
