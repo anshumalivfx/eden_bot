@@ -528,60 +528,92 @@ class DubService {
    */
   async generateSpeechAsyncLabs(text, langCode, originalAudioPath) {
     let trimmedAudioPath = null;
+    let voiceId = null;
+    let usedCloning = false;
     
     try {
-      console.log(`🗣️ Creating voice clone and dubbing with Async Labs...`);
+      console.log(`🗣️ Dubbing with Async Labs...`);
 
-      // Step 1: Extract first 5 seconds of audio for cloning
-      console.log(`✂️ Extracting first 5 seconds for voice cloning...`);
-      const timestamp = Date.now();
-      trimmedAudioPath = path.join(this.tempDir, `clone_sample_${timestamp}.wav`);
-      
-      await new Promise((resolve, reject) => {
-        ffmpeg(originalAudioPath)
-          .setDuration(5) // Only first 5 seconds
-          .toFormat('wav')
-          .on('end', () => {
-            console.log(`✅ Extracted 5-second sample`);
-            resolve();
-          })
-          .on('error', (err) => {
-            reject(new Error(`Audio trimming failed: ${err.message}`));
-          })
-          .save(trimmedAudioPath);
-      });
+      // Try voice cloning if original audio is provided
+      if (originalAudioPath) {
+        try {
+          // Step 1: Extract first 5 seconds of audio for cloning
+          console.log(`✂️ Extracting first 5 seconds for voice cloning...`);
+          const timestamp = Date.now();
+          trimmedAudioPath = path.join(this.tempDir, `clone_sample_${timestamp}.wav`);
+          
+          await new Promise((resolve, reject) => {
+            ffmpeg(originalAudioPath)
+              .setDuration(5) // Only first 5 seconds
+              .toFormat('wav')
+              .on('end', () => {
+                console.log(`✅ Extracted 5-second sample`);
+                resolve();
+              })
+              .on('error', (err) => {
+                reject(new Error(`Audio trimming failed: ${err.message}`));
+              })
+              .save(trimmedAudioPath);
+          });
 
-      // Step 2: Create voice clone from 5-second sample
-      console.log(`📤 Creating voice clone from 5-second sample...`);
-      
-      const FormData = require("form-data");
-      const form = new FormData();
-      form.append("audio", fs.createReadStream(trimmedAudioPath));
-      form.append("name", `clone_${timestamp}`);
+          // Step 2: Create voice clone from 5-second sample
+          console.log(`📤 Creating voice clone from 5-second sample...`);
+          
+          const FormData = require("form-data");
+          const form = new FormData();
+          form.append("audio", fs.createReadStream(trimmedAudioPath));
+          form.append("name", `clone_${timestamp}`);
 
-      const cloneResponse = await axios.post(
-        `${this.asyncLabsBaseUrl}/voices/clone`,
-        form,
-        {
-          headers: {
-            ...form.getHeaders(),
-            "x-api-key": this.asyncLabsApiKey,
-            "version": "v1",
-          },
+          const cloneResponse = await axios.post(
+            `${this.asyncLabsBaseUrl}/voices/clone`,
+            form,
+            {
+              headers: {
+                ...form.getHeaders(),
+                "x-api-key": this.asyncLabsApiKey,
+                "version": "v1",
+              },
+            }
+          );
+
+          voiceId = cloneResponse.data.id;
+          usedCloning = true;
+          console.log(`✅ Voice cloned successfully: ${voiceId}`);
+          
+          // Clean up trimmed audio sample
+          if (fs.existsSync(trimmedAudioPath)) {
+            fs.unlinkSync(trimmedAudioPath);
+            trimmedAudioPath = null;
+          }
+        } catch (cloneError) {
+          // Clean up on clone failure
+          if (trimmedAudioPath && fs.existsSync(trimmedAudioPath)) {
+            try {
+              fs.unlinkSync(trimmedAudioPath);
+              trimmedAudioPath = null;
+            } catch (e) {}
+          }
+          
+          // Check if it's a quota/limit error
+          if (cloneError.response?.data?.detail?.error_code === 'VOICE_CLONE_LIMIT_EXCEEDED') {
+            console.warn(`⚠️ Voice cloning limit exceeded. Falling back to default voice.`);
+            voiceId = this.getAsyncLabsVoiceId(langCode);
+          } else {
+            // Re-throw other errors
+            throw cloneError;
+          }
         }
-      );
-
-      const voiceId = cloneResponse.data.id;
-      console.log(`✅ Voice cloned successfully: ${voiceId}`);
-      
-      // Clean up trimmed audio sample
-      if (fs.existsSync(trimmedAudioPath)) {
-        fs.unlinkSync(trimmedAudioPath);
-        trimmedAudioPath = null;
+      } else {
+        // No original audio, use default voice
+        voiceId = this.getAsyncLabsVoiceId(langCode);
       }
 
-      // Step 2: Generate speech with cloned voice
-      console.log(`🎵 Generating speech with cloned voice...`);
+      // Step 3: Generate speech with voice (cloned or default)
+      if (usedCloning) {
+        console.log(`🎵 Generating speech with cloned voice: ${voiceId}`);
+      } else {
+        console.log(`🎵 Generating speech with default voice: ${voiceId}`);
+      }
 
       const ttsTimestamp = Date.now();
       const ttsResponse = await axios.post(
