@@ -19,7 +19,7 @@ class DubService {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     // TTS Engine Selection (set in .env)
-    // Options: "piper" (free, local) or "elevenlabs" (paid, cloud)
+    // Options: "piper" (free, local), "elevenlabs" (paid, cloud), or "asynclabs" (paid, cloud)
     this.ttsEngine = process.env.DUB_TTS_ENGINE || "piper";
 
     // Transcription Engine Selection (set in .env)
@@ -32,6 +32,10 @@ class DubService {
     // ElevenLabs API setup
     this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     this.elevenLabsBaseUrl = "https://api.elevenlabs.io/v1";
+
+    // Async Labs API setup
+    this.asyncLabsApiKey = process.env.ASYNCLABS_API_KEY;
+    this.asyncLabsBaseUrl = "https://api.async.ai";
 
     // Piper TTS setup
     this.piperPath = path.join(__dirname, "../piper/piper/piper");
@@ -146,6 +150,44 @@ class DubService {
         })
         .save(outputPath);
     });
+  }
+
+  /**
+   * Async Labs voice ID mapping for different languages
+   * Using Async's pre-built multilingual voices
+   */
+  getAsyncLabsVoiceId(langCode) {
+    const voiceIds = {
+      en: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Default English voice
+      hi: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Multilingual voice supports Hindi
+      es: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Spanish
+      fr: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // French
+      de: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // German
+      it: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Italian
+      pt: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Portuguese
+      ru: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Russian
+      ja: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Japanese
+      ko: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Korean
+      zh: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Chinese
+      ar: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Arabic
+      tr: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Turkish
+      pl: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Polish
+      nl: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Dutch
+      sv: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Swedish
+      da: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Danish
+      fi: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Finnish
+      no: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Norwegian
+      cs: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Czech
+      el: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Greek
+      hu: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Hungarian
+      ro: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Romanian
+      uk: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Ukrainian
+      id: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Indonesian
+      ms: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Malay
+      th: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Thai
+      vi: "e0f39dc4-f691-4e78-bba5-5c636692cc04", // Vietnamese
+    };
+    return voiceIds[langCode] || voiceIds["en"];
   }
 
   /**
@@ -476,6 +518,136 @@ class DubService {
       throw new Error(`ElevenLabs dubbing failed: ${error.message}`);
     }
   }
+
+  /**
+   * Create instant voice clone and generate speech with Async Labs
+   * @param {string} text - Text to speak
+   * @param {string} langCode - Target language code
+   * @param {string} originalAudioPath - Path to original audio for voice cloning
+   * @returns {Promise<{filepath: string, cleanup: Function}>}
+   */
+  async generateSpeechAsyncLabs(text, langCode, originalAudioPath) {
+    try {
+      console.log(`🗣️ Creating voice clone and dubbing with Async Labs...`);
+
+      // Step 1: Create instant voice clone from audio sample
+      console.log(`📤 Creating voice clone from audio sample...`);
+      
+      const FormData = require("form-data");
+      const form = new FormData();
+      form.append("audio_file", fs.createReadStream(originalAudioPath));
+      form.append("voice_name", `clone_${Date.now()}`);
+
+      const cloneResponse = await axios.post(
+        `${this.asyncLabsBaseUrl}/voices/instant_clone`,
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            "X-Api-Key": this.asyncLabsApiKey,
+          },
+        }
+      );
+
+      const voiceId = cloneResponse.data.voice_id;
+      console.log(`✅ Voice cloned successfully: ${voiceId}`);
+
+      // Step 2: Generate speech with cloned voice
+      console.log(`🎵 Generating speech with cloned voice...`);
+
+      const ttsResponse = await axios.post(
+        `${this.asyncLabsBaseUrl}/text_to_speech/streaming`,
+        {
+          model_id: "asyncflow_v2.0",
+          transcript: text,
+          voice: {
+            mode: "id",
+            id: voiceId,
+          },
+          output_format: {
+            container: "raw",
+            encoding: "pcm_s16le",
+            sample_rate: 44100,
+          },
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Api-Key": this.asyncLabsApiKey,
+          },
+          responseType: "arraybuffer",
+        }
+      );
+
+      // Step 3: Convert raw PCM to OGG for WhatsApp
+      const timestamp = Date.now();
+      const rawPath = path.join(this.tempDir, `speech_${timestamp}.raw`);
+      const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
+
+      // Write raw PCM data
+      fs.writeFileSync(rawPath, ttsResponse.data);
+
+      console.log(`🔄 Converting to OGG for WhatsApp...`);
+
+      // Convert PCM to OGG using ffmpeg
+      await new Promise((resolve, reject) => {
+        ffmpeg()
+          .input(rawPath)
+          .inputFormat("s16le")
+          .inputOptions(["-ar 44100", "-ac 1"]) // 44.1kHz, mono
+          .toFormat("ogg")
+          .audioCodec("libopus")
+          .audioChannels(1)
+          .audioFrequency(16000) // 16kHz for voice
+          .audioBitrate("32k")
+          .on("end", () => {
+            console.log(`✅ Converted to OGG`);
+            // Clean up raw file
+            try {
+              fs.unlinkSync(rawPath);
+            } catch (e) {}
+            resolve();
+          })
+          .on("error", (err) => {
+            reject(new Error(`FFmpeg conversion failed: ${err.message}`));
+          })
+          .save(oggPath);
+      });
+
+      const stats = fs.statSync(oggPath);
+      console.log(
+        `✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`
+      );
+
+      return {
+        filepath: oggPath,
+        cleanup: () => {
+          if (fs.existsSync(oggPath)) {
+            fs.unlinkSync(oggPath);
+            console.log(`🗑️ Cleaned up: ${oggPath}`);
+          }
+        },
+      };
+    } catch (error) {
+      console.error(
+        "Async Labs TTS error:",
+        error.response?.data || error.message
+      );
+
+      if (error.response?.status === 401) {
+        throw new Error("Invalid Async Labs API key");
+      } else if (error.response?.status === 429) {
+        throw new Error("Async Labs rate limit exceeded");
+      } else if (error.response?.status === 400) {
+        const errorMsg =
+          error.response?.data?.detail?.message || "Bad request";
+        throw new Error(`Async Labs TTS failed: ${errorMsg}`);
+      }
+
+      throw new Error(`Async Labs TTS failed: ${error.message}`);
+    }
+  }
+
   /**
    * Generate speech using Piper TTS (local)
    * @param {string} text - Text to speak
@@ -577,7 +749,7 @@ class DubService {
    * Generate speech using selected TTS engine
    * @param {string} text - Text to speak
    * @param {string} langCode - Language code
-   * @param {string} originalAudioPath - Path to original audio (for ElevenLabs voice cloning)
+   * @param {string} originalAudioPath - Path to original audio (for voice cloning)
    * @returns {Promise<{filepath: string, cleanup: Function}>}
    */
   async generateSpeech(text, langCode, originalAudioPath = null) {
@@ -588,6 +760,17 @@ class DubService {
         );
       }
       return await this.generateSpeechElevenLabs(
+        text,
+        langCode,
+        originalAudioPath
+      );
+    } else if (this.ttsEngine === "asynclabs") {
+      if (!originalAudioPath) {
+        throw new Error(
+          "Original audio path required for Async Labs voice cloning"
+        );
+      }
+      return await this.generateSpeechAsyncLabs(
         text,
         langCode,
         originalAudioPath
@@ -644,6 +827,46 @@ class DubService {
           targetLanguage: targetLang,
           originalText: "(auto-transcribed by ElevenLabs)",
           translatedText: "(auto-translated by ElevenLabs)",
+        };
+      } else if (this.ttsEngine === "asynclabs") {
+        // Async Labs workflow: Manual transcription → translation → TTS with voice cloning
+        console.log(
+          "🎬 Using Async Labs (transcribe → translate → voice clone + TTS)..."
+        );
+
+        // Step 2: Transcribe audio to text
+        const transcription = await this.transcribeAudio(convertedFilePath);
+
+        // Step 3: Translate text to target language
+        const translatedText = await this.translateText(
+          transcription.text,
+          targetLang
+        );
+
+        // Step 4: Generate speech with voice cloning
+        const speech = await this.generateSpeechAsyncLabs(
+          translatedText,
+          targetLang,
+          convertedFilePath
+        );
+
+        return {
+          filepath: speech.filepath,
+          cleanup: () => {
+            speech.cleanup();
+            if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+              try {
+                fs.unlinkSync(convertedFilePath);
+                console.log(`🗑️ Cleaned up: ${convertedFilePath}`);
+              } catch (e) {
+                console.warn("Failed to clean up converted file:", e.message);
+              }
+            }
+          },
+          sourceLanguage: transcription.language,
+          targetLanguage: targetLang,
+          originalText: transcription.text,
+          translatedText: translatedText,
         };
       } else {
         // Piper workflow: Manual transcription → translation → synthesis
