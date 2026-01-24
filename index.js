@@ -692,8 +692,15 @@ async function connectToWhatsApp() {
             `👋 New member(s) joined group ${groupJid}: ${participants.join(", ")}`
           );
 
-          // Welcome message with group rules
-          const welcomeMessage = `Imp *Pls no sensitive/SEXUAL DISCUSSION here.*
+          // Extract numbers from JIDs for @mentions in text
+          const mentionTexts = participants
+            .map((jid) => `@${jid.split("@")[0]}`)
+            .join(" ");
+
+          // Welcome message with personalized greeting and group rules
+          const welcomeMessage = `HI ${mentionTexts} 
+
+Imp *Pls no sensitive/SEXUAL DISCUSSION here.*
 *No 18+ stickers/sometimes you can*
 *no ragebait*
 * Avoid saying negative things here *

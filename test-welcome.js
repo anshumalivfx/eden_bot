@@ -45,7 +45,9 @@ async function testWelcomeFeature() {
         console.log("   - Event: group-participants.update");
         console.log("   - Action: add");
         console.log("   - Mentions: New member JIDs");
-        console.log("\n📝 Welcome Message:");
+        console.log("\n📝 Welcome Message Format:");
+        console.log("   HI @user1 @user2 ");
+        console.log("   ");
         console.log("   Imp *Pls no sensitive/SEXUAL DISCUSSION here.*");
         console.log("   *No 18+ stickers/sometimes you can*");
         console.log("   *no ragebait*");
