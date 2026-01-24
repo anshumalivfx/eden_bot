@@ -700,6 +700,8 @@ async function connectToWhatsApp() {
           // Welcome message with personalized greeting and group rules
           const welcomeMessage = `HI ${mentionTexts} 
 
+*Please introduce yourself!* 👋
+
 Imp *Pls no sensitive/SEXUAL DISCUSSION here.*
 *No 18+ stickers/sometimes you can*
 *no ragebait*

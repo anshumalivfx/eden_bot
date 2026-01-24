@@ -48,6 +48,8 @@ async function testWelcomeFeature() {
         console.log("\n📝 Welcome Message Format:");
         console.log("   HI @user1 @user2 ");
         console.log("   ");
+        console.log("   *Please introduce yourself!* 👋");
+        console.log("   ");
         console.log("   Imp *Pls no sensitive/SEXUAL DISCUSSION here.*");
         console.log("   *No 18+ stickers/sometimes you can*");
         console.log("   *no ragebait*");
