@@ -394,16 +394,23 @@ class DubService {
    */
   async translateText(text, targetLang) {
     try {
-      console.log(`🌐 Translating to ${targetLang}...`);
+      console.log(`🌐 Translating from auto-detect to ${targetLang}...`);
+      console.log(`   Original: "${text.substring(0, 100)}..."`);
 
       const result = await googleTranslate.translate(text, { to: targetLang });
 
-      console.log(`✅ Translated: "${result.text.substring(0, 50)}..."`);
+      console.log(`   Translated: "${result.text.substring(0, 100)}..."`);
+      console.log(`   ✅ Translation complete`);
+
+      // Verify translation happened (text should change unless already in target language)
+      if (result.text.trim() === text.trim()) {
+        console.warn(`⚠️ Translation returned same text - might already be in ${targetLang}`);
+      }
 
       return result.text;
     } catch (error) {
       console.error("Error translating text:", error);
-      throw new Error("Failed to translate text");
+      throw new Error(`Failed to translate text: ${error.message}`);
     }
   }
 
@@ -904,18 +911,38 @@ class DubService {
 
         // Step 2: Transcribe audio to text
         const transcription = await this.transcribeAudio(convertedFilePath);
+        console.log(`📝 Transcribed (${transcription.language}): "${transcription.text.substring(0, 100)}..."`);
 
         // Step 3: Translate text to target language
         const translatedText = await this.translateText(
           transcription.text,
           targetLang
         );
+        console.log(`🌐 Translated to ${targetLang}: "${translatedText.substring(0, 100)}..."`);
 
-        // Step 4: Generate speech with voice cloning
+        // Check if source and target languages are supported by Async Labs
+        const asyncLabsSupportedLangs = ['en', 'en-US', 'fr', 'de', 'it', 'es', 'es-419', 'es-LATAM', 'pt', 'ar', 'ru', 'ro', 'ja', 'he', 'hy', 'tr', 'hi', 'zh', 'cmn'];
+        const normalizedTargetLang = targetLang.toLowerCase().split('-')[0]; // 'en-US' -> 'en'
+        const normalizedSourceLang = transcription.language.toLowerCase().split('-')[0];
+        
+        // Validate target language
+        if (!asyncLabsSupportedLangs.some(lang => lang.toLowerCase().startsWith(normalizedTargetLang))) {
+          throw new Error(`Target language '${targetLang}' not supported by Async Labs. Supported: ${asyncLabsSupportedLangs.join(', ')}`);
+        }
+
+        // Check if source audio language is supported for voice cloning
+        const sourceIsSupported = asyncLabsSupportedLangs.some(lang => lang.toLowerCase().startsWith(normalizedSourceLang));
+        
+        if (!sourceIsSupported) {
+          console.warn(`⚠️ Source language '${transcription.language}' not supported by Async Labs for voice cloning.`);
+          console.log(`   Using predefined voice instead of cloning.`);
+        }
+
+        // Step 4: Generate speech (with or without voice cloning based on source language)
         const speech = await this.generateSpeechAsyncLabs(
           translatedText,
           targetLang,
-          convertedFilePath
+          sourceIsSupported ? convertedFilePath : null // Only pass audio if source language is supported
         );
 
         return {

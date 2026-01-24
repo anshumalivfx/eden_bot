@@ -681,6 +681,40 @@ async function connectToWhatsApp() {
     // Handle credentials update
     sock.ev.on("creds.update", saveCreds);
 
+    // Handle group participant updates (welcome new members)
+    sock.ev.on("group-participants.update", async (event) => {
+      try {
+        const { id: groupJid, participants, action } = event;
+
+        // Only handle when participants are added (join)
+        if (action === "add") {
+          console.log(
+            `👋 New member(s) joined group ${groupJid}: ${participants.join(", ")}`
+          );
+
+          // Welcome message with group rules
+          const welcomeMessage = `Imp *Pls no sensitive/SEXUAL DISCUSSION here.*
+*No 18+ stickers/sometimes you can*
+*no ragebait*
+* Avoid saying negative things here *
+Happy good vibes only ✨
+No DMs anyone without consent guys
+
+Violators will be shamed publicly`;
+
+          // Send welcome message mentioning all new members
+          await sock.sendMessage(groupJid, {
+            text: welcomeMessage,
+            mentions: participants, // Mention all new members
+          });
+
+          console.log(`✅ Welcome message sent to ${groupJid}`);
+        }
+      } catch (error) {
+        console.error("Error handling group participant update:", error);
+      }
+    });
+
     // Handle message history sync from WhatsApp
     sock.ev.on("messaging-history.set", ({ messages, chats, isLatest }) => {
       console.log(
