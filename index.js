@@ -1461,7 +1461,7 @@ Violators will be shamed publicly`;
             );
             console.log(
               `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}${
-                niceUser ? " [SPECIAL USER 💕]" : ""
+                niceUser ? " [SPECIAL USER]" : ""
               }`,
             );
 
@@ -1577,13 +1577,13 @@ Violators will be shamed publicly`;
                   : messageText;
 
                 const context = imageBase64
-                  ? `${contextPrefix}${senderName} sent you a photo${niceUser ? " (they're special to you! 💕)" : ""}. Look at it and respond warmly! ${niceUser ? "Be extra sweet and caring!" : "Be friendly and genuine!"} If it's a selfie, give honest, kind compliments ✨`
-                  : `${contextPrefix}${senderName}: ${messageText}. Respond naturally and warmly ${niceUser ? "- they're special to you! 💕" : "😊"}`;
+                  ? `${contextPrefix}${senderName} sent you a photo${niceUser ? " (they're special to you)" : ""}. Look at it and respond warmly! ${niceUser ? "Be extra sweet and caring!" : "Be friendly and genuine!"} If it's a selfie, give honest, kind compliments`
+                  : `${contextPrefix}${senderName}: ${messageText}. Respond naturally and warmly ${niceUser ? "- they're special to you" : ""}`;
 
                 console.log(
                   `🎭 Context mode: ${
                     niceUser
-                      ? "SPECIAL USER 💕 (extra caring)"
+                      ? "SPECIAL USER (extra caring)"
                       : "REGULAR (friendly)"
                   } for ${senderName}`,
                 );
