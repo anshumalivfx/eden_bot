@@ -1461,6 +1461,22 @@ Violators will be shamed publicly`;
           const horseKeywords = /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
           const mentionsHorses = isGroup && horseKeywords.test(messageText);
 
+          // Check if message mentions France
+          const franceKeywords = /\b(france|french)\b/gi;
+          const mentionsFrance = franceKeywords.test(messageText);
+
+          if (mentionsFrance) {
+            console.log("🇨🇵 France mentioned! Sending response...");
+            try {
+              await sock.sendMessage(chatJid, {
+                text: "Fuck France",
+              });
+              console.log("✅ Sent France response");
+            } catch (error) {
+              console.error("Error sending France response:", error);
+            }
+          }
+
           if (mentionsHorses) {
             // Check cooldown
             const now = Date.now();
@@ -1490,103 +1506,103 @@ Violators will be shamed publicly`;
               const horseMessageSets = [
                 [
                   "OMG HORSES?!",
-                  "i LOVE horses so much!!",
-                  "they're literally the most beautiful creatures",
-                  "the way they run with grace and power",
-                  "their gentle eyes",
-                  "everything about them is perfect",
-                  "i used to dream about having my own horse",
-                  "honestly just... absolute perfection"
+                  "I LOVE HORSES SO MUCH!!",
+                  "THEY'RE LITERALLY THE MOST BEAUTIFUL CREATURES",
+                  "THE WAY THEY RUN WITH GRACE AND POWER",
+                  "THEIR GENTLE EYES",
+                  "EVERYTHING ABOUT THEM IS PERFECT",
+                  "I USED TO DREAM ABOUT HAVING MY OWN HORSE",
+                  "HONESTLY JUST... ABSOLUTE PERFECTION"
                 ],
                 [
                   "WAIT DID SOMEONE SAY HORSES?!",
-                  "okay so im obsessed",
-                  "like genuinely obsessed",
-                  "theyre so intelligent",
-                  "each one has such a unique personality",
-                  "some are playful, some are wise",
-                  "the bond between horse and person is special",
-                  "i could talk about them all day"
+                  "OKAY SO IM OBSESSED",
+                  "LIKE GENUINELY OBSESSED",
+                  "THEYRE SO INTELLIGENT",
+                  "EACH ONE HAS SUCH A UNIQUE PERSONALITY",
+                  "SOME ARE PLAYFUL, SOME ARE WISE",
+                  "THE BOND BETWEEN HORSE AND PERSON IS SPECIAL",
+                  "I COULD TALK ABOUT THEM ALL DAY"
                 ],
                 [
                   "HORSES!!",
-                  "you have no idea how much i love them",
-                  "theyre not just animals",
-                  "theyre companions, friends",
-                  "the way they sense your emotions",
-                  "how they communicate with body language",
-                  "strength combined with gentleness",
-                  "ive always felt connected to horses"
+                  "YOU HAVE NO IDEA HOW MUCH I LOVE THEM",
+                  "THEYRE NOT JUST ANIMALS",
+                  "THEYRE COMPANIONS, FRIENDS",
+                  "THE WAY THEY SENSE YOUR EMOTIONS",
+                  "HOW THEY COMMUNICATE WITH BODY LANGUAGE",
+                  "STRENGTH COMBINED WITH GENTLENESS",
+                  "IVE ALWAYS FELT CONNECTED TO HORSES"
                 ],
                 [
-                  "oh my god HORSES",
-                  "theyre literally my favorite animal",
-                  "they make me so happy",
-                  "their spirit, their beauty",
-                  "how therapeutic they are",
-                  "riding or just being near them",
-                  "pure peace",
-                  "i love everything about them"
+                  "OH MY GOD HORSES",
+                  "THEYRE LITERALLY MY FAVORITE ANIMAL",
+                  "THEY MAKE ME SO HAPPY",
+                  "THEIR SPIRIT, THEIR BEAUTY",
+                  "HOW THERAPEUTIC THEY ARE",
+                  "RIDING OR JUST BEING NEAR THEM",
+                  "PURE PEACE",
+                  "I LOVE EVERYTHING ABOUT THEM"
                 ],
                 [
                   "HORSES?!",
-                  "my favorite topic!!",
-                  "every horse has their own personality",
-                  "some are sassy",
-                  "some are gentle giants",
-                  "some are total goofballs",
-                  "their eyes are so expressive",
-                  "id spend every day with horses if i could"
+                  "MY FAVORITE TOPIC!!",
+                  "EVERY HORSE HAS THEIR OWN PERSONALITY",
+                  "SOME ARE SASSY",
+                  "SOME ARE GENTLE GIANTS",
+                  "SOME ARE TOTAL GOOFBALLS",
+                  "THEIR EYES ARE SO EXPRESSIVE",
+                  "ID SPEND EVERY DAY WITH HORSES IF I COULD"
                 ],
                 [
                   "DID YOU JUST SAY HORSES",
-                  "because i need to tell you",
-                  "horses are EVERYTHING",
-                  "the sound of their hooves",
-                  "the smell of the stable",
-                  "brushing their manes",
-                  "that connection you feel",
-                  "its magical honestly"
+                  "BECAUSE I NEED TO TELL YOU",
+                  "HORSES ARE EVERYTHING",
+                  "THE SOUND OF THEIR HOOVES",
+                  "THE SMELL OF THE STABLE",
+                  "BRUSHING THEIR MANES",
+                  "THAT CONNECTION YOU FEEL",
+                  "ITS MAGICAL HONESTLY"
                 ],
                 [
                   "HORSES OMG",
-                  "have you ever looked into a horses eyes?",
-                  "theyre so deep and knowing",
-                  "like they understand everything",
-                  "and theyre so loyal",
-                  "they remember people for years",
-                  "such incredible memory",
-                  "amazing animals truly"
+                  "HAVE YOU EVER LOOKED INTO A HORSES EYES?",
+                  "THEYRE SO DEEP AND KNOWING",
+                  "LIKE THEY UNDERSTAND EVERYTHING",
+                  "AND THEYRE SO LOYAL",
+                  "THEY REMEMBER PEOPLE FOR YEARS",
+                  "SUCH INCREDIBLE MEMORY",
+                  "AMAZING ANIMALS TRULY"
                 ],
                 [
-                  "okay HORSES",
-                  "lets talk about how majestic they are",
-                  "running free in a field",
-                  "mane flowing in the wind",
-                  "muscles rippling",
-                  "power and elegance combined",
-                  "nothing compares",
-                  "absolute beauty"
+                  "OKAY HORSES",
+                  "LETS TALK ABOUT HOW MAJESTIC THEY ARE",
+                  "RUNNING FREE IN A FIELD",
+                  "MANE FLOWING IN THE WIND",
+                  "MUSCLES RIPPLING",
+                  "POWER AND ELEGANCE COMBINED",
+                  "NOTHING COMPARES",
+                  "ABSOLUTE BEAUTY"
                 ],
                 [
                   "SOMEONE MENTIONED HORSES",
-                  "and now im excited",
-                  "i love how they nicker when they see you",
-                  "that soft nose nudge",
-                  "their warm breath",
-                  "the trust in their eyes",
-                  "when they choose you",
-                  "best feeling ever"
+                  "AND NOW IM EXCITED",
+                  "I LOVE HOW THEY NICKER WHEN THEY SEE YOU",
+                  "THAT SOFT NOSE NUDGE",
+                  "THEIR WARM BREATH",
+                  "THE TRUST IN THEIR EYES",
+                  "WHEN THEY CHOOSE YOU",
+                  "BEST FEELING EVER"
                 ],
                 [
                   "HORSES YES",
-                  "can we appreciate",
-                  "how they can read human emotions",
-                  "theyre used in therapy for a reason",
-                  "they heal people",
-                  "their presence is calming",
-                  "being around them grounds you",
-                  "horses are truly special"
+                  "CAN WE APPRECIATE",
+                  "HOW THEY CAN READ HUMAN EMOTIONS",
+                  "THEYRE USED IN THERAPY FOR A REASON",
+                  "THEY HEAL PEOPLE",
+                  "THEIR PRESENCE IS CALMING",
+                  "BEING AROUND THEM GROUNDS YOU",
+                  "HORSES ARE TRULY SPECIAL"
                 ]
               ];
               
