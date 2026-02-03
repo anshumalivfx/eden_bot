@@ -76,7 +76,7 @@ class ImageService {
       }
 
       console.log(
-        `🎨 Generating image with ${apiProvider}: "${enhancedPrompt}"`
+        `🎨 Generating image with ${apiProvider}: "${enhancedPrompt}"`,
       );
 
       let imageBuffer;
@@ -154,7 +154,7 @@ class ImageService {
       const url = `${this.baseUrl}/${encodedPrompt}?${queryParams.toString()}`;
 
       console.log(
-        `🎨 Generating with model: ${model}, size: ${width}x${height}`
+        `🎨 Generating with model: ${model}, size: ${width}x${height}`,
       );
 
       const response = await axios.get(url, {
@@ -191,7 +191,9 @@ class ImageService {
         finalPrompt = `${finalPrompt}, highly detailed, professional quality, sharp focus`;
       }
 
-      console.log(`📝 Text-to-Image [${provider}]: "${finalPrompt.substring(0, 80)}..."`);
+      console.log(
+        `📝 Text-to-Image [${provider}]: "${finalPrompt.substring(0, 80)}..."`,
+      );
 
       // Select provider
       let buffer;
@@ -216,7 +218,7 @@ class ImageService {
       fs.writeFileSync(filepath, buffer);
 
       console.log(
-        `✅ Image generated! Size: ${(buffer.length / 1024).toFixed(2)} KB`
+        `✅ Image generated! Size: ${(buffer.length / 1024).toFixed(2)} KB`,
       );
 
       return {
@@ -254,7 +256,7 @@ class ImageService {
       } = options;
 
       console.log(
-        `🔄 Image-to-Image transformation: "${prompt.substring(0, 60)}..."`
+        `🔄 Image-to-Image transformation: "${prompt.substring(0, 60)}..."`,
       );
 
       // Get image buffer
@@ -299,7 +301,7 @@ class ImageService {
       }
 
       console.log(
-        `✅ Image transformed! Size: ${(buffer.length / 1024).toFixed(2)} KB`
+        `✅ Image transformed! Size: ${(buffer.length / 1024).toFixed(2)} KB`,
       );
 
       return {
@@ -343,7 +345,7 @@ class ImageService {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === "your_gemini_api_key_here") {
       throw new Error(
-        "Gemini API key not configured. Get free key from https://aistudio.google.com/apikey"
+        "Gemini API key not configured. Get free key from https://aistudio.google.com/apikey",
       );
     }
 
@@ -374,12 +376,12 @@ class ImageService {
             "Content-Type": "application/json",
           },
           timeout: 60000,
-        }
+        },
       );
 
       // Gemini 2.0 Flash returns inline image data
       const imageData = response.data?.candidates?.[0]?.content?.parts?.find(
-        (part) => part.inlineData
+        (part) => part.inlineData,
       );
 
       if (!imageData || !imageData.inlineData) {
@@ -392,11 +394,11 @@ class ImageService {
     } catch (error) {
       if (error.response?.status === 429) {
         throw new Error(
-          "Gemini rate limit reached. Try again in a few minutes or use Pollinations instead."
+          "Gemini rate limit reached. Try again in a few minutes or use Pollinations instead.",
         );
       } else if (error.response?.status === 403) {
         throw new Error(
-          "Invalid Gemini API key. Get a new one from https://aistudio.google.com/apikey"
+          "Invalid Gemini API key. Get a new one from https://aistudio.google.com/apikey",
         );
       }
       throw new Error(`Gemini API error: ${error.message}`);
@@ -410,7 +412,7 @@ class ImageService {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "Hugging Face API key not found in environment variables"
+        "Hugging Face API key not found in environment variables",
       );
     }
 
@@ -425,7 +427,7 @@ class ImageService {
           },
           responseType: "arraybuffer",
           timeout: 30000,
-        }
+        },
       );
 
       return Buffer.from(response.data);

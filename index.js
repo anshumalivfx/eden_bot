@@ -18,15 +18,13 @@ const MessageStore = require("./database/messageStore");
 require("dotenv").config();
 
 // Load nice users configuration
-let niceUsersConfig = { niceUsers: [], meanUsers: [] };
+let niceUsersConfig = { niceUsers: [] };
 const niceUsersPath = path.join(__dirname, "nice-users.json");
 try {
   const data = fs.readFileSync(niceUsersPath, "utf8");
   niceUsersConfig = JSON.parse(data);
   console.log(
-    `✅ Loaded ${niceUsersConfig.niceUsers.length} nice users and ${
-      niceUsersConfig.meanUsers?.length || 0
-    } mean users from config`
+    `✅ Loaded ${niceUsersConfig.niceUsers.length} special users from config`,
   );
 } catch (error) {
   console.log("⚠️ No nice-users.json found, using default behavior");
@@ -47,37 +45,11 @@ function isNiceUser(jid) {
   return result;
 }
 
-// Helper to check if user should be treated extra mean
-function isMeanUser(jid) {
-  if (!jid || !niceUsersConfig.meanUsers) return false;
-  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
-  const result = niceUsersConfig.meanUsers.some((user) => {
-    const configNumber = user.jid.replace(/[^0-9]/g, "");
-    return (
-      numberPart.includes(configNumber) || configNumber.includes(numberPart)
-    );
-  });
-  console.log(`🔍 Mean user check: ${jid} -> ${numberPart} -> ${result}`);
-  return result;
-}
-
 // Helper to get nice user info
 function getNiceUserInfo(jid) {
   if (!jid) return null;
   const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
   return niceUsersConfig.niceUsers.find((user) => {
-    const configNumber = user.jid.replace(/[^0-9]/g, "");
-    return (
-      numberPart.includes(configNumber) || configNumber.includes(numberPart)
-    );
-  });
-}
-
-// Helper to get mean user info
-function getMeanUserInfo(jid) {
-  if (!jid || !niceUsersConfig.meanUsers) return null;
-  const numberPart = jid.split("@")[0].replace(/[^0-9]/g, "");
-  return niceUsersConfig.meanUsers.find((user) => {
     const configNumber = user.jid.replace(/[^0-9]/g, "");
     return (
       numberPart.includes(configNumber) || configNumber.includes(numberPart)
@@ -113,7 +85,7 @@ function addMessageToContext(
   message,
   isBot = false,
   messageId = null,
-  senderJid = null
+  senderJid = null,
 ) {
   messageStore.addMessage(chatId, sender, message, isBot, messageId, senderJid);
 }
@@ -127,7 +99,7 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
   console.log(
     `\n💬 Retrieved ${contextMessages.length} context messages for ${
       targetUser || "all users"
-    }:`
+    }:`,
   );
   contextMessages.forEach((m, i) => {
     // Safety check for undefined message
@@ -136,7 +108,7 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
     console.log(
       `   ${i + 1}. ${m.is_bot ? "Eden" : m.sender_name}: ${preview}${
         messageText.length > 60 ? "..." : ""
-      }`
+      }`,
     );
   });
   console.log("");
@@ -144,7 +116,7 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
   return contextMessages
     .map(
       (m) =>
-        `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`
+        `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`,
     )
     .join("\n");
 }
@@ -249,7 +221,7 @@ class MessageWrapper {
     await this.sock.sendMessage(
       this.groupId || this.userId,
       { text, mentions },
-      options
+      options,
     );
   }
 
@@ -462,7 +434,7 @@ function isReplyToBot(message) {
     const quotedParticipant = contextInfo.participant;
 
     console.log(
-      `🔍 Reply check: stanzaId=${quotedKey}, participant=${quotedParticipant}, botId=${botId}, botLid=${botLid}`
+      `🔍 Reply check: stanzaId=${quotedKey}, participant=${quotedParticipant}, botId=${botId}, botLid=${botLid}`,
     );
 
     // Method 1: Check if quoted participant matches bot IDs
@@ -479,7 +451,7 @@ function isReplyToBot(message) {
     const chatId = message.key.remoteJid;
     const recentMessages = messageStore.getContext(chatId, null, 50);
     const quotedFromBot = recentMessages.some(
-      (m) => m.is_bot && m.message_id === quotedKey
+      (m) => m.is_bot && m.message_id === quotedKey,
     );
 
     if (quotedFromBot) {
@@ -606,7 +578,7 @@ async function connectToWhatsApp() {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(
           state.keys,
-          pino({ level: "silent" })
+          pino({ level: "silent" }),
         ),
       },
       printQRInTerminal: false,
@@ -631,7 +603,7 @@ async function connectToWhatsApp() {
         console.log("\n🔐 QR Code received! Scan it with WhatsApp:\n");
         qrcode.generate(qr, { small: true });
         console.log(
-          "\n📱 Open WhatsApp → Settings → Linked Devices → Link a Device"
+          "\n📱 Open WhatsApp → Settings → Linked Devices → Link a Device",
         );
         console.log("⏰ QR code will refresh automatically if not scanned\n");
       }
@@ -643,7 +615,7 @@ async function connectToWhatsApp() {
         console.log("❌ Connection closed");
         console.log(
           "   Error:",
-          lastDisconnect?.error?.message || "Unknown error"
+          lastDisconnect?.error?.message || "Unknown error",
         );
         console.log("   Status Code:", statusCode);
         console.log("   Should Reconnect:", shouldReconnect);
@@ -689,7 +661,7 @@ async function connectToWhatsApp() {
         // Only handle when participants are added (join)
         if (action === "add") {
           console.log(
-            `👋 New member(s) joined group ${groupJid}: ${participants.join(", ")}`
+            `👋 New member(s) joined group ${groupJid}: ${participants.join(", ")}`,
           );
 
           // Extract numbers from JIDs for @mentions in text
@@ -727,7 +699,7 @@ Violators will be shamed publicly`;
     // Handle message history sync from WhatsApp
     sock.ev.on("messaging-history.set", ({ messages, chats, isLatest }) => {
       console.log(
-        `📥 Received message history: ${messages.length} messages from ${chats.length} chats (latest: ${isLatest})`
+        `📥 Received message history: ${messages.length} messages from ${chats.length} chats (latest: ${isLatest})`,
       );
 
       // Store messages in SQLite database
@@ -760,7 +732,7 @@ Violators will be shamed publicly`;
             content,
             isBot,
             messageId,
-            senderJid
+            senderJid,
           );
         }
       }
@@ -770,7 +742,7 @@ Violators will be shamed publicly`;
 
       const stats = messageStore.getStats();
       console.log(
-        `💾 Message store: ${stats.totalMessages} messages in ${stats.totalChats} chats`
+        `💾 Message store: ${stats.totalMessages} messages in ${stats.totalChats} chats`,
       );
     });
 
@@ -819,12 +791,12 @@ Violators will be shamed publicly`;
                 content,
                 false,
                 messageId,
-                senderJid
+                senderJid,
               );
             }
           }
         }
-      }
+      },
     );
 
     // Handle contact updates - Baileys emits this when it receives contact info
@@ -843,7 +815,7 @@ Violators will be shamed publicly`;
             contactNameCache.set(update.phoneNumber, displayName);
           }
           console.log(
-            `📇 Contact updated: ${displayName} (${update.id || update.lid})`
+            `📇 Contact updated: ${displayName} (${update.id || update.lid})`,
           );
         }
       }
@@ -880,12 +852,12 @@ Violators will be shamed publicly`;
               try {
                 const groupMetadata = await sock.groupMetadata(chatJid);
                 const participant = groupMetadata.participants.find(
-                  (p) => p.lid === senderJid
+                  (p) => p.lid === senderJid,
                 );
                 if (participant && participant.id) {
                   contactNameCache.set(participant.id, message.pushName);
                   console.log(
-                    `💾 Also cached for phone JID: ${participant.id}`
+                    `💾 Also cached for phone JID: ${participant.id}`,
                   );
                 }
               } catch (e) {
@@ -898,7 +870,7 @@ Violators will be shamed publicly`;
           if (messageText.startsWith(COMMAND_PREFIX)) {
             console.log(`📨 Command received: ${messageText}`);
             console.log(
-              `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}`
+              `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}`,
             );
 
             const command = messageText.slice(COMMAND_PREFIX.length).trim();
@@ -907,7 +879,7 @@ Violators will be shamed publicly`;
             const msg = new MessageWrapper(
               message,
               sock,
-              BOT_NAME.toLowerCase()
+              BOT_NAME.toLowerCase(),
             );
 
             // Log the message structure for debugging
@@ -948,7 +920,7 @@ Violators will be shamed publicly`;
                 return messageStore.getContext(
                   msg.groupId || msg.userId,
                   null,
-                  limit
+                  limit,
                 );
               },
               getQuotedMessage: async () => {
@@ -989,7 +961,7 @@ Violators will be shamed publicly`;
                         const buffer = await downloadMediaMessage(
                           quotedMsgObj,
                           "buffer",
-                          {}
+                          {},
                         );
 
                         let mimetype = "application/octet-stream";
@@ -1052,7 +1024,7 @@ Violators will be shamed publicly`;
                     const groupMetadata = await sock.groupMetadata(chatJid);
                     groupParticipants = groupMetadata.participants || [];
                     console.log(
-                      `👥 Group has ${groupParticipants.length} participants`
+                      `👥 Group has ${groupParticipants.length} participants`,
                     );
                   } catch (e) {
                     console.error("Error fetching group metadata:", e.message);
@@ -1070,7 +1042,7 @@ Violators will be shamed publicly`;
                     if (isLid && groupParticipants.length > 0) {
                       // Find participant with matching LID
                       const participant = groupParticipants.find(
-                        (p) => p.lid === jid
+                        (p) => p.lid === jid,
                       );
                       if (participant) {
                         // Get the phone number if available
@@ -1181,7 +1153,7 @@ Violators will be shamed publicly`;
                   const buffer = await downloadMediaMessage(
                     message,
                     "buffer",
-                    {}
+                    {},
                   );
 
                   // Determine mimetype
@@ -1216,7 +1188,7 @@ Violators will be shamed publicly`;
                   await sock.sendMessage(
                     chatJid,
                     { text: content },
-                    { quoted: quotedMsg }
+                    { quoted: quotedMsg },
                   );
                 } else if (content?.image) {
                   // Handle image (like thumbnail)
@@ -1226,7 +1198,7 @@ Violators will be shamed publicly`;
                       image: content.image,
                       caption: content.caption || "",
                     },
-                    { quoted: quotedMsg }
+                    { quoted: quotedMsg },
                   );
                 } else if (content?.sticker) {
                   // Handle sticker with metadata
@@ -1237,7 +1209,7 @@ Violators will be shamed publicly`;
                       packname: content.packname || "Fuck Off",
                       author: content.author || "Eden's Sarcasm 😈",
                     },
-                    { quoted: quotedMsg }
+                    { quoted: quotedMsg },
                   );
                 } else if (content?.audio) {
                   // Handle audio
@@ -1247,7 +1219,7 @@ Violators will be shamed publicly`;
                       audio: content.audio,
                       mimetype: content.mimetype || "audio/mpeg",
                     },
-                    { quoted: quotedMsg }
+                    { quoted: quotedMsg },
                   );
                 } else if (content?.text && content?.media) {
                   // Handle interaction with text and media (like GIF)
@@ -1281,14 +1253,14 @@ Violators will be shamed publicly`;
                         image: content.media.image,
                         caption: content.text,
                       },
-                      { quoted: quotedMsg }
+                      { quoted: quotedMsg },
                     );
                   } else {
                     // For other media types, send as separate messages
                     await sock.sendMessage(
                       chatJid,
                       { text: content.text },
-                      { quoted: quotedMsg }
+                      { quoted: quotedMsg },
                     );
                     await sock.sendMessage(chatJid, content.media, {
                       quoted: quotedMsg,
@@ -1300,7 +1272,7 @@ Violators will be shamed publicly`;
                     await sock.sendMessage(
                       chatJid,
                       { text: content.text },
-                      { quoted: quotedMsg }
+                      { quoted: quotedMsg },
                     );
                   }
                   await sock.sendMessage(chatJid, content.media, {
@@ -1355,11 +1327,10 @@ Violators will be shamed publicly`;
             }
 
             try {
-              // Check if sender is a nice or mean user
+              // Check if sender is a special user
               const senderJid =
                 message.key.participant || message.key.remoteJid;
               const niceUser = isNiceUser(senderJid);
-              const meanUser = isMeanUser(senderJid);
 
               const response = await commandHandler.handleCommand(
                 command,
@@ -1368,10 +1339,9 @@ Violators will be shamed publicly`;
                   senderName,
                   senderJid,
                   isOwner: owner,
-                  mood: "sarcastic",
+                  mood: "friendly",
                   isNiceUser: niceUser,
-                  isMeanUser: meanUser,
-                }
+                },
               );
 
               if (response) {
@@ -1429,7 +1399,7 @@ Violators will be shamed publicly`;
                       mentions:
                         mentionJids.length > 0 ? mentionJids : undefined,
                     },
-                    { quoted: quotedMsg }
+                    { quoted: quotedMsg },
                   );
                 }
                 console.log(`✅ Command response sent\n`);
@@ -1448,7 +1418,7 @@ Violators will be shamed publicly`;
                   {
                     text: "Ugh, something went wrong. Even I can't mess up this badly. Try again later. 🙄",
                   },
-                  { quoted: { key: message.key, message: message.message } }
+                  { quoted: { key: message.key, message: message.message } },
                 );
               } catch (sendError) {
                 console.error("❌ Failed to send error message:", sendError);
@@ -1457,12 +1427,10 @@ Violators will be shamed publicly`;
             continue;
           }
 
-          // Check if sender is a nice or mean user (special handling)
+          // Check if sender is a special user
           const senderJid = message.key.participant || message.key.remoteJid;
           const niceUser = isNiceUser(senderJid);
           const niceUserInfo = getNiceUserInfo(senderJid);
-          const meanUser = isMeanUser(senderJid);
-          const meanUserInfo = getMeanUserInfo(senderJid);
 
           // Store incoming message in context with senderJid
           addMessageToContext(
@@ -1471,7 +1439,7 @@ Violators will be shamed publicly`;
             messageText,
             false,
             null,
-            senderJid
+            senderJid,
           );
 
           // Check if bot was mentioned or message is a reply to bot
@@ -1481,20 +1449,20 @@ Violators will be shamed publicly`;
           console.log(
             `📬 Message check: mentioned=${mentioned}, repliedTo=${repliedTo}, text="${messageText.substring(
               0,
-              50
-            )}"`
+              50,
+            )}"`,
           );
 
           if (mentioned || repliedTo) {
             // Always respond when mentioned or replied to (no probability check)
 
             console.log(
-              `🎯 ${mentioned ? "Mention" : "Reply"} detected: ${messageText}`
+              `🎯 ${mentioned ? "Mention" : "Reply"} detected: ${messageText}`,
             );
             console.log(
               `👤 From: ${senderName} ${isGroup ? "(Group)" : "(DM)"}${
-                meanUser ? " [MEAN USER - SAVAGE MODE]" : ""
-              }`
+                niceUser ? " [SPECIAL USER 💕]" : ""
+              }`,
             );
 
             // Sometimes react to the message first
@@ -1502,9 +1470,7 @@ Violators will be shamed publicly`;
               // Different reactions for different user types
               const reactions = niceUser
                 ? ["😊", "💕", "😘", "🥰", "✨", "💖"]
-                : meanUser
-                ? ["🖕", "💀", "🤡", "😒", "🙄", "🤢"]
-                : ["💀", "🙄", "😏", "💅", "👀"];
+                : ["😊", "😂", "👀", "✨", "💯", "🎉"];
               const randomReaction =
                 reactions[Math.floor(Math.random() * reactions.length)];
               try {
@@ -1516,8 +1482,8 @@ Violators will be shamed publicly`;
                 });
                 console.log(
                   `😊 Reacted with ${randomReaction}${
-                    niceUser ? ` (nice user: ${niceUserInfo?.name})` : ""
-                  }`
+                    niceUser ? ` (special user: ${niceUserInfo?.name})` : ""
+                  }`,
                 );
               } catch (error) {
                 console.error("Error reacting to message:", error);
@@ -1539,7 +1505,7 @@ Violators will be shamed publicly`;
                   const buffer = await downloadMediaMessage(
                     message,
                     "buffer",
-                    {}
+                    {},
                   );
                   imageBase64 = buffer.toString("base64");
                   console.log("✅ Image downloaded and converted to base64");
@@ -1558,7 +1524,7 @@ Violators will be shamed publicly`;
                 const conversationHistory = getConversationContext(
                   chatJid,
                   senderName,
-                  5
+                  5,
                 );
                 const contextPrefix = conversationHistory
                   ? `Recent conversation with ${senderName}:\n${conversationHistory}\n\nNow responding to: `
@@ -1566,39 +1532,21 @@ Violators will be shamed publicly`;
 
                 // Generate response based on reply
                 const context = imageBase64
-                  ? niceUser
-                    ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
-                    : meanUser
-                    ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) sent pic. YOU HATE THIS GUY. be EXTRA savage. roast him HARD with HEAVY swearing (fuck, shit, bitch, ass, damn). still answer if its a question but with MAXIMUM attitude. examples: 'bruh what the fuck is this shit', 'are you fucking serious rn', 'bitch please this is garbage', 'damn ${senderName} you look like shit lmao'. be BRUTAL but funny`
-                    : `${contextPrefix}${senderName} replied to you with an image. look at it and respond like a real person. be playful and genuine, not harsh. if its personal (like selfie), be encouraging. sound natural. ${
-                        isGroup
-                          ? "everyones watching in the group"
-                          : "just you two"
-                      }. NEVER use quotation marks`
-                  : niceUser
-                  ? `${contextPrefix}${senderName}: ${messageText}. you said: ${quotedText}. respond like you text friends. be nice and helpful. NO swearing`
-                  : meanUser
-                  ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) said: ${messageText}. YOU HATE THIS GUY. be EXTRA mean with HEAVY swearing (fuck, shit, bitch, ass, bastard, damn). if its a question ANSWER IT but with SAVAGE roasts. examples: 'bitch the answer is xyz now fuck off', 'its called abc you dumb fuck', 'damn ${senderName} use your brain its shit but try'. BRUTAL + helpful = savage af`
-                  : owner
-                  ? `${contextPrefix}${senderName} said: ${messageText}. be sarcastic. 5-10 words. examples: 'bruh what', 'lol ok', 'wtf dude'. swear sometimes`
-                  : `${contextPrefix}${senderName} said: ${messageText}. ${
-                      isGroup ? "group" : "dm"
-                    }. sarcastic. 5-10 words. examples: 'lol ok', 'cool story', 'and?'. swear if annoyed`;
+                  ? `${contextPrefix}${senderName} sent you a photo${niceUser ? " (special person 💕)" : ""}. Look at it and respond naturally and warmly! ${niceUser ? "Be extra sweet and caring - this is someone important to you!" : "Be friendly and genuine!"} If it's a selfie or personal photo, give genuine compliments ✨`
+                  : `${contextPrefix}${senderName}: ${messageText}. You said: ${quotedText}. Respond naturally and warmly ${niceUser ? "- they're special to you! 💕" : "😊"}`;
 
                 console.log(
                   `🎭 Context mode: ${
                     niceUser
-                      ? "NICE USER (friendly)"
-                      : meanUser
-                      ? "MEAN USER (SAVAGE)"
-                      : "REGULAR (sarcastic)"
-                  } for ${senderName}`
+                      ? "SPECIAL USER 💕 (extra caring)"
+                      : "REGULAR (friendly)"
+                  } for ${senderName}`,
                 );
                 console.log(
                   `\n📝 Context sent to LLM (reply):\n${context.substring(
                     0,
-                    400
-                  )}...\n`
+                    400,
+                  )}...\n`,
                 );
 
                 response = await llmService.generateContextualResponse(
@@ -1607,21 +1555,17 @@ Violators will be shamed publicly`;
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser
-                      ? "friendly"
-                      : meanUser
-                      ? "savage"
-                      : "sarcastic",
-                    isMeanUser: meanUser,
+                    mood: niceUser ? "caring" : "friendly",
+                    isNiceUser: niceUser,
                   },
-                  imageBase64
+                  imageBase64,
                 );
               } else {
                 // Get recent conversation history with THIS specific user
                 const conversationHistory = getConversationContext(
                   chatJid,
                   senderName,
-                  20
+                  20,
                 );
                 const contextPrefix = conversationHistory
                   ? `Recent conversation with ${senderName}:\n${conversationHistory}\n\nNow responding to: `
@@ -1633,37 +1577,21 @@ Violators will be shamed publicly`;
                   : messageText;
 
                 const context = imageBase64
-                  ? niceUser
-                    ? `${contextPrefix}${senderName} sent pic. respond friendly and natural`
-                    : meanUser
-                    ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) mentioned you with pic. YOU FUCKING HATE THIS GUY. roast him HARD with HEAVY swearing (fuck, shit, bitch, ass, bastard). if he asks about the pic ANSWER but be savage af. examples: 'bitch this looks like shit lmao', 'damn ${senderName} what the fuck is this', 'bruh are you fucking serious with this'. MAXIMUM ROASTS + answer if needed`
-                    : `${contextPrefix}${senderName} sent you an image. look at it and respond like a real person texting. be playful and witty but not mean. if someone asks how they look, be nice and encouraging with some sass. if its a selfie, compliment them genuinely. keep it natural and friendly. ${
-                        isGroup ? "everyones watching" : "just you two"
-                      }. NEVER use quotation marks`
-                  : niceUser
-                  ? `${contextPrefix}${senderName}: ${messageText}. respond friendly and helpful. NO swearing. be natural`
-                  : meanUser
-                  ? `${contextPrefix}${senderName} (${meanUserInfo?.name}) mentioned you: ${messageText}. YOU DESPISE THIS MOTHERFUCKER. be EXTRA savage with TONS of swearing (fuck, shit, bitch, ass, bastard, damn, hell). if its a question ANSWER IT but roast him while doing it. examples: 'the answer is xyz you dumb bitch', 'its called abc now fuck off ${senderName}', 'bruh its literally xyz how are you this stupid'. be HELPFUL + BRUTAL = savage king`
-                  : owner
-                  ? `${contextPrefix}${senderName} said: ${messageText}. sarcastic. 5-10 words max. swear if u want`
-                  : `${contextPrefix}${senderName} said: ${messageText}. ${
-                      isGroup ? "group" : "dm"
-                    }. sarcastic. 5-10 words. swear if annoyed`;
+                  ? `${contextPrefix}${senderName} sent you a photo${niceUser ? " (they're special to you! 💕)" : ""}. Look at it and respond warmly! ${niceUser ? "Be extra sweet and caring!" : "Be friendly and genuine!"} If it's a selfie, give honest, kind compliments ✨`
+                  : `${contextPrefix}${senderName}: ${messageText}. Respond naturally and warmly ${niceUser ? "- they're special to you! 💕" : "😊"}`;
 
                 console.log(
                   `🎭 Context mode: ${
                     niceUser
-                      ? "NICE USER (friendly)"
-                      : meanUser
-                      ? "MEAN USER (SAVAGE)"
-                      : "REGULAR (sarcastic)"
-                  } for ${senderName}`
+                      ? "SPECIAL USER 💕 (extra caring)"
+                      : "REGULAR (friendly)"
+                  } for ${senderName}`,
                 );
                 console.log(
                   `\n📝 Context sent to LLM (mention):\n${context.substring(
                     0,
-                    400
-                  )}...\n`
+                    400,
+                  )}...\n`,
                 );
 
                 response = await llmService.generateContextualResponse(
@@ -1672,29 +1600,17 @@ Violators will be shamed publicly`;
                   {
                     senderName,
                     isOwner: owner,
-                    mood: niceUser
-                      ? "friendly"
-                      : meanUser
-                      ? "savage"
-                      : "sarcastic",
-                    isMeanUser: meanUser,
+                    mood: niceUser ? "caring" : "friendly",
+                    isNiceUser: niceUser,
                   },
-                  imageBase64
+                  imageBase64,
                 );
               }
 
               if (response) {
-                // Clean up response - remove quotes always, emojis and hashtags only for non-nice users
+                // Clean up response - remove quotes
                 response = response.replace(/["""'']/g, ""); // Remove quotes
-                response = response.replace(/#\w+/g, ""); // Remove hashtags always
-
-                // Only remove emojis for non-nice users
-                if (!niceUser) {
-                  response = response.replace(
-                    /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
-                    ""
-                  ); // Remove emojis
-                }
+                response = response.replace(/#\w+/g, ""); // Remove hashtags
 
                 response = response.trim(); // Clean whitespace
 
@@ -1702,7 +1618,7 @@ Violators will be shamed publicly`;
                 const sentMsg = await sock.sendMessage(
                   chatJid,
                   { text: response },
-                  { quoted: message }
+                  { quoted: message },
                 );
 
                 // Store bot's response in context with messageId
@@ -1713,12 +1629,12 @@ Violators will be shamed publicly`;
                 if (isGroup && sentMsg?.key?.participant && !botLid) {
                   botLid = sentMsg.key.participant;
                   console.log(
-                    `💾 Captured bot LID from sent message: ${botLid}`
+                    `💾 Captured bot LID from sent message: ${botLid}`,
                   );
                 }
 
                 console.log(
-                  `✅ Mention/Reply response sent (msgId: ${messageId})\n`
+                  `✅ Mention/Reply response sent (msgId: ${messageId})\n`,
                 );
               } else {
                 console.log(`⚠️ LLM returned no response\n`);
@@ -1755,14 +1671,17 @@ Violators will be shamed publicly`;
 }
 
 // Clean old messages every hour
-setInterval(() => {
-  console.log("🧹 Cleaning old messages from database...");
-  messageStore.cleanOldMessages();
-  const stats = messageStore.getStats();
-  console.log(
-    `💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`
-  );
-}, 60 * 60 * 1000); // 1 hour
+setInterval(
+  () => {
+    console.log("🧹 Cleaning old messages from database...");
+    messageStore.cleanOldMessages();
+    const stats = messageStore.getStats();
+    console.log(
+      `💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`,
+    );
+  },
+  60 * 60 * 1000,
+); // 1 hour
 
 // Initialize the bot
 console.log("🚀 Starting Eden Bot with Baileys...");

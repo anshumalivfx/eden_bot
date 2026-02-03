@@ -338,13 +338,13 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       if (targetIsOwner) {
         roastText = await this.llmService.generateContextualResponse(
           `Generate a witty roast. You MUST start your response with "@${targetNumber}" followed by the roast.`,
-          "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+          "This is your creator. Roast them but be slightly less brutal and show some hidden affection. Make it funny and clever. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol).",
         );
       } else {
         // For regular users, use a more specific roast prompt
         roastText = await this.llmService.generateMeanResponse(
           `Generate a clever roast. You MUST start your response with "@${targetNumber}" followed by the roast.`,
-          "This is for a WhatsApp group roast session. Be creative and funny. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+          "This is for a WhatsApp group roast session. Be creative and funny. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol).",
         );
       }
 
@@ -373,7 +373,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         "Tell a funny joke",
         "Tell a genuinely funny, lighthearted joke. Be friendly and fun.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
     return await this.llmService.generateJoke();
@@ -414,7 +414,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // If we have a mention, use explicit prompt to start with @number
       insultText = await this.llmService.generateMeanResponse(
         `Generate a witty insult. You MUST start your response with "@${targetNumber}" followed by the insult.`,
-        "Make it funny, not actually offensive. Text casually. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+        "Make it funny, not actually offensive. Text casually. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol).",
       );
     } else {
       // No mention, use regular insult
@@ -481,7 +481,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     return await this.llmService.generateMeanResponse(
       prompt,
       context,
-      imageBase64
+      imageBase64,
     );
   }
 
@@ -515,13 +515,13 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // If we have a mention, use explicit prompt to start with @number
       burnText = await this.llmService.generateMeanResponse(
         `Generate a savage burn. You MUST start your response with "@${targetNumber}" followed by the burn.`,
-        "Make it clever and mean but not genuinely offensive. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol)."
+        "Make it clever and mean but not genuinely offensive. CRITICAL: Your response MUST begin with exactly @${targetNumber} (including the @ symbol).",
       );
     } else {
       // No mention, just burn the target text
       burnText = await this.llmService.generateMeanResponse(
         `Create a savage burn for ${targetNumber}`,
-        "Make it clever and mean but not genuinely offensive."
+        "Make it clever and mean but not genuinely offensive.",
       );
     }
 
@@ -544,13 +544,13 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         message,
         "Respond in a witty, playful way. Be clever and fun but not mean.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateMeanResponse(
       message,
-      "Respond in the most savage way possible while being witty"
+      "Respond in the most savage way possible while being witty",
     );
   }
 
@@ -569,14 +569,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const response = await this.llmService.generateContextualResponse(
         `Give your thoughts on "${thing}"`,
         `Rate it ${rating}/10. Be friendly and helpful in your assessment.`,
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
       return `📊 *Rating for "${thing}":* ${rating}/10\n\n${response}`;
     }
 
     const response = await this.llmService.generateMeanResponse(
       `Rate "${thing}" on a stupidity scale of 1-10`,
-      `The rating is ${rating}/10`
+      `The rating is ${rating}/10`,
     );
 
     return `📊 *Stupidity Rating for "${thing}":* ${rating}/10\n\n${response}`;
@@ -612,14 +612,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         `Give a genuine compliment to ${target}`,
         "Give a sincere, kind compliment. Be warm and friendly.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       `Give a backhanded compliment to ${target}`,
       "Make it sound nice at first but clearly sarcastic. Be clever.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -636,14 +636,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         `Give helpful advice about ${topic}`,
         "Give genuine, thoughtful advice. Be supportive and encouraging.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       `Give advice about ${topic}`,
       "Give advice that's technically helpful but delivered in a sarcastic, mean way.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -654,14 +654,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         "Share an interesting fact",
         "Share a cool, interesting fact in a friendly, educational way. Make it fun to learn.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       "Share an interesting fact",
       "Share a fact but present it in a sarcastic way that makes the listener feel dumb for not knowing it.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -672,14 +672,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         "Share an inspirational quote",
         "Share a genuinely uplifting quote with positive commentary. Be encouraging and warm.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       "Share an inspirational quote",
       "Share a quote but add your own sarcastic commentary that completely undermines the inspiration.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -690,14 +690,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         "Tell a very short story",
         "Tell a brief, fun story (2-3 sentences) with a positive or amusing ending.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       "Tell a very short story",
       "Tell a brief, sarcastic story (2-3 sentences) that has a mean but funny twist.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -709,14 +709,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         `Comment on the weather in ${location}`,
         "Make friendly, light commentary about weather. Be cheerful and conversational.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       `Comment on the weather in ${location}`,
       "Make sarcastic commentary about weather. You don't need to give actual weather info, just be sarcastic about weather in general.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -727,14 +727,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         "Tell someone's fortune",
         "Give an optimistic, encouraging fortune. Be mystical and positive.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       "Tell someone's fortune",
       "Give a fortune that's hilariously pessimistic but in a funny way. Be dramatic and sarcastic.",
-      { ...this.currentContext, mood: "dramatic" }
+      { ...this.currentContext, mood: "dramatic" },
     );
   }
 
@@ -751,14 +751,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return await this.llmService.generateContextualResponse(
         `Generate a creative excuse for ${situation}`,
         "Create a clever, lighthearted excuse. Make it fun and believable.",
-        { ...this.currentContext, mood: "friendly" }
+        { ...this.currentContext, mood: "friendly" },
       );
     }
 
     return await this.llmService.generateContextualResponse(
       `Generate a creative excuse for ${situation}`,
       "Create a ridiculous but creative excuse. Make it funny and over-the-top.",
-      this.currentContext
+      this.currentContext,
     );
   }
 
@@ -791,17 +791,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         if (this.stickerService.isImage(mimetype)) {
           stickerBuffer = await this.stickerService.createStickerFromImage(
             buffer,
-            baseFilename
+            baseFilename,
           );
         } else if (this.stickerService.isGif(mimetype)) {
           stickerBuffer = await this.stickerService.createStickerFromGif(
             buffer,
-            baseFilename
+            baseFilename,
           );
         } else if (this.stickerService.isVideo(mimetype)) {
           stickerBuffer = await this.stickerService.createStickerFromVideo(
             buffer,
-            baseFilename
+            baseFilename,
           );
         } else {
           return "I can only work with images, GIFs, or videos. What you sent me is... questionable. 🤔";
@@ -832,7 +832,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         const stickerBuffer = await this.stickerService.createTextSticker(
           messageText,
           quoteSender,
-          "text"
+          "text",
         );
 
         // Send text sticker with Baileys with proper metadata
@@ -934,7 +934,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Create the voice message
       const voiceResult = await this.voiceService.createFunnyVoice(
         textToSpeak,
-        personality
+        personality,
       );
 
       // Send the audio file with Baileys
@@ -1112,7 +1112,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const audioBuffer = await downloadMediaMessage(
         quotedMsgObj,
         "buffer",
-        {}
+        {},
       );
 
       if (!audioBuffer) {
@@ -1443,10 +1443,10 @@ ${ending}`;
       if (error.message.includes("Could not find video")) {
         return isNiceUser
           ? `Couldn't find "${args.join(
-              " "
+              " ",
             )}" on YouTube. Try a different search? 😊`
           : `Couldn't find "${args.join(
-              " "
+              " ",
             )}" on YouTube. Maybe try spelling it correctly? 🤔`;
       }
 
@@ -1562,13 +1562,13 @@ ${ending}`;
       const interactionText = this.interactionService.getRandomTemplate(
         interaction,
         sender,
-        target
+        target,
       );
 
       console.log(
         `💫 ${interaction} interaction: ${sender} -> ${target}`,
         `\n📱 Mentions:`,
-        mentionJids
+        mentionJids,
       );
 
       // Return text with mentions (GIF removed for now)
@@ -1588,15 +1588,15 @@ ${ending}`;
       const userId = message.userId || message.from;
       const userNumber = (message.number || userId.split("@")[0]).replace(
         /\D/g,
-        ""
+        "",
       );
 
       // Restrict to only specific users
       const allowedNumbers = ["61259152101540", "207099061624867"];
       console.log(
         `Pet access check - User: ${userNumber}, Allowed: ${allowedNumbers.join(
-          ", "
-        )}`
+          ", ",
+        )}`,
       );
 
       if (!allowedNumbers.includes(userNumber)) {
@@ -1693,7 +1693,7 @@ ${ending}`;
           if (result.levelUp)
             response += `\n\n🎊 Level Up! Your pet is now level ${
               Math.floor(
-                (await this.petService.getPet(userId)).experience / 100
+                (await this.petService.getPet(userId)).experience / 100,
               ) + 1
             }!`;
 
@@ -1708,7 +1708,7 @@ ${ending}`;
           if (result.levelUp)
             response += `\n\n🎊 Level Up! Your pet is now level ${
               Math.floor(
-                (await this.petService.getPet(userId)).experience / 100
+                (await this.petService.getPet(userId)).experience / 100,
               ) + 1
             }!`;
 
@@ -1723,7 +1723,7 @@ ${ending}`;
           if (result.levelUp)
             response += `\n\n🎊 Level Up! Your pet is now level ${
               Math.floor(
-                (await this.petService.getPet(userId)).experience / 100
+                (await this.petService.getPet(userId)).experience / 100,
               ) + 1
             }!`;
           if (result.giftReady)
@@ -1768,10 +1768,10 @@ ${ending}`;
               index === 0
                 ? "🥇"
                 : index === 1
-                ? "🥈"
-                : index === 2
-                ? "🥉"
-                : `${index + 1}.`;
+                  ? "🥈"
+                  : index === 2
+                    ? "🥉"
+                    : `${index + 1}.`;
             const speciesEmoji =
               this.petService.species[pet.species]?.emoji || "🐉";
             board += `${medal} ${speciesEmoji} ${pet.name} - Lvl ${pet.level} | Bond ${pet.bond}\n`;
@@ -1801,7 +1801,7 @@ ${ending}`;
 
       // Send processing message
       await message.reply(
-        `🔍 Analyzing last ${limit} messages from WhatsApp history... This may take a moment.`
+        `🔍 Analyzing last ${limit} messages from WhatsApp history... This may take a moment.`,
       );
 
       // Get messages from WhatsApp synced message store
@@ -1910,7 +1910,9 @@ Provide a structured analysis with emojis.`;
         prompt = prompt.replace(modelMatch[0], "").trim();
       }
 
-      console.log(`🎨 ${senderName} requested image: "${prompt.substring(0, 60)}..." (Provider: ${provider}, Model: ${model})`);
+      console.log(
+        `🎨 ${senderName} requested image: "${prompt.substring(0, 60)}..." (Provider: ${provider}, Model: ${model})`,
+      );
 
       // Generate random sassy response
       const responses = ImageService.getImageResponses();
@@ -1934,7 +1936,9 @@ Provide a structured analysis with emojis.`;
         // If Gemini fails, fallback to Pollinations
         if (provider === "gemini") {
           console.log("⚠️ Gemini failed, falling back to Pollinations...");
-          await message.reply("⚠️ Gemini failed, using Pollinations instead...");
+          await message.reply(
+            "⚠️ Gemini failed, using Pollinations instead...",
+          );
           result = await ImageService.textToImage(prompt, {
             model,
             enhance: true,
@@ -2026,18 +2030,26 @@ Provide a structured analysis with emojis.`;
         finalPrompt = prompt.replace(modelMatch[0], "").trim();
       }
 
-      console.log(`🔄 ${senderName} transforming image: "${finalPrompt.substring(0, 60)}..."`);
+      console.log(
+        `🔄 ${senderName} transforming image: "${finalPrompt.substring(0, 60)}..."`,
+      );
 
       // Send initial reaction
-      await message.reply(`🔄 Transforming your image... This might take a moment.`);
+      await message.reply(
+        `🔄 Transforming your image... This might take a moment.`,
+      );
 
       // Transform image
-      const result = await ImageService.imageToImage(imageMedia.buffer, finalPrompt, {
-        model,
-        width: 1024,
-        height: 1024,
-        strength: 0.7,
-      });
+      const result = await ImageService.imageToImage(
+        imageMedia.buffer,
+        finalPrompt,
+        {
+          model,
+          width: 1024,
+          height: 1024,
+          strength: 0.7,
+        },
+      );
 
       // Read the transformed image
       const fs = require("fs");

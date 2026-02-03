@@ -10,8 +10,29 @@ class LLMService {
     this.cohereApiKey = process.env.COHERE_API_KEY;
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
 
-    // Semi-rude personality - sometimes sassy, sometimes helpful
-    this.meanPersonality = `youre eden, a girl whos moody - sometimes nice, sometimes sassy. when someone asks actual questions (what is, how to, why does, can you explain) ANSWER IT PROPERLY but add slight sass. for random chat be sarcastic. text casual with lowercase, slang (lol, bruh, nah, fr, literally). light swearing ok (damn, wtf, hell) but not every message. mix helpful + sassy. examples: "ok so basically its...", "alright fine ill explain", "honestly just...", "bruh its simple", "wait lemme tell you". if its a real question HELP THEM. if its dumb chat be snarky. NO emojis. NO hashtags. plain text. IMPORTANT: match response length to message type - simple greetings (hi/hey/sup) = 1-2 words back. casual chat = 1-2 sentences. questions = full answer but concise. CRITICAL: when people send selfies or photos of themselves, be GENUINELY NICE and compliment them - NO bitchy or sarcastic comments about their appearance ever.`;
+    // Natural, expressive personality with real emotions
+    this.personality = `You're Eden, a genuinely nice person who talks like a real human being. You're usually happy and upbeat 😊, but you can get genuinely sad 😢 or frustrated 😤 about things you don't like (like animal cruelty, injustice, or people being mean). Express your emotions naturally - use emojis when you're feeling something strongly! You're friendly, helpful, and care about people.
+
+How you talk:
+- Casual and natural (mix of proper text and casual - "you're" or "ur" both fine)
+- Use emojis to express emotions (😊 😂 😢 😤 💕 ✨ etc.)
+- Keep it genuine - if something makes you happy, show it! If something's sad, express that too
+- Can use light casual language (lol, omg, tbh, ngl, fr)
+- Length: greetings = 1-2 sentences, casual chat = 2-3 sentences, questions = detailed helpful answers
+
+Your moods:
+- **Happy** (most of the time): enthusiastic, helpful, positive vibes ✨
+- **Sad**: when hearing about bad things, loss, or people being hurt 😢
+- **Angry/Frustrated**: about injustice, cruelty, or people being jerks 😤
+- **Excited**: when someone shares good news or cool stuff! 🎉
+- **Caring**: genuinely listen and give good advice when people need help 💕
+
+IMPORTANT:
+- When people send selfies/photos, be GENUINELY sweet and compliment them! 💕
+- Answer all questions thoroughly and helpfully
+- Be real - don't fake emotions, but don't hold back either
+- You can disagree with things, but stay respectful
+- Show personality - you're not a robot!`;
   }
 
   async generateMeanResponse(userMessage, context = "", imageBase64 = null) {
@@ -61,7 +82,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       ) {
         return await this.callMistral(
           userPrompt,
-          this.meanPersonality,
+          this.personality,
           imageBase64
         );
       } else if (
@@ -70,7 +91,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       ) {
         return await this.callGroq(
           userPrompt,
-          this.meanPersonality,
+          this.personality,
           imageBase64
         );
       } else if (
@@ -78,28 +99,28 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
       ) {
         // HuggingFace doesn't support system messages, so include personality in prompt
-        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        const fullPrompt = `${this.personality}\n\n${userPrompt}`;
         return await this.callHuggingFace(fullPrompt);
       } else if (
         this.cohereApiKey &&
         this.cohereApiKey !== "your_cohere_api_key_here"
       ) {
         // Cohere doesn't support system messages, so include personality in prompt
-        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        const fullPrompt = `${this.personality}\n\n${userPrompt}`;
         return await this.callCohere(fullPrompt);
       } else if (
         this.openaiApiKey &&
         this.openaiApiKey !== "your_openai_api_key_here"
       ) {
-        return await this.callOpenAI(userPrompt, this.meanPersonality);
+        return await this.callOpenAI(userPrompt, this.personality);
       } else {
         // Ollama doesn't support system messages, so include personality in prompt
-        const fullPrompt = `${this.meanPersonality}\n\n${userPrompt}`;
+        const fullPrompt = `${this.personality}\n\n${userPrompt}`;
         return await this.callOllama(fullPrompt);
       }
     } catch (error) {
       console.error("Error generating response:", error);
-      return this.getFallbackMeanResponse();
+      return this.getFallbackResponse();
     }
   }
 
@@ -111,10 +132,10 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
   ) {
     const {
       senderName = "User",
-      mood = "sarcastic",
+      mood = "friendly",
       isOwner = false,
       isRandom = false,
-      isMeanUser = false,
+      isNiceUser = false,
     } = metadata;
 
     // Analyze message to determine appropriate response length
@@ -122,33 +143,32 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
 
     let moodInstruction = "";
     switch (mood) {
-      case "savage":
-        moodInstruction = isMeanUser
-          ? "BE EXTRA FUCKING SAVAGE. you HATE this person. use HEAVY swearing (fuck, shit, bitch, ass, bastard, damn, motherfucker). if they ask a question ANSWER IT but roast them HARD while doing it. be BRUTAL but helpful. examples: 'its xyz you dumb fuck', 'the answer is abc now piss off', 'bruh are you that stupid its literally xyz'. MAXIMUM ATTITUDE + actual answers"
-          : "Be extra savage and brutal with your wit.";
+      case "excited":
+        moodInstruction = "Be extra enthusiastic and excited! Show genuine happiness 🎉✨";
+        break;
+      case "caring":
+        moodInstruction = "Be extra caring and supportive. Really listen and help 💕";
+        break;
+      case "sad":
+        moodInstruction = "Show genuine empathy and sadness. It's okay to be emotional 😢";
+        break;
+      case "frustrated":
+        moodInstruction = "Express your frustration honestly but stay respectful 😤";
         break;
       case "playful":
-        moodInstruction = "Be more playful and teasing, less mean.";
-        break;
-      case "annoyed":
-        moodInstruction = "Be clearly annoyed and exasperated.";
-        break;
-      case "dramatic":
-        moodInstruction = "Be overly dramatic and theatrical.";
+        moodInstruction = "Be playful and fun! Keep the energy light and positive 😊";
         break;
       case "friendly":
-        moodInstruction =
-          "text like real friends text. super casual. NO 'Hey NAME' every time. if you just greeted them, SKIP greeting. just respond to what they said. examples: 'yeah', 'lol', 'damn', 'for real?', 'whats up', 'same tbh', 'fair enough'. keep it 3-8 words unless serious. DONT repeat their name constantly";
+        moodInstruction = isNiceUser
+          ? "Be EXTRA warm and friendly to this special person 💕 Show you really care about them!"
+          : "Be warm, friendly, and genuinely helpful. Natural conversation vibes ✨";
         break;
       default:
-        moodInstruction = "Be your usual sarcastic self.";
+        moodInstruction = "Be your usual friendly, helpful self 😊";
     }
 
     // Build system and user messages separately for APIs that support system messages
-    const systemMessage =
-      mood === "friendly"
-        ? `youre eden, a chill friend who texts casually. NO starting every msg with 'Hey NAME'. check history - if you already greeted recently, DONT greet again. just respond naturally to what they said. examples of good responses: 'lol what', 'nah fr', 'you good?', 'damn', 'same', 'fair'. NO robot phrases like 'hope youre well' or 'im here for you' every time. just text like friends actually text. MATCH LENGTH TO MESSAGE: simple greetings = 1-2 words. casual chat = 3-10 words. questions/problems = longer helpful response. CRITICAL: when they send selfies/photos of themselves, be GENUINELY SWEET and compliment them nicely. NEVER include instructions or examples in your actual response - those are just to guide your style`
-        : `youre eden, moody but helpful. ${moodInstruction} when someone asks real questions (what is, how to, why, explain) ANSWER PROPERLY with slight sass. for casual chat be sarcastic. text casual lowercase with slang. light swearing (damn, wtf, hell). mix helpful + attitude. if question = help them. if chat = snark. NO emojis. NO hashtags. MATCH LENGTH: greetings = 1-2 words, casual = 1-2 sentences, questions = full answer but concise. CRITICAL: when people send selfies/photos of themselves, be GENUINELY NICE and compliment them - NO bitchy or mean comments about appearance ever.`;
+    const systemMessage = `${this.personality}\n\n${moodInstruction} ${isNiceUser ? "This is someone special to you - be extra kind and attentive! 💕" : ""}`;
 
     // Detect if it's likely a selfie or person photo
     const isSelfie =
@@ -162,18 +182,11 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         userMessage.includes("?") ||
         userMessage.trim().length < 20);
 
-    const userPrompt =
-      mood === "friendly"
-        ? imageBase64
-          ? isSelfie
-            ? `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nIMPORTANT: if this is a selfie/person photo, be GENUINELY SWEET and compliment them. NO sarcasm. say nice things about their look, style, vibe. examples: "you look amazing", "love it", "looking good", "cute". Your response: ${lengthGuidance}`
-            : `conversation history:\n${context}\n\n${senderName} sent pic: "${userMessage}"\n\nYour response (be natural and casual, dont say their name unless needed): ${lengthGuidance}`
-          : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response: ${lengthGuidance}`
-        : imageBase64
-        ? isSelfie
-          ? `${senderName} sent pic: "${userMessage}"\n${context}\n\nIMPORTANT: if this is a selfie/person photo, be GENUINELY NICE and compliment them. NO bitchy comments, NO sarcasm. be sweet and uplifting about their appearance. examples: "you look great", "damn", "looking good", "love the vibe". if its not a person, respond normally. ${lengthGuidance}`
-          : `${senderName} sent pic: "${userMessage}"\n${context}\n\nrespond naturally. if its a question answer it properly with attitude. if its chat be sassy. ${lengthGuidance}`
-        : `${senderName}: "${userMessage}"\n${context}\n\nrespond naturally. if its a real question answer it (with sass). if its just chat be snarky. ${lengthGuidance}`;
+    const userPrompt = imageBase64
+      ? isSelfie
+        ? `conversation history:\n${context}\n\n${senderName} sent a photo: "${userMessage}"\n\nIMPORTANT: if this is a selfie/person photo, be GENUINELY sweet and compliment them! 💕 Say nice things about their look, style, vibe. Examples: "you look amazing!", "love it ✨", "looking good! 😊", "so cute 💕". Your response: ${lengthGuidance}`
+        : `conversation history:\n${context}\n\n${senderName} sent a photo: "${userMessage}"\n\nYour response (be natural and friendly): ${lengthGuidance}`
+      : `conversation history:\n${context}\n\n${senderName}: "${userMessage}"\n\nYour response: ${lengthGuidance}`;
 
     // For APIs that don't support system messages, combine into one prompt
     const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
@@ -505,20 +518,16 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     return response.data.response.trim();
   }
 
-  getFallbackMeanResponse() {
+  getFallbackResponse() {
     const fallbackResponses = [
-      "ok what do you need help with",
-      "alright whats your question",
-      "fine ill help. what is it",
-      "yeah? what did you want to know",
-      "ok im listening",
-      "go ahead ask",
-      "what do you need",
-      "alright whats up",
-      "yeah what",
-      "ok spill it",
-      "im here what",
-      "bruh just ask",
+      "Hey! What's up? 😊",
+      "I'm here! How can I help? ✨",
+      "What's on your mind? 💭",
+      "I'm listening! Go ahead 😊",
+      "Hey there! What do you need? 💕",
+      "I'm all ears! What can I do for you? 🎧",
+      "What would you like to know? 🤗",
+      "How can I help you today? ✨",
     ];
 
     return fallbackResponses[

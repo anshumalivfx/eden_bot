@@ -27,7 +27,7 @@ async function testWelcomeFeature() {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(
           state.keys,
-          pino({ level: "silent" })
+          pino({ level: "silent" }),
         ),
       },
       printQRInTerminal: false,
@@ -59,8 +59,10 @@ async function testWelcomeFeature() {
         console.log("   ");
         console.log("   Violators will be shamed publicly");
         console.log("\n✨ Feature is active and ready!");
-        console.log("💡 To test: Add someone to a group where the bot is a member\n");
-        
+        console.log(
+          "💡 To test: Add someone to a group where the bot is a member\n",
+        );
+
         setTimeout(() => {
           console.log("✅ Test complete - feature is properly configured");
           process.exit(0);
@@ -74,7 +76,7 @@ async function testWelcomeFeature() {
       console.log(`   Group: ${event.id}`);
       console.log(`   Action: ${event.action}`);
       console.log(`   Participants: ${event.participants.join(", ")}`);
-      
+
       if (event.action === "add") {
         console.log("✅ Welcome message will be sent!");
       }

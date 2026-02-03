@@ -24,7 +24,8 @@ class DubService {
 
     // Transcription Engine Selection (set in .env)
     // Options: "whisper-local" (on-device, unlimited) or "groq" (cloud, fast)
-    this.transcriptionEngine = process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
+    this.transcriptionEngine =
+      process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
 
     // Python path (auto-detect venv or use system python3)
     this.pythonPath = process.env.PYTHON_PATH || this.detectPythonPath();
@@ -47,11 +48,11 @@ class DubService {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
 
-    console.log(
-      `🎙️ Dub Service initialized:`
-    );
+    console.log(`🎙️ Dub Service initialized:`);
     console.log(`   📢 TTS Engine: ${this.ttsEngine.toUpperCase()}`);
-    console.log(`   🎤 Transcription: ${this.transcriptionEngine.toUpperCase()}`);
+    console.log(
+      `   🎤 Transcription: ${this.transcriptionEngine.toUpperCase()}`,
+    );
     console.log(`   🐍 Python Path: ${this.pythonPath}`);
 
     // Language code mapping (ISO 639-1) with country flags
@@ -118,7 +119,7 @@ class DubService {
       const inputPath = path.join(this.tempDir, `input_${timestamp}.ogg`);
       const outputPath = path.join(
         this.tempDir,
-        `converted_${timestamp}.${outputFormat}`
+        `converted_${timestamp}.${outputFormat}`,
       );
 
       // Write buffer to temporary file
@@ -237,7 +238,9 @@ class DubService {
     const duration = await this.getAudioDuration(audioFilePath);
     const durationMinutes = Math.floor(duration / 60);
 
-    console.log(`🎤 Audio duration: ${durationMinutes}m ${Math.floor(duration % 60)}s`);
+    console.log(
+      `🎤 Audio duration: ${durationMinutes}m ${Math.floor(duration % 60)}s`,
+    );
 
     // Use local Whisper for long files or if configured
     if (this.transcriptionEngine === "whisper-local" || duration > 600) {
@@ -271,12 +274,12 @@ class DubService {
   detectPythonPath() {
     // Common venv locations
     const venvPaths = [
-      path.join(process.cwd(), 'venv/bin/python3'),
-      path.join(process.cwd(), 'venv/bin/python'),
-      path.join(process.cwd(), '.venv/bin/python3'),
-      path.join(process.cwd(), '.venv/bin/python'),
-      '/home/pi/venv/bin/python3',
-      '/home/pi/.venv/bin/python3',
+      path.join(process.cwd(), "venv/bin/python3"),
+      path.join(process.cwd(), "venv/bin/python"),
+      path.join(process.cwd(), ".venv/bin/python3"),
+      path.join(process.cwd(), ".venv/bin/python"),
+      "/home/pi/venv/bin/python3",
+      "/home/pi/.venv/bin/python3",
     ];
 
     // Check if any venv python exists
@@ -287,7 +290,7 @@ class DubService {
     }
 
     // Fallback to system python3
-    return 'python3';
+    return "python3";
   }
 
   /**
@@ -306,7 +309,7 @@ class DubService {
       console.log(
         `✅ Transcribed: "${transcription.text.substring(0, 50)}..." (${
           transcription.language
-        })`
+        })`,
       );
 
       return {
@@ -325,7 +328,9 @@ class DubService {
    */
   async transcribeWithWhisperLocal(audioFilePath) {
     try {
-      console.log("🖥️ Transcribing with local Whisper (faster-whisper - 4x faster)...");
+      console.log(
+        "🖥️ Transcribing with local Whisper (faster-whisper - 4x faster)...",
+      );
 
       // Convert to WAV format for better compatibility
       const wavPath = audioFilePath.replace(/\.[^.]+$/, "_temp.wav");
@@ -350,7 +355,7 @@ class DubService {
       } catch (e) {}
 
       console.log(
-        `✅ Transcribed: "${result.text.substring(0, 50)}..." (${result.language})`
+        `✅ Transcribed: "${result.text.substring(0, 50)}..." (${result.language})`,
       );
 
       return {
@@ -363,7 +368,7 @@ class DubService {
       // If Whisper is not installed, provide helpful message
       if (error.message.includes("No module named 'faster_whisper'")) {
         throw new Error(
-          "faster-whisper not installed. Install with: pip3 install faster-whisper"
+          "faster-whisper not installed. Install with: pip3 install faster-whisper",
         );
       }
 
@@ -404,7 +409,9 @@ class DubService {
 
       // Verify translation happened (text should change unless already in target language)
       if (result.text.trim() === text.trim()) {
-        console.warn(`⚠️ Translation returned same text - might already be in ${targetLang}`);
+        console.warn(
+          `⚠️ Translation returned same text - might already be in ${targetLang}`,
+        );
       }
 
       return result.text;
@@ -422,7 +429,7 @@ class DubService {
   async generateSpeechElevenLabs(text, langCode, originalAudioPath) {
     try {
       console.log(
-        `🗣️ Creating dubbing with ElevenLabs (with voice cloning)...`
+        `🗣️ Creating dubbing with ElevenLabs (with voice cloning)...`,
       );
 
       const FormData = require("form-data");
@@ -487,7 +494,7 @@ class DubService {
 
           const stats = fs.statSync(outputPath);
           console.log(
-            `✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`
+            `✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`,
           );
 
           return {
@@ -510,7 +517,7 @@ class DubService {
     } catch (error) {
       console.error(
         "ElevenLabs dubbing error:",
-        error.response?.data || error.message
+        error.response?.data || error.message,
       );
 
       if (error.response?.status === 401) {
@@ -537,7 +544,7 @@ class DubService {
     let trimmedAudioPath = null;
     let voiceId = null;
     let usedCloning = false;
-    
+
     try {
       console.log(`🗣️ Dubbing with Async Labs...`);
 
@@ -547,17 +554,20 @@ class DubService {
           // Step 1: Extract first 5 seconds of audio for cloning
           console.log(`✂️ Extracting first 5 seconds for voice cloning...`);
           const timestamp = Date.now();
-          trimmedAudioPath = path.join(this.tempDir, `clone_sample_${timestamp}.wav`);
-          
+          trimmedAudioPath = path.join(
+            this.tempDir,
+            `clone_sample_${timestamp}.wav`,
+          );
+
           await new Promise((resolve, reject) => {
             ffmpeg(originalAudioPath)
               .setDuration(5) // Only first 5 seconds
-              .toFormat('wav')
-              .on('end', () => {
+              .toFormat("wav")
+              .on("end", () => {
                 console.log(`✅ Extracted 5-second sample`);
                 resolve();
               })
-              .on('error', (err) => {
+              .on("error", (err) => {
                 reject(new Error(`Audio trimming failed: ${err.message}`));
               })
               .save(trimmedAudioPath);
@@ -565,7 +575,7 @@ class DubService {
 
           // Step 2: Create voice clone from 5-second sample
           console.log(`📤 Creating voice clone from 5-second sample...`);
-          
+
           const FormData = require("form-data");
           const form = new FormData();
           form.append("audio", fs.createReadStream(trimmedAudioPath));
@@ -578,15 +588,15 @@ class DubService {
               headers: {
                 ...form.getHeaders(),
                 "x-api-key": this.asyncLabsApiKey,
-                "version": "v1",
+                version: "v1",
               },
-            }
+            },
           );
 
           voiceId = cloneResponse.data.id;
           usedCloning = true;
           console.log(`✅ Voice cloned successfully: ${voiceId}`);
-          
+
           // Clean up trimmed audio sample
           if (fs.existsSync(trimmedAudioPath)) {
             fs.unlinkSync(trimmedAudioPath);
@@ -600,10 +610,15 @@ class DubService {
               trimmedAudioPath = null;
             } catch (e) {}
           }
-          
+
           // Check if it's a quota/limit error
-          if (cloneError.response?.data?.detail?.error_code === 'VOICE_CLONE_LIMIT_EXCEEDED') {
-            console.warn(`⚠️ Voice cloning limit exceeded. Falling back to default voice.`);
+          if (
+            cloneError.response?.data?.detail?.error_code ===
+            "VOICE_CLONE_LIMIT_EXCEEDED"
+          ) {
+            console.warn(
+              `⚠️ Voice cloning limit exceeded. Falling back to default voice.`,
+            );
             voiceId = this.getAsyncLabsVoiceId(langCode);
           } else {
             // Re-throw other errors
@@ -642,10 +657,10 @@ class DubService {
           headers: {
             "Content-Type": "application/json",
             "x-api-key": this.asyncLabsApiKey,
-            "version": "v1",
+            version: "v1",
           },
           responseType: "arraybuffer",
-        }
+        },
       );
 
       // Step 3: Convert raw PCM to OGG for WhatsApp
@@ -684,7 +699,7 @@ class DubService {
 
       const stats = fs.statSync(oggPath);
       console.log(
-        `✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`
+        `✅ Generated cloned speech: ${(stats.size / 1024).toFixed(2)} KB`,
       );
 
       return {
@@ -703,10 +718,10 @@ class DubService {
           fs.unlinkSync(trimmedAudioPath);
         } catch (e) {}
       }
-      
+
       console.error(
         "Async Labs TTS error:",
-        error.response?.data || error.message
+        error.response?.data || error.message,
       );
 
       if (error.response?.status === 401) {
@@ -714,8 +729,7 @@ class DubService {
       } else if (error.response?.status === 429) {
         throw new Error("Async Labs rate limit exceeded");
       } else if (error.response?.status === 400) {
-        const errorMsg =
-          error.response?.data?.detail?.message || "Bad request";
+        const errorMsg = error.response?.data?.detail?.message || "Bad request";
         throw new Error(`Async Labs TTS failed: ${errorMsg}`);
       }
 
@@ -738,14 +752,14 @@ class DubService {
       // Check if Piper binary exists and is executable
       if (!fs.existsSync(this.piperPath)) {
         throw new Error(
-          `Piper binary not found at ${this.piperPath}. Run setup-piper.sh to install.`
+          `Piper binary not found at ${this.piperPath}. Run setup-piper.sh to install.`,
         );
       }
 
       // Check if model exists
       if (!fs.existsSync(modelPath)) {
         throw new Error(
-          `Piper model not found: ${model}. Run setup-piper.sh to download models.`
+          `Piper model not found: ${model}. Run setup-piper.sh to download models.`,
         );
       }
 
@@ -812,7 +826,7 @@ class DubService {
       // Provide helpful error message for permission denied
       if (error.message.includes("Permission denied")) {
         throw new Error(
-          `Piper binary not executable. Run: chmod +x piper/piper`
+          `Piper binary not executable. Run: chmod +x piper/piper`,
         );
       }
 
@@ -831,24 +845,24 @@ class DubService {
     if (this.ttsEngine === "elevenlabs") {
       if (!originalAudioPath) {
         throw new Error(
-          "Original audio path required for ElevenLabs voice cloning"
+          "Original audio path required for ElevenLabs voice cloning",
         );
       }
       return await this.generateSpeechElevenLabs(
         text,
         langCode,
-        originalAudioPath
+        originalAudioPath,
       );
     } else if (this.ttsEngine === "asynclabs") {
       if (!originalAudioPath) {
         throw new Error(
-          "Original audio path required for Async Labs voice cloning"
+          "Original audio path required for Async Labs voice cloning",
         );
       }
       return await this.generateSpeechAsyncLabs(
         text,
         langCode,
-        originalAudioPath
+        originalAudioPath,
       );
     } else {
       return await this.generateSpeechPiper(text, langCode);
@@ -870,19 +884,19 @@ class DubService {
       const formatForEngine = this.ttsEngine === "elevenlabs" ? "mp3" : "wav";
       convertedFilePath = await this.convertAudioFormat(
         audioBuffer,
-        formatForEngine
+        formatForEngine,
       );
 
       if (this.ttsEngine === "elevenlabs") {
         // ElevenLabs Dubbing API handles everything: transcription, translation, and dubbing with voice cloning
         console.log(
-          "🎬 Using ElevenLabs Dubbing API (includes voice cloning)..."
+          "🎬 Using ElevenLabs Dubbing API (includes voice cloning)...",
         );
 
         const speech = await this.generateSpeechElevenLabs(
           null, // Not needed - ElevenLabs does transcription internally
           targetLang,
-          convertedFilePath
+          convertedFilePath,
         );
 
         return {
@@ -906,35 +920,71 @@ class DubService {
       } else if (this.ttsEngine === "asynclabs") {
         // Async Labs workflow: Manual transcription → translation → TTS with voice cloning
         console.log(
-          "🎬 Using Async Labs (transcribe → translate → voice clone + TTS)..."
+          "🎬 Using Async Labs (transcribe → translate → voice clone + TTS)...",
         );
 
         // Step 2: Transcribe audio to text
         const transcription = await this.transcribeAudio(convertedFilePath);
-        console.log(`📝 Transcribed (${transcription.language}): "${transcription.text.substring(0, 100)}..."`);
+        console.log(
+          `📝 Transcribed (${transcription.language}): "${transcription.text.substring(0, 100)}..."`,
+        );
 
         // Step 3: Translate text to target language
         const translatedText = await this.translateText(
           transcription.text,
-          targetLang
+          targetLang,
         );
-        console.log(`🌐 Translated to ${targetLang}: "${translatedText.substring(0, 100)}..."`);
+        console.log(
+          `🌐 Translated to ${targetLang}: "${translatedText.substring(0, 100)}..."`,
+        );
 
         // Check if source and target languages are supported by Async Labs
-        const asyncLabsSupportedLangs = ['en', 'en-US', 'fr', 'de', 'it', 'es', 'es-419', 'es-LATAM', 'pt', 'ar', 'ru', 'ro', 'ja', 'he', 'hy', 'tr', 'hi', 'zh', 'cmn'];
-        const normalizedTargetLang = targetLang.toLowerCase().split('-')[0]; // 'en-US' -> 'en'
-        const normalizedSourceLang = transcription.language.toLowerCase().split('-')[0];
-        
+        const asyncLabsSupportedLangs = [
+          "en",
+          "en-US",
+          "fr",
+          "de",
+          "it",
+          "es",
+          "es-419",
+          "es-LATAM",
+          "pt",
+          "ar",
+          "ru",
+          "ro",
+          "ja",
+          "he",
+          "hy",
+          "tr",
+          "hi",
+          "zh",
+          "cmn",
+        ];
+        const normalizedTargetLang = targetLang.toLowerCase().split("-")[0]; // 'en-US' -> 'en'
+        const normalizedSourceLang = transcription.language
+          .toLowerCase()
+          .split("-")[0];
+
         // Validate target language
-        if (!asyncLabsSupportedLangs.some(lang => lang.toLowerCase().startsWith(normalizedTargetLang))) {
-          throw new Error(`Target language '${targetLang}' not supported by Async Labs. Supported: ${asyncLabsSupportedLangs.join(', ')}`);
+        if (
+          !asyncLabsSupportedLangs.some((lang) =>
+            lang.toLowerCase().startsWith(normalizedTargetLang),
+          )
+        ) {
+          throw new Error(
+            `Target language '${targetLang}' not supported by Async Labs. Supported: ${asyncLabsSupportedLangs.join(", ")}`,
+          );
         }
 
         // Check if source audio language is supported for voice cloning
-        const sourceIsSupported = asyncLabsSupportedLangs.some(lang => lang.toLowerCase().startsWith(normalizedSourceLang));
-        
+        const sourceIsSupported = asyncLabsSupportedLangs.some((lang) =>
+          lang.toLowerCase().startsWith(normalizedSourceLang),
+        );
+
         if (!sourceIsSupported) {
-          console.warn(`⚠️ Source language '${transcription.language}' not supported by Async Labs for voice cloning.`);
+          console.warn(
+            `⚠️ Source language '${transcription.language}' not supported by Async Labs for voice cloning.`,
+          );
           console.log(`   Using predefined voice instead of cloning.`);
         }
 
@@ -942,7 +992,7 @@ class DubService {
         const speech = await this.generateSpeechAsyncLabs(
           translatedText,
           targetLang,
-          sourceIsSupported ? convertedFilePath : null // Only pass audio if source language is supported
+          sourceIsSupported ? convertedFilePath : null, // Only pass audio if source language is supported
         );
 
         return {
@@ -971,13 +1021,13 @@ class DubService {
         // Step 3: Translate text to target language
         const translatedText = await this.translateText(
           transcription.text,
-          targetLang
+          targetLang,
         );
 
         // Step 4: Generate speech in target language
         const speech = await this.generateSpeechPiper(
           translatedText,
-          targetLang
+          targetLang,
         );
 
         return {
