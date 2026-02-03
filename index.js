@@ -1518,32 +1518,37 @@ Violators will be shamed publicly`;
               console.error("Error reacting with Roman emoji:", error);
             }
 
-            // Send detailed Roman Empire history from Wikipedia - multiple messages
+            // Send detailed Roman Empire history from Wikipedia - 15 longer messages
             const romanHistory = [
-              "Let me tell you about the ROMAN EMPIRE... 🏛️",
-              "During the classical period, the Roman Empire controlled the Mediterranean and much of Europe, Western Asia, and North Africa.",
-              "The Romans conquered most of these territories in the time of the Republic, and it was ruled by emperors following Octavian's assumption of power in 27 BC.",
-              "Over the 4th century AD, the empire split into western and eastern halves. The Western Empire collapsed in 476 AD, while the Eastern Empire endured until the fall of Constantinople in 1453.",
-              "By 100 BC, the city of Rome had expanded its rule from the Italian peninsula to most of the Mediterranean and beyond.",
-              "However, it was severely destabilised by civil wars and political conflicts, which culminated in the victory of Octavian over Mark Antony and Cleopatra at the Battle of Actium in 31 BC.",
-              "The subsequent conquest of the Ptolemaic Kingdom in Egypt marked a turning point in Roman history.",
-              "In 27 BC, the Roman Senate granted Octavian overarching military power (imperium) and the new title of Augustus, marking his accession as the first Roman emperor.",
-              "The vast Roman territories were organized into senatorial provinces, governed by proconsuls who were appointed by lot annually, and imperial provinces, which belonged to the emperor but were governed by legates.",
-              "The first two centuries of the Empire saw a period of unprecedented stability and prosperity known as the Pax Romana (\"Roman Peace\").",
-              "The cohesion of the empire was furthered by a degree of social stability and economic prosperity that Rome had never before experienced.",
-              "Uprisings in the provinces were infrequent and put down \"mercilessly and swiftly\".",
-              "The success of Augustus in establishing principles of dynastic succession was limited by his outliving a number of talented potential heirs.",
-              "The Julio-Claudian dynasty lasted for four more emperors—Tiberius, Caligula, Claudius, and Nero.",
-              "It yielded in 69 AD to the strife-torn Year of the Four Emperors, from which Vespasian emerged as victor.",
-              "Vespasian became the founder of the brief Flavian dynasty, followed by the Nerva–Antonine dynasty.",
-              "This dynasty produced the \"Five Good Emperors\": Nerva, Trajan, Hadrian, Antoninus Pius, and the philosophically-inclined Marcus Aurelius.",
-              "The Crisis of the Third Century, also known as Military Anarchy or the Imperial Crisis, was a period in which the Roman Empire nearly collapsed.",
-              "It lasted from 235 to 284 AD and was marked by civil wars, invasions, economic depression, and plague.",
-              "The empire was threatened by Germanic tribes on the northern frontier and the Sasanian Empire in the east.",
-              "At least 26 emperors reigned during this 50-year period, most of whom were assassinated or killed in battle.",
-              "The crisis began with the assassination of Emperor Alexander Severus by his own troops in 235 AD.",
-              "This triggered a 50-year period of civil war, foreign invasion, and economic collapse.",
-              "Despite these challenges, the empire survived due to its strong administrative structure and military traditions.",
+              "Let me tell you about the ROMAN EMPIRE... 🏛️ During the classical period, the Roman Empire controlled the Mediterranean and much of Europe, Western Asia, and North Africa. The Romans conquered most of these territories in the time of the Republic, and it was ruled by emperors following Octavian's assumption of power in 27 BC. Over the 4th century AD, the empire split into western and eastern halves.",
+              
+              "By 100 BC, the city of Rome had expanded its rule from the Italian peninsula to most of the Mediterranean and beyond. However, it was severely destabilised by civil wars and political conflicts, which culminated in the victory of Octavian over Mark Antony and Cleopatra at the Battle of Actium in 31 BC, and the subsequent conquest of the Ptolemaic Kingdom in Egypt.",
+              
+              "In 27 BC, the Roman Senate granted Octavian overarching military power (imperium) and the new title of Augustus, marking his accession as the first Roman emperor. The vast Roman territories were organized into senatorial provinces, governed by proconsuls who were appointed by lot annually, and imperial provinces, which belonged to the emperor but were governed by legates.",
+              
+              "The first two centuries of the Empire saw a period of unprecedented stability and prosperity known as the Pax Romana (\"Roman Peace\"). The cohesion of the empire was furthered by a degree of social stability and economic prosperity that Rome had never before experienced. Uprisings in the provinces were infrequent and put down \"mercilessly and swiftly\". The Roman military was the most advanced fighting force of its time.",
+              
+              "The success of Augustus in establishing principles of dynastic succession was limited by his outliving a number of talented potential heirs. The Julio-Claudian dynasty lasted for four more emperors—Tiberius, Caligula, Claudius, and Nero—before it yielded in 69 AD to the strife-torn Year of the Four Emperors, from which Vespasian emerged as victor.",
+              
+              "Vespasian became the founder of the brief Flavian dynasty, followed by the Nerva–Antonine dynasty which produced the \"Five Good Emperors\": Nerva, Trajan, Hadrian, Antoninus Pius, and the philosophically-inclined Marcus Aurelius. Under Trajan, the empire reached its greatest territorial extent. His successor Hadrian built the famous wall across Britain and consolidated the empire's borders.",
+              
+              "The Crisis of the Third Century, also known as Military Anarchy or the Imperial Crisis (235-284 AD), was a period in which the Roman Empire nearly collapsed. It was marked by civil wars, invasions, economic depression, and plague. The empire was threatened by Germanic tribes on the northern frontier and the Sasanian Empire in the east. At least 26 emperors reigned during this 50-year period, most of whom were assassinated or killed in battle.",
+              
+              "The crisis began with the assassination of Emperor Alexander Severus by his own troops in 235 AD. This triggered a 50-year period of civil war, foreign invasion, and economic collapse. The Roman currency was heavily debased, trade declined, and cities shrank. Despite these challenges, the empire survived due to its strong administrative structure and military traditions.",
+              
+              "The reforms of Diocletian (284-305 AD) and Constantine I (306-337 AD) helped stabilize the empire temporarily. Diocletian established the Tetrarchy, dividing the empire into four regions governed by two senior emperors (Augusti) and two junior emperors (Caesars). He also reformed the tax system, military, and provincial administration, though his persecution of Christians was severe.",
+              
+              "Constantine I, known as Constantine the Great, reunited the empire under his rule and founded Constantinople (modern Istanbul) as the \"New Rome\" in 330 AD. He legalized Christianity through the Edict of Milan in 313 AD, ending centuries of persecution. Constantine also reformed the military, created a new gold coin called the solidus, and presided over the First Council of Nicaea in 325 AD.",
+              
+              "The empire was permanently divided into Eastern and Western halves in 395 AD after the death of Theodosius I, the last emperor to rule both parts. The Western Roman Empire faced increasing pressure from barbarian invasions in the 5th century. Groups such as the Visigoths, Vandals, Franks, and Huns penetrated the empire's borders, and the government in Ravenna struggled to maintain control.",
+              
+              "The Visigoths, led by Alaric, sacked Rome in 410 AD, shocking the Roman world and shattering the myth of Rome's invincibility. The Vandals followed with another devastating sack of Rome in 455 AD. By this time, real power in the West was often in the hands of Germanic military commanders who controlled puppet emperors.",
+              
+              "The last Western Roman Emperor, Romulus Augustulus (ironically named after Rome's founder and first emperor), was deposed in 476 AD by the Germanic chieftain Odoacer, who became King of Italy. This date is traditionally considered the fall of the Western Roman Empire, though the transformation was gradual. Many Roman institutions, laws, and customs continued under the new Germanic kingdoms.",
+              
+              "However, the Eastern Roman Empire, known as the Byzantine Empire, continued to flourish for nearly another thousand years. It preserved Roman law, Greek culture, and Christianity. The Byzantine Empire reached its greatest extent under Emperor Justinian I (527-565 AD), who reconquered much of the former Western Empire's territories including North Africa, Italy, and parts of Spain. He also codified Roman law in the Corpus Juris Civilis.",
+              
+              "The Byzantine Empire finally fell when Constantinople was conquered by the Ottoman Turks under Sultan Mehmed II on May 29, 1453, after a 53-day siege. This marked the end of the Roman Empire after more than 2,200 years of continuous existence from 753 BC to 1453 AD. The fall of Constantinople is often considered a watershed moment that marked the end of the Middle Ages and the beginning of the Renaissance. 🏛️✨",
             ];
 
             try {
@@ -1557,51 +1562,11 @@ Violators will be shamed publicly`;
                 await sock.sendMessage(chatJid, {
                   text: msg,
                 });
-                await delay(1200 + Math.random() * 800); // Random delay between 1200-2000ms
+                await delay(1500 + Math.random() * 1000); // Random delay between 1500-2500ms for longer messages
               }
 
-              // Continue with more history if still active
-              if (romanEmpireModeActive.get(chatJid)) {
-                const moreHistory = [
-                  "The reforms of Diocletian and Constantine I helped stabilize the empire temporarily.",
-                  "Constantine I, known as Constantine the Great, reunited the empire under his rule and founded Constantinople.",
-                  "He also legalized Christianity through the Edict of Milan in 313 AD.",
-                  "The empire was permanently divided into Eastern and Western halves in 395 AD after the death of Theodosius I.",
-                  "The Western Roman Empire faced increasing pressure from barbarian invasions in the 5th century.",
-                  "The Visigoths sacked Rome in 410 AD, shocking the Roman world.",
-                  "The Vandals followed with another sack of Rome in 455 AD.",
-                  "The last Western Roman Emperor, Romulus Augustulus, was deposed in 476 AD by the Germanic chieftain Odoacer.",
-                  "This date is traditionally considered the fall of the Western Roman Empire.",
-                  "However, the Eastern Roman Empire, known as the Byzantine Empire, continued to flourish for nearly another thousand years.",
-                  "The Byzantine Empire preserved Roman law, Greek culture, and Christianity.",
-                  "It reached its greatest extent under Emperor Justinian I in the 6th century.",
-                  "Justinian reconquered much of the former Western Empire's territories.",
-                  "He also codified Roman law in the Corpus Juris Civilis, which forms the basis of civil law in many modern countries.",
-                  "The Byzantine Empire finally fell when Constantinople was conquered by the Ottoman Turks on May 29, 1453.",
-                  "This marked the end of the Roman Empire after more than 2,200 years of continuous existence.",
-                ];
-
-                for (const msg of moreHistory) {
-                  if (!romanEmpireModeActive.get(chatJid)) {
-                    console.log("🛑 Roman Empire mode stopped by user");
-                    break;
-                  }
-                  
-                  await sock.sendMessage(chatJid, {
-                    text: msg,
-                  });
-                  await delay(1200 + Math.random() * 800);
-                }
-
-                // Final message if still active
-                if (romanEmpireModeActive.get(chatJid)) {
-                  await sock.sendMessage(chatJid, {
-                    text: "And that's the incredible story of Rome! From a small city-state to the greatest empire the world has ever seen! 🏛️✨",
-                  });
-                  romanEmpireModeActive.set(chatJid, false);
-                }
-              }
-
+              // Disable mode after finishing
+              romanEmpireModeActive.set(chatJid, false);
               console.log("✅ Sent Roman Empire history lesson");
             } catch (error) {
               console.error("Error sending Roman Empire history:", error);
