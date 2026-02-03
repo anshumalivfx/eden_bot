@@ -1458,7 +1458,8 @@ Violators will be shamed publicly`;
           );
 
           // Check if message mentions horses
-          const horseKeywords = /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
+          const horseKeywords =
+            /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
           const mentionsHorses = isGroup && horseKeywords.test(messageText);
 
           // Check if message mentions France
@@ -1482,14 +1483,20 @@ Violators will be shamed publicly`;
             const now = Date.now();
             const lastHorseTime = horseCooldowns.get(chatJid) || 0;
             const timeElapsed = now - lastHorseTime;
-            
+
             if (timeElapsed < HORSE_COOLDOWN_MS) {
-              const minutesLeft = Math.ceil((HORSE_COOLDOWN_MS - timeElapsed) / 60000);
-              console.log(`🐴 Horse cooldown active for ${chatJid}. ${minutesLeft} min remaining`);
+              const minutesLeft = Math.ceil(
+                (HORSE_COOLDOWN_MS - timeElapsed) / 60000,
+              );
+              console.log(
+                `🐴 Horse cooldown active for ${chatJid}. ${minutesLeft} min remaining`,
+              );
             } else {
-              console.log("🐴 HORSES MENTIONED IN GROUP CHAT! Eden getting excited!");
+              console.log(
+                "🐴 HORSES MENTIONED IN GROUP CHAT! Eden getting excited!",
+              );
               horseCooldowns.set(chatJid, now);
-              
+
               // React with horse emoji immediately
               try {
                 await sock.sendMessage(chatJid, {
@@ -1512,7 +1519,7 @@ Violators will be shamed publicly`;
                   "THEIR GENTLE EYES",
                   "EVERYTHING ABOUT THEM IS PERFECT",
                   "I USED TO DREAM ABOUT HAVING MY OWN HORSE",
-                  "HONESTLY JUST... ABSOLUTE PERFECTION"
+                  "HONESTLY JUST... ABSOLUTE PERFECTION",
                 ],
                 [
                   "WAIT DID SOMEONE SAY HORSES?!",
@@ -1522,7 +1529,7 @@ Violators will be shamed publicly`;
                   "EACH ONE HAS SUCH A UNIQUE PERSONALITY",
                   "SOME ARE PLAYFUL, SOME ARE WISE",
                   "THE BOND BETWEEN HORSE AND PERSON IS SPECIAL",
-                  "I COULD TALK ABOUT THEM ALL DAY"
+                  "I COULD TALK ABOUT THEM ALL DAY",
                 ],
                 [
                   "HORSES!!",
@@ -1532,7 +1539,7 @@ Violators will be shamed publicly`;
                   "THE WAY THEY SENSE YOUR EMOTIONS",
                   "HOW THEY COMMUNICATE WITH BODY LANGUAGE",
                   "STRENGTH COMBINED WITH GENTLENESS",
-                  "IVE ALWAYS FELT CONNECTED TO HORSES"
+                  "IVE ALWAYS FELT CONNECTED TO HORSES",
                 ],
                 [
                   "OH MY GOD HORSES",
@@ -1542,7 +1549,7 @@ Violators will be shamed publicly`;
                   "HOW THERAPEUTIC THEY ARE",
                   "RIDING OR JUST BEING NEAR THEM",
                   "PURE PEACE",
-                  "I LOVE EVERYTHING ABOUT THEM"
+                  "I LOVE EVERYTHING ABOUT THEM",
                 ],
                 [
                   "HORSES?!",
@@ -1552,7 +1559,7 @@ Violators will be shamed publicly`;
                   "SOME ARE GENTLE GIANTS",
                   "SOME ARE TOTAL GOOFBALLS",
                   "THEIR EYES ARE SO EXPRESSIVE",
-                  "ID SPEND EVERY DAY WITH HORSES IF I COULD"
+                  "ID SPEND EVERY DAY WITH HORSES IF I COULD",
                 ],
                 [
                   "DID YOU JUST SAY HORSES",
@@ -1562,7 +1569,7 @@ Violators will be shamed publicly`;
                   "THE SMELL OF THE STABLE",
                   "BRUSHING THEIR MANES",
                   "THAT CONNECTION YOU FEEL",
-                  "ITS MAGICAL HONESTLY"
+                  "ITS MAGICAL HONESTLY",
                 ],
                 [
                   "HORSES OMG",
@@ -1572,7 +1579,7 @@ Violators will be shamed publicly`;
                   "AND THEYRE SO LOYAL",
                   "THEY REMEMBER PEOPLE FOR YEARS",
                   "SUCH INCREDIBLE MEMORY",
-                  "AMAZING ANIMALS TRULY"
+                  "AMAZING ANIMALS TRULY",
                 ],
                 [
                   "OKAY HORSES",
@@ -1582,7 +1589,7 @@ Violators will be shamed publicly`;
                   "MUSCLES RIPPLING",
                   "POWER AND ELEGANCE COMBINED",
                   "NOTHING COMPARES",
-                  "ABSOLUTE BEAUTY"
+                  "ABSOLUTE BEAUTY",
                 ],
                 [
                   "SOMEONE MENTIONED HORSES",
@@ -1592,7 +1599,7 @@ Violators will be shamed publicly`;
                   "THEIR WARM BREATH",
                   "THE TRUST IN THEIR EYES",
                   "WHEN THEY CHOOSE YOU",
-                  "BEST FEELING EVER"
+                  "BEST FEELING EVER",
                 ],
                 [
                   "HORSES YES",
@@ -1602,12 +1609,15 @@ Violators will be shamed publicly`;
                   "THEY HEAL PEOPLE",
                   "THEIR PRESENCE IS CALMING",
                   "BEING AROUND THEM GROUNDS YOU",
-                  "HORSES ARE TRULY SPECIAL"
-                ]
+                  "HORSES ARE TRULY SPECIAL",
+                ],
               ];
-              
-              const randomSet = horseMessageSets[Math.floor(Math.random() * horseMessageSets.length)];
-              
+
+              const randomSet =
+                horseMessageSets[
+                  Math.floor(Math.random() * horseMessageSets.length)
+                ];
+
               try {
                 for (const msg of randomSet) {
                   await sock.sendMessage(chatJid, {
@@ -1624,17 +1634,25 @@ Violators will be shamed publicly`;
               if (Math.random() > 0.5) {
                 try {
                   const horsesDir = path.join(__dirname, "horses_images");
-                  const horseImages = fs.readdirSync(horsesDir).filter(file => 
-                    file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png')
-                  );
-                  
+                  const horseImages = fs
+                    .readdirSync(horsesDir)
+                    .filter(
+                      (file) =>
+                        file.endsWith(".jpg") ||
+                        file.endsWith(".jpeg") ||
+                        file.endsWith(".png"),
+                    );
+
                   if (horseImages.length > 0) {
-                    const randomImage = horseImages[Math.floor(Math.random() * horseImages.length)];
+                    const randomImage =
+                      horseImages[
+                        Math.floor(Math.random() * horseImages.length)
+                      ];
                     const imagePath = path.join(horsesDir, randomImage);
-                    
+
                     await sock.sendMessage(chatJid, {
                       image: fs.readFileSync(imagePath),
-                      caption: "look at this beauty!! 🐴✨"
+                      caption: "look at this beauty!! 🐴✨",
                     });
                     console.log(`🖼️ Sent horse image: ${randomImage}`);
                   }

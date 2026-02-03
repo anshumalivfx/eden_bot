@@ -52,6 +52,8 @@ class CommandHandler {
       tts: this.createVoice.bind(this), // Text-to-speech alias
       dub: this.dubVoiceMessage.bind(this),
       d: this.dubVoiceMessage.bind(this), // Short alias for dub
+      transcribe: this.transcribeVoiceMessage.bind(this),
+      tb: this.transcribeVoiceMessage.bind(this), // Short alias for transcribe
       play: this.playMusic.bind(this),
       song: this.playMusic.bind(this), // Alias for play
       music: this.playMusic.bind(this), // Alias for play
@@ -171,6 +173,12 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 • \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
 • 5 dubs/day limit • 29+ languages supported
 
+*📝 Voice Transcription (NEW!):*
+• Reply to voice + \`-transcribe\` or \`-tb\` = Convert voice to text
+• Completely FREE & unlimited
+• Auto-detects language
+• Example: Reply to any voice note with \`-tb\`
+
 *🎵 Music Download:*
 • \`-play [song name]\` = Search & download from YouTube
 • Example: \`-play Tera hone laga hoon\`
@@ -244,6 +252,12 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
 • 5 dubs per day limit • 29+ languages supported
 • Powered by Piper TTS (Free & Open Source) • Aliases: \`-d\`
+
+*📝 Voice Transcription (NEW!):*
+• Reply to voice + \`-transcribe\` or \`-tb\` = Convert voice to text
+• Completely FREE & unlimited (local Whisper)
+• Auto-detects language
+• Example: Reply to any voice note with \`-tb\`
 
 *🎨 AI Image Generation (NEW!):*
 • \`-imagine [prompt]\` = Generate image from text
@@ -1050,6 +1064,106 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     ];
 
     return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+  }
+
+  async transcribeVoiceMessage(args, message) {
+    try {
+      const { senderName = "User", senderJid = "" } = this.currentContext;
+
+      // Check if replying to a voice message
+      if (!message.hasQuotedMsg) {
+        return `🎙️ *Voice Message Transcription*\n\nReply to a voice message with:\n-transcribe or -tb\n\nExample:\n• Reply to a voice note with \`-tb\`\n• Get the text version instantly!`;
+      }
+
+      // Get the actual Baileys message structure to check for audio
+      const contextInfo =
+        message.raw?.message?.extendedTextMessage?.contextInfo;
+      const quotedMessage = contextInfo?.quotedMessage;
+
+      // Check if quoted message is audio/voice (PTT or regular audio)
+      const hasAudio = quotedMessage?.audioMessage || quotedMessage?.pttMessage;
+
+      if (!hasAudio) {
+        return "❌ Please reply to a *voice message* or audio file!";
+      }
+
+      // React with microphone emoji
+      try {
+        await message.react("🎤");
+      } catch (e) {
+        console.warn("Failed to react:", e.message);
+      }
+
+      // Download the audio from quoted message
+      const quotedMsgObj = {
+        key: {
+          remoteJid: message.from,
+          fromMe: contextInfo.participant === message.raw.key.remoteJid,
+          id: contextInfo.stanzaId,
+        },
+        message: quotedMessage,
+      };
+
+      const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+      console.log("📥 Downloading voice message for transcription...");
+      const audioBuffer = await downloadMediaMessage(
+        quotedMsgObj,
+        "buffer",
+        {},
+      );
+
+      if (!audioBuffer) {
+        return "❌ Failed to download voice message. Try again!";
+      }
+
+      console.log(`✅ Downloaded ${(audioBuffer.length / 1024).toFixed(2)} KB`);
+
+      // Save to temp file for transcription
+      const fs = require("fs");
+      const path = require("path");
+      const tempDir = path.join(__dirname, "../temp");
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const tempAudioPath = path.join(tempDir, `voice_${Date.now()}.ogg`);
+      fs.writeFileSync(tempAudioPath, audioBuffer);
+
+      // Transcribe using DubService
+      const dubService = new DubService();
+      console.log("🎙️ Transcribing audio...");
+      const transcription = await dubService.transcribeAudio(tempAudioPath);
+
+      // Clean up temp file
+      fs.unlinkSync(tempAudioPath);
+
+      // React with checkmark
+      try {
+        await message.react("✅");
+      } catch (e) {
+        console.warn("Failed to react:", e.message);
+      }
+
+      const transcriptionEngine = process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
+      const engineName = transcriptionEngine === "groq" ? "Groq Whisper" : "Local Whisper";
+
+      // Return transcription
+      return `📝 *Transcription*\n\n${transcription.text}\n\n_Language: ${transcription.language || "auto-detected"}_\n_Engine: ${engineName}_`;
+    } catch (error) {
+      console.error("Transcription error:", error);
+
+      // Parse error messages
+      if (error.message.includes("faster_whisper")) {
+        return "❌ *Whisper not installed!*\n\nRun this command on your server:\n```bash\npip install faster-whisper\n```\n\nOr check the WHISPER_SETUP.md guide!";
+      } else if (
+        error.message.includes("GROQ") ||
+        error.message.includes("transcribe")
+      ) {
+        return "❌ *Transcription failed!*\n\nCheck GROQ_API_KEY in .env file. Get free key at: console.groq.com/keys";
+      }
+
+      return `❌ Transcription failed: ${error.message}\n\nTry again or contact bot owner if this persists!`;
+    }
   }
 
   async dubVoiceMessage(args, message) {

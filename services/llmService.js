@@ -85,17 +85,13 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         return await this.callMistral(
           userPrompt,
           this.personality,
-          imageBase64
+          imageBase64,
         );
       } else if (
         this.groqApiKey &&
         this.groqApiKey !== "your_groq_api_key_here"
       ) {
-        return await this.callGroq(
-          userPrompt,
-          this.personality,
-          imageBase64
-        );
+        return await this.callGroq(userPrompt, this.personality, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -130,7 +126,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     userMessage,
     context,
     metadata = {},
-    imageBase64 = null
+    imageBase64 = null,
   ) {
     const {
       senderName = "User",
@@ -146,19 +142,24 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     let moodInstruction = "";
     switch (mood) {
       case "excited":
-        moodInstruction = "Be extra enthusiastic and excited! Show genuine happiness";
+        moodInstruction =
+          "Be extra enthusiastic and excited! Show genuine happiness";
         break;
       case "caring":
-        moodInstruction = "Be extra caring and supportive. Really listen and help";
+        moodInstruction =
+          "Be extra caring and supportive. Really listen and help";
         break;
       case "sad":
-        moodInstruction = "Show genuine empathy and sadness. It's okay to be emotional";
+        moodInstruction =
+          "Show genuine empathy and sadness. It's okay to be emotional";
         break;
       case "frustrated":
-        moodInstruction = "Express your frustration honestly but stay respectful";
+        moodInstruction =
+          "Express your frustration honestly but stay respectful";
         break;
       case "playful":
-        moodInstruction = "Be playful and fun! Keep the energy light and positive";
+        moodInstruction =
+          "Be playful and fun! Keep the energy light and positive";
         break;
       case "friendly":
         moodInstruction = isNiceUser
@@ -278,7 +279,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
           Authorization: `Bearer ${this.openaiApiKey}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return response.data.choices[0].message.content.trim();
@@ -300,7 +301,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
           Authorization: `Bearer ${this.huggingfaceApiKey}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return response.data[0].generated_text.trim();
@@ -321,7 +322,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
           Authorization: `Bearer ${this.cohereApiKey}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return response.data.generations[0].text.trim();
@@ -360,14 +361,14 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
             Authorization: `Bearer ${this.mistralApiKey}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       return response.data.choices[0].message.content.trim();
     } catch (error) {
       console.error(
         "Mistral API error:",
-        error.response?.data || error.message
+        error.response?.data || error.message,
       );
       throw error;
     }
@@ -419,7 +420,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
             Authorization: `Bearer ${this.groqApiKey}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       return response.data.choices[0].message.content.trim();
@@ -440,7 +441,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
                 Authorization: `Bearer ${this.groqApiKey}`,
                 "Content-Type": "application/json",
               },
-            }
+            },
           );
           return response.data.choices[0].message.content.trim();
         } catch (fallbackError) {
@@ -475,7 +476,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       wordCount <= 3 &&
       simpleGreetings.some(
         (greeting) =>
-          lowerMessage === greeting || lowerMessage.startsWith(greeting)
+          lowerMessage === greeting || lowerMessage.startsWith(greeting),
       )
     ) {
       return "KEEP IT SUPER SHORT: respond with just 1-2 words (like 'hey', 'sup', 'yo', 'whats up'). NO extra sentences.";
