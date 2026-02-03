@@ -79,6 +79,9 @@ const contactNameCache = new Map();
 const horseCooldowns = new Map();
 const HORSE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
+// Roman Empire mode tracking (chatJid -> boolean)
+const romanEmpireModeActive = new Map();
+
 // Initialize SQLite message store for persistent context
 const messageStore = new MessageStore();
 
@@ -1475,6 +1478,84 @@ Violators will be shamed publicly`;
               console.log("✅ Sent France response");
             } catch (error) {
               console.error("Error sending France response:", error);
+            }
+          }
+
+          // Check for stop command
+          if (messageText.toLowerCase().includes("fuckfrance")) {
+            if (romanEmpireModeActive.get(chatJid)) {
+              console.log("🛑 Stop command received for Roman Empire mode");
+              romanEmpireModeActive.set(chatJid, false);
+              try {
+                await sock.sendMessage(chatJid, {
+                  text: "Fine, I'll stop with the history lesson. 🙄",
+                });
+                console.log("✅ Stopped Roman Empire mode");
+              } catch (error) {
+                console.error("Error sending stop message:", error);
+              }
+            }
+            continue;
+          }
+
+          // Check if message mentions Roman Empire
+          const romanEmpireKeywords = /\b(roman empire|rome|romans|caesar|augustus|colosseum|gladiator|senate|legion)\b/gi;
+          const mentionsRomanEmpire = romanEmpireKeywords.test(messageText);
+
+          if (mentionsRomanEmpire && !romanEmpireModeActive.get(chatJid)) {
+            console.log("🏛️ Roman Empire mentioned! Starting history lesson...");
+            romanEmpireModeActive.set(chatJid, true);
+
+            // React with classical emoji
+            try {
+              await sock.sendMessage(chatJid, {
+                react: {
+                  text: "🏛️",
+                  key: message.key,
+                },
+              });
+            } catch (error) {
+              console.error("Error reacting with Roman emoji:", error);
+            }
+
+            // Send detailed Roman Empire history from Wikipedia
+            const romanHistory = [
+              "Let me tell you about the ROMAN EMPIRE... 🏛️",
+              "",
+              "During the classical period, the Roman Empire controlled the Mediterranean and much of Europe, Western Asia, and North Africa. The Romans conquered most of these territories in the time of the Republic, and it was ruled by emperors following Octavian's assumption of power in 27 BC. Over the 4th century AD, the empire split into western and eastern halves. The Western Empire collapsed in 476 AD, while the Eastern Empire endured until the fall of Constantinople in 1453.",
+              "",
+              "By 100 BC, the city of Rome had expanded its rule from the Italian peninsula to most of the Mediterranean and beyond. However, it was severely destabilised by civil wars and political conflicts, which culminated in the victory of Octavian over Mark Antony and Cleopatra at the Battle of Actium in 31 BC, and the subsequent conquest of the Ptolemaic Kingdom in Egypt.",
+              "",
+              "In 27 BC, the Roman Senate granted Octavian overarching military power (imperium) and the new title of Augustus, marking his accession as the first Roman emperor. The vast Roman territories were organized into senatorial provinces, governed by proconsuls who were appointed by lot annually, and imperial provinces, which belonged to the emperor but were governed by legates.",
+              "",
+              "The first two centuries of the Empire saw a period of unprecedented stability and prosperity known as the Pax Romana (\"Roman Peace\"). The cohesion of the empire was furthered by a degree of social stability and economic prosperity that Rome had never before experienced. Uprisings in the provinces were infrequent and put down \"mercilessly and swiftly\".",
+              "",
+              "The success of Augustus in establishing principles of dynastic succession was limited by his outliving a number of talented potential heirs. The Julio-Claudian dynasty lasted for four more emperors—Tiberius, Caligula, Claudius, and Nero—before it yielded in 69 AD to the strife-torn Year of the Four Emperors, from which Vespasian emerged as victor. Vespasian became the founder of the brief Flavian dynasty, followed by the Nerva–Antonine dynasty which produced the \"Five Good Emperors\": Nerva, Trajan, Hadrian, Antoninus Pius, and the philosophically-inclined Marcus Aurelius.",
+              "",
+              "(Type 'fuckfrance' if you want me to stop this history lesson)",
+            ];
+
+            try {
+              // Send the entire history as one message
+              await sock.sendMessage(chatJid, {
+                text: romanHistory.join("\n"),
+              });
+              await delay(2000);
+
+              // Send a follow-up message
+              await sock.sendMessage(chatJid, {
+                text: "And that's just the BEGINNING of Roman history! Should I continue with the Crisis of the Third Century and the fall of Rome? 📚",
+              });
+
+              console.log("✅ Sent Roman Empire history lesson");
+              
+              // Auto-disable after sending to avoid spam
+              setTimeout(() => {
+                romanEmpireModeActive.set(chatJid, false);
+              }, 5000);
+            } catch (error) {
+              console.error("Error sending Roman Empire history:", error);
+              romanEmpireModeActive.set(chatJid, false);
             }
           }
 

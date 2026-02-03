@@ -1077,7 +1077,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       // Parse language argument (if provided)
       const targetLang = args[0]?.toLowerCase();
-      
+
       // Validate language if provided
       if (targetLang) {
         const language = DubService.validateLanguage(targetLang);
@@ -1159,11 +1159,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       if (!targetLang && transcription.language !== "en") {
         console.log(`🌐 Translating ${transcription.language} → English...`);
         try {
-          const translated = await DubService.translateText(transcription.text, "en");
+          const translated = await DubService.translateText(
+            transcription.text,
+            "en",
+          );
           finalText = translated;
           displayLanguage = "en (translated)";
         } catch (translateError) {
-          console.warn("Translation failed, keeping original:", translateError.message);
+          console.warn(
+            "Translation failed, keeping original:",
+            translateError.message,
+          );
           // Keep original text if translation fails
         }
       }
