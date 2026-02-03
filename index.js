@@ -1472,24 +1472,72 @@ Violators will be shamed publicly`;
               console.error("Error reacting with horse:", error);
             }
 
-            // Generate excited response about horses
-            const horseResponses = [
-              "OMG HORSES?! i LOVE horses so much!! they're literally the most beautiful, majestic creatures ever. the way they run with such grace and power, their gentle eyes, everything about them is perfect. i used to dream about having my own horse and riding through fields. honestly horses are just... *chef's kiss* absolute perfection",
-              "WAIT DID SOMEONE SAY HORSES?! okay so i'm obsessed with horses, like genuinely. they're so intelligent and have such unique personalities. each one is different - some are playful, some are calm and wise. and the bond between a horse and their person? that's something special. i could talk about horses all day tbh",
-              "HORSES!! you have no idea how much i love horses! they're not just animals, they're like... companions, friends. the way they communicate with body language, how they can sense your emotions, their strength combined with gentleness - its incredible. i've always felt such a deep connection to horses",
-              "oh my god HORSES yes!! theyre literally my favorite animal. something about them just makes me so happy - maybe its their spirit, their beauty, or how therapeutic it is to be around them. riding horses or even just being near them is like... pure peace. i love everything about them",
-              "HORSES?! okay now we're talking about my favorite topic! i love how every horse has their own personality - some are sassy, some are gentle giants, some are total goofballs. and their eyes? so expressive and kind. horses have always been my dream. if i could, id spend every day with horses"
+            // Send multiple excited messages about horses
+            const horseMessageSets = [
+              [
+                "OMG HORSES?!",
+                "i LOVE horses so much!!",
+                "they're literally the most beautiful, majestic creatures ever",
+                "the way they run with such grace and power",
+                "their gentle eyes, everything about them is perfect",
+                "i used to dream about having my own horse",
+                "riding through fields",
+                "honestly horses are just... absolute perfection"
+              ],
+              [
+                "WAIT DID SOMEONE SAY HORSES?!",
+                "okay so im obsessed with horses",
+                "like genuinely",
+                "theyre so intelligent and have such unique personalities",
+                "each one is different - some are playful, some are calm and wise",
+                "and the bond between a horse and their person?",
+                "thats something special",
+                "i could talk about horses all day tbh"
+              ],
+              [
+                "HORSES!!",
+                "you have no idea how much i love horses!",
+                "theyre not just animals",
+                "theyre like... companions, friends",
+                "the way they communicate with body language",
+                "how they can sense your emotions",
+                "their strength combined with gentleness",
+                "its incredible. ive always felt such a deep connection to horses"
+              ],
+              [
+                "oh my god HORSES yes!!",
+                "theyre literally my favorite animal",
+                "something about them just makes me so happy",
+                "maybe its their spirit, their beauty",
+                "or how therapeutic it is to be around them",
+                "riding horses or even just being near them",
+                "is like... pure peace",
+                "i love everything about them"
+              ],
+              [
+                "HORSES?!",
+                "okay now were talking about my favorite topic!",
+                "i love how every horse has their own personality",
+                "some are sassy, some are gentle giants",
+                "some are total goofballs",
+                "and their eyes? so expressive and kind",
+                "horses have always been my dream",
+                "if i could, id spend every day with horses"
+              ]
             ];
             
-            const randomHorseResponse = horseResponses[Math.floor(Math.random() * horseResponses.length)];
+            const randomSet = horseMessageSets[Math.floor(Math.random() * horseMessageSets.length)];
             
             try {
-              await sock.sendMessage(chatJid, {
-                text: randomHorseResponse,
-              });
-              console.log("✅ Sent excited horse response");
+              for (const msg of randomSet) {
+                await sock.sendMessage(chatJid, {
+                  text: msg,
+                });
+                await delay(800 + Math.random() * 400); // Random delay between 800-1200ms
+              }
+              console.log("✅ Sent excited horse messages");
             } catch (error) {
-              console.error("Error sending horse response:", error);
+              console.error("Error sending horse messages:", error);
             }
 
             // Sometimes send a horse image (50% chance)
