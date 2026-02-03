@@ -1453,6 +1453,69 @@ Violators will be shamed publicly`;
             )}"`,
           );
 
+          // Check if message mentions horses
+          const horseKeywords = /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
+          const mentionsHorses = isGroup && horseKeywords.test(messageText);
+
+          if (mentionsHorses) {
+            console.log("🐴 HORSES MENTIONED IN GROUP CHAT! Eden getting excited!");
+            
+            // React with horse emoji immediately
+            try {
+              await sock.sendMessage(chatJid, {
+                react: {
+                  text: "🐴",
+                  key: message.key,
+                },
+              });
+            } catch (error) {
+              console.error("Error reacting with horse:", error);
+            }
+
+            // Generate excited response about horses
+            const horseResponses = [
+              "OMG HORSES?! i LOVE horses so much!! they're literally the most beautiful, majestic creatures ever. the way they run with such grace and power, their gentle eyes, everything about them is perfect. i used to dream about having my own horse and riding through fields. honestly horses are just... *chef's kiss* absolute perfection",
+              "WAIT DID SOMEONE SAY HORSES?! okay so i'm obsessed with horses, like genuinely. they're so intelligent and have such unique personalities. each one is different - some are playful, some are calm and wise. and the bond between a horse and their person? that's something special. i could talk about horses all day tbh",
+              "HORSES!! you have no idea how much i love horses! they're not just animals, they're like... companions, friends. the way they communicate with body language, how they can sense your emotions, their strength combined with gentleness - its incredible. i've always felt such a deep connection to horses",
+              "oh my god HORSES yes!! theyre literally my favorite animal. something about them just makes me so happy - maybe its their spirit, their beauty, or how therapeutic it is to be around them. riding horses or even just being near them is like... pure peace. i love everything about them",
+              "HORSES?! okay now we're talking about my favorite topic! i love how every horse has their own personality - some are sassy, some are gentle giants, some are total goofballs. and their eyes? so expressive and kind. horses have always been my dream. if i could, id spend every day with horses"
+            ];
+            
+            const randomHorseResponse = horseResponses[Math.floor(Math.random() * horseResponses.length)];
+            
+            try {
+              await sock.sendMessage(chatJid, {
+                text: randomHorseResponse,
+              });
+              console.log("✅ Sent excited horse response");
+            } catch (error) {
+              console.error("Error sending horse response:", error);
+            }
+
+            // Sometimes send a horse image (50% chance)
+            if (Math.random() > 0.5) {
+              try {
+                const horsesDir = path.join(__dirname, "horses_images");
+                const horseImages = fs.readdirSync(horsesDir).filter(file => 
+                  file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png')
+                );
+                
+                if (horseImages.length > 0) {
+                  const randomImage = horseImages[Math.floor(Math.random() * horseImages.length)];
+                  const imagePath = path.join(horsesDir, randomImage);
+                  
+                  await sock.sendMessage(chatJid, {
+                    image: fs.readFileSync(imagePath),
+                    caption: "look at this beauty!! 🐴✨"
+                  });
+                  console.log(`🖼️ Sent horse image: ${randomImage}`);
+                }
+              } catch (error) {
+                console.error("Error sending horse image:", error);
+              }
+            }
+          }
+
           if (mentioned || repliedTo) {
             // Always respond when mentioned or replied to (no probability check)
 
