@@ -1070,12 +1070,25 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       const { senderName = "User", senderJid = "" } = this.currentContext;
 
+      // Check for help command
+      if (args[0]?.toLowerCase() === "help") {
+        return this.getTranscribeHelpMessage();
+      }
+
       // Parse language argument (if provided)
       const targetLang = args[0]?.toLowerCase();
+      
+      // Validate language if provided
+      if (targetLang) {
+        const language = DubService.validateLanguage(targetLang);
+        if (!language) {
+          return `❌ Unsupported language code: *${targetLang}*\n\n💡 Use *-tb help* to see all available languages!`;
+        }
+      }
 
       // Check if replying to a voice message
       if (!message.hasQuotedMsg) {
-        return `🎙️ *Voice Message Transcription*\n\nReply to a voice message with:\n-transcribe or -tb → Transcribe to English\n-tb [lang] → Keep original language\n\nExamples:\n• \`-tb\` → English transcription\n• \`-tb hi\` → Keep Hindi\n• \`-tb fr\` → Keep French\n• \`-tb es\` → Keep Spanish`;
+        return `🎙️ *Voice Message Transcription*\n\nReply to a voice message with:\n• \`-tb\` → Transcribe to English\n• \`-tb [lang]\` → Keep original language\n\nExamples:\n• \`-tb\` → English transcription\n• \`-tb hi\` → Hindi 🇮🇳\n• \`-tb fr\` → French 🇫🇷\n• \`-tb es\` → Spanish 🇪🇸\n\n💡 Use *-tb help* for all 29+ languages!`;
       }
 
       // Get the actual Baileys message structure to check for audio
@@ -1179,6 +1192,53 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
       return `❌ Transcription failed: ${error.message}\n\nTry again or contact bot owner if this persists!`;
     }
+  }
+
+  getTranscribeHelpMessage() {
+    return `🎙️ *Voice Transcription Help*
+
+*Basic Usage:*
+Reply to a voice message with:
+• \`-transcribe [lang]\` or \`-tb [lang]\`
+
+*Default Behavior:*
+• \`-tb\` → Transcribes to English (auto-translates if needed)
+
+*Language Preservation:*
+• \`-tb hi\` → Keep Hindi transcription
+• \`-tb es\` → Keep Spanish transcription
+• \`-tb fr\` → Keep French transcription
+
+*Supported Languages (29+):*
+
+🌍 *European Languages:*
+• \`en\` 🇺🇸 English • \`es\` 🇪🇸 Spanish • \`fr\` 🇫🇷 French
+• \`de\` 🇩🇪 German • \`it\` 🇮🇹 Italian • \`pt\` 🇧🇷 Portuguese
+• \`ru\` 🇷🇺 Russian • \`pl\` 🇵🇱 Polish • \`nl\` 🇳🇱 Dutch
+• \`sv\` 🇸🇪 Swedish • \`da\` 🇩🇰 Danish • \`fi\` 🇫🇮 Finnish
+• \`no\` 🇳🇴 Norwegian • \`cs\` 🇨🇿 Czech • \`el\` 🇬🇷 Greek
+• \`hu\` 🇭🇺 Hungarian • \`ro\` 🇷🇴 Romanian • \`uk\` 🇺🇦 Ukrainian
+• \`tr\` 🇹🇷 Turkish
+
+🌏 *Asian Languages:*
+• \`hi\` 🇮🇳 Hindi • \`ja\` 🇯🇵 Japanese • \`ko\` 🇰🇷 Korean
+• \`zh\` 🇨🇳 Chinese • \`ar\` 🇸🇦 Arabic • \`id\` 🇮🇩 Indonesian
+• \`ms\` 🇲🇾 Malay • \`th\` 🇹🇭 Thai • \`vi\` 🇻🇳 Vietnamese
+
+*Examples:*
+1️⃣ Reply to Hindi voice + \`-tb\` → Get English text
+2️⃣ Reply to Hindi voice + \`-tb hi\` → Get Hindi text
+3️⃣ Reply to French voice + \`-tb fr\` → Get French text
+4️⃣ Reply to Spanish voice + \`-tb\` → Get English text
+
+*Features:*
+✅ 100% FREE & Unlimited
+✅ Powered by Local Whisper
+✅ Auto language detection
+✅ Supports 29+ languages
+✅ Auto-translates to English by default
+
+*Note:* Without language code, all transcriptions are translated to English for convenience!`;
   }
 
   async dubVoiceMessage(args, message) {
