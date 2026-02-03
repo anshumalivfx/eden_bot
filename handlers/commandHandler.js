@@ -1070,9 +1070,12 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     try {
       const { senderName = "User", senderJid = "" } = this.currentContext;
 
+      // Parse language argument (if provided)
+      const targetLang = args[0]?.toLowerCase();
+
       // Check if replying to a voice message
       if (!message.hasQuotedMsg) {
-        return `🎙️ *Voice Message Transcription*\n\nReply to a voice message with:\n-transcribe or -tb\n\nExample:\n• Reply to a voice note with \`-tb\`\n• Get the text version instantly!`;
+        return `🎙️ *Voice Message Transcription*\n\nReply to a voice message with:\n-transcribe or -tb → Transcribe to English\n-tb [lang] → Keep original language\n\nExamples:\n• \`-tb\` → English transcription\n• \`-tb hi\` → Keep Hindi\n• \`-tb fr\` → Keep French\n• \`-tb es\` → Keep Spanish`;
       }
 
       // Get the actual Baileys message structure to check for audio
@@ -1136,6 +1139,22 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       // Clean up temp file
       fs.unlinkSync(tempAudioPath);
 
+      let finalText = transcription.text;
+      let displayLanguage = transcription.language || "auto-detected";
+
+      // If no language specified, translate to English
+      if (!targetLang && transcription.language !== "en") {
+        console.log(`🌐 Translating ${transcription.language} → English...`);
+        try {
+          const translated = await DubService.translateText(transcription.text, "en");
+          finalText = translated;
+          displayLanguage = "en (translated)";
+        } catch (translateError) {
+          console.warn("Translation failed, keeping original:", translateError.message);
+          // Keep original text if translation fails
+        }
+      }
+
       // React with checkmark
       try {
         await message.react("✅");
@@ -1143,11 +1162,8 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         console.warn("Failed to react:", e.message);
       }
 
-      const transcriptionEngine = process.env.DUB_TRANSCRIPTION_ENGINE || "whisper-local";
-      const engineName = transcriptionEngine === "groq" ? "Groq Whisper" : "Local Whisper";
-
-      // Return transcription
-      return `📝 *Transcription*\n\n${transcription.text}\n\n_Language: ${transcription.language || "auto-detected"}_\n_Engine: ${engineName}_`;
+      // Return transcription (without engine mention)
+      return `📝 *Transcription*\n\n${finalText}\n\n_Language: ${displayLanguage}_`;
     } catch (error) {
       console.error("Transcription error:", error);
 
