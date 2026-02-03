@@ -1129,10 +1129,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const tempAudioPath = path.join(tempDir, `voice_${Date.now()}.ogg`);
       fs.writeFileSync(tempAudioPath, audioBuffer);
 
-      // Transcribe using DubService
-      const dubService = new DubService();
+      // Transcribe using DubService (it's already a singleton instance)
       console.log("🎙️ Transcribing audio...");
-      const transcription = await dubService.transcribeAudio(tempAudioPath);
+      const transcription = await DubService.transcribeAudio(tempAudioPath);
 
       // Clean up temp file
       fs.unlinkSync(tempAudioPath);
