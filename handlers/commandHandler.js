@@ -2371,16 +2371,21 @@ Provide a structured analysis with emojis.`;
       }
 
       // Don't allow warning admins
+      // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
       );
 
       if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
         return "❌ Cannot warn group admins!";
       }
 
-      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
-      const actualJid = targetParticipant?.jid || targetJid;
+      // Get the actual JID for proper mentions
+      // If targetJid is already actual JID format (@s.whatsapp.net), use it
+      // Otherwise use participant.jid to convert from LID to actual JID
+      const actualJid = targetJid.includes('@s.whatsapp.net') 
+        ? targetJid 
+        : (targetParticipant?.jid || targetJid);
       const mentionNumber = actualJid.split("@")[0];
 
       // Add warning to database
@@ -2536,16 +2541,21 @@ Provide a structured analysis with emojis.`;
       }
 
       // Don't allow kicking admins
+      // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
       );
 
       if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
         return "❌ Cannot kick group admins!";
       }
 
-      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
-      const actualJid = targetParticipant?.jid || targetJid;
+      // Get the actual JID for proper mentions
+      // If targetJid is already actual JID format (@s.whatsapp.net), use it
+      // Otherwise use participant.jid to convert from LID to actual JID
+      const actualJid = targetJid.includes('@s.whatsapp.net') 
+        ? targetJid 
+        : (targetParticipant?.jid || targetJid);
       const mentionNumber = actualJid.split("@")[0];
 
       // Get warning history for context
@@ -2648,12 +2658,17 @@ Provide a structured analysis with emojis.`;
       }
 
       // Get the target participant for proper mention JID
+      // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
       );
 
-      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
-      const actualJid = targetParticipant?.jid || targetJid;
+      // Get the actual JID for proper mentions
+      // If targetJid is already actual JID format (@s.whatsapp.net), use it
+      // Otherwise use participant.jid to convert from LID to actual JID
+      const actualJid = targetJid.includes('@s.whatsapp.net') 
+        ? targetJid 
+        : (targetParticipant?.jid || targetJid);
       const mentionNumber = actualJid.split("@")[0];
 
       // Get all warnings for this user
@@ -2746,12 +2761,17 @@ Provide a structured analysis with emojis.`;
       }
 
       // Get the target participant for proper mention JID
+      // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
       );
 
-      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
-      const actualJid = targetParticipant?.jid || targetJid;
+      // Get the actual JID for proper mentions
+      // If targetJid is already actual JID format (@s.whatsapp.net), use it
+      // Otherwise use participant.jid to convert from LID to actual JID
+      const actualJid = targetJid.includes('@s.whatsapp.net') 
+        ? targetJid 
+        : (targetParticipant?.jid || targetJid);
       const mentionNumber = actualJid.split("@")[0];
 
       // Get warning count before clearing
