@@ -2647,12 +2647,21 @@ Provide a structured analysis with emojis.`;
         return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-show\`\n2️⃣ Mention a user: \`-show @user\``;
       }
 
+      // Get the target participant for proper mention JID
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.id === targetJid || p.lid === targetJid
+      );
+
+      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
+      const actualJid = targetParticipant?.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
       // Get all warnings for this user
       const warnings = this.warningStore.getWarnings(targetJid, groupJid);
       const warningCount = warnings.length;
 
       if (warningCount === 0) {
-        return `✨ *Clean Record*\n\n👤 User: @${targetJid.split("@")[0]}\n\n🎉 This user has no warnings! They're being... surprisingly well-behaved. For now.`;
+        return `✨ *Clean Record*\n\n👤 User: @${mentionNumber}\n\n🎉 This user has no warnings! They're being... surprisingly well-behaved. For now.`;
       }
 
       // Format warnings list
@@ -2684,11 +2693,11 @@ Provide a structured analysis with emojis.`;
         insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
       }
 
-      // Send message with mention
+      // Send message with mention using actual JID
       await rawMessage.reply(
-        `⚠️ *Warning History*\n\n👤 User: @${targetJid.split("@")[0]}\n🔢 Total Warnings: ${warningCount}/3\n\n📋 *Violations:*${warningsList}\n\n💬 *Eden's Take:*\n${insult}\n\n${warningCount === 2 ? "⚡ *One more warning and they're out!*" : warningCount === 1 ? "⏰ 2 more warnings until removal" : "⏰ 1 more warning until removal"}`,
+        `⚠️ *Warning History*\n\n👤 User: @${mentionNumber}\n🔢 Total Warnings: ${warningCount}/3\n\n📋 *Violations:*${warningsList}\n\n💬 *Eden's Take:*\n${insult}\n\n${warningCount === 2 ? "⚡ *One more warning and they're out!*" : warningCount === 1 ? "⏰ 2 more warnings until removal" : "⏰ 1 more warning until removal"}`,
         rawMessage.raw,
-        [targetJid]
+        [actualJid]
       );
 
       return null; // Already sent reply
@@ -2736,11 +2745,20 @@ Provide a structured analysis with emojis.`;
         return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-clean\`\n2️⃣ Mention a user: \`-clean @user\``;
       }
 
+      // Get the target participant for proper mention JID
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.id === targetJid || p.lid === targetJid
+      );
+
+      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
+      const actualJid = targetParticipant?.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
       // Get warning count before clearing
       const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
 
       if (warningCount === 0) {
-        return `✨ *Already Clean*\n\n👤 User: @${targetJid.split("@")[0]}\n\n🎉 This user has no warnings to clear!`;
+        return `✨ *Already Clean*\n\n👤 User: @${mentionNumber}\n\n🎉 This user has no warnings to clear!`;
       }
 
       // Clear warnings
@@ -2750,11 +2768,11 @@ Provide a structured analysis with emojis.`;
         `🧹 ${senderName} cleared ${warningCount} warning(s) for ${targetJid} in ${groupJid}`
       );
 
-      // Send message with mention
+      // Send message with mention using actual JID
       await rawMessage.reply(
-        `🧹 *Warnings Cleared*\n\n👤 User: @${targetJid.split("@")[0]}\n📊 Warnings Removed: ${warningCount}\n\n✨ Slate wiped clean! They better not mess this up again...\n\n*Cleared by:* ${senderName}`,
+        `🧹 *Warnings Cleared*\n\n👤 User: @${mentionNumber}\n📊 Warnings Removed: ${warningCount}\n\n✨ Slate wiped clean! They better not mess this up again...\n\n*Cleared by:* ${senderName}`,
         rawMessage.raw,
-        [targetJid]
+        [actualJid]
       );
 
       return null; // Already sent reply
