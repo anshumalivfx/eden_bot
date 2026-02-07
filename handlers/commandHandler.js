@@ -2331,16 +2331,30 @@ Provide a structured analysis with emojis.`;
 
       // Check if Eden is an admin - get bot's JID from sock.user
       const botJid = rawMessage.sock.user?.id;
+      console.log(`🔍 Bot JID: ${botJid}`);
+      console.log(`🔍 Group participants:`, groupMetadata.participants.map(p => ({
+        id: p.id,
+        admin: p.admin,
+        superAdmin: p.isSuperAdmin
+      })));
+      
       const botParticipant = groupMetadata.participants.find(
         (p) => {
           const botNumber = botJid?.split(":")[0]?.split("@")[0];
           const pNumber = p.id?.split("@")[0];
+          console.log(`🔍 Comparing: bot=${botNumber} vs participant=${pNumber}`);
           return pNumber === botNumber;
         }
       );
 
-      if (!botParticipant || (!botParticipant.admin && !botParticipant.isSuperAdmin)) {
-        return "❌ I need to be an admin to warn users!";
+      console.log(`🔍 Bot participant found:`, botParticipant);
+
+      if (!botParticipant) {
+        return "❌ I need to be an admin to warn users! (Bot not found in group)";
+      }
+      
+      if (!botParticipant.admin && !botParticipant.isSuperAdmin) {
+        return "❌ I need to be an admin to warn users! (Bot is not an admin)";
       }
 
       let targetJid = null;
@@ -2496,8 +2510,12 @@ Provide a structured analysis with emojis.`;
         }
       );
 
-      if (!botParticipant || (!botParticipant.admin && !botParticipant.isSuperAdmin)) {
-        return "❌ I need to be an admin to kick users!";
+      if (!botParticipant) {
+        return "❌ I need to be an admin to kick users! (Bot not found in group)";
+      }
+      
+      if (!botParticipant.admin && !botParticipant.isSuperAdmin) {
+        return "❌ I need to be an admin to kick users! (Bot is not an admin)";
       }
 
       let targetJid = null;
