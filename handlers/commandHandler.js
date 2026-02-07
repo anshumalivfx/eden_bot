@@ -5,6 +5,7 @@ const InteractionService = require("../services/interactionService");
 const PetService = require("../services/petService");
 const DubService = require("../services/dubService");
 const ImageService = require("../services/imageService");
+const WarningStore = require("../database/warningStore");
 
 class CommandHandler {
   constructor(llmService) {
@@ -14,6 +15,7 @@ class CommandHandler {
     this.youtubeService = new YouTubeService();
     this.interactionService = new InteractionService();
     this.petService = new PetService();
+    this.warningStore = new WarningStore();
     this.currentContext = {};
     this.commands = {
       help: this.showHelp.bind(this),
@@ -94,6 +96,11 @@ class CommandHandler {
       draw: this.generateImage.bind(this),
       transform: this.transformImage.bind(this),
       reimagine: this.transformImage.bind(this),
+      // Admin commands
+      warn: this.handleWarn.bind(this),
+      kick: this.handleKick.bind(this),
+      clean: this.handleClean.bind(this),
+      show: this.handleShow.bind(this),
     };
   }
 
@@ -189,6 +196,17 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 • \`-pat @person\` - Pat someone's head
 • \`-love @person\` - Show love to someone
 • \`-cuddle @person\` - Cuddle with someone
+
+*👮 Admin Commands (Group Admin Only):*
+• \`-warn @user [reason]\` - Warn a user (3 warnings = auto-kick)
+• Reply to message + \`-warn [reason]\` - Warn via reply
+• \`-kick @user\` - Immediately remove user from group
+• Reply to message + \`-kick\` - Kick via reply
+• \`-show @user\` - Show all warnings for a user
+• Reply to message + \`-show\` - Show warnings via reply
+• \`-clean @user\` - Clear all warnings for a user
+• Reply to message + \`-clean\` - Clear warnings via reply
+• Note: I must be an admin to use these commands!
 
 *🎯 Mention Me:*
 Say "Eden" or "@Eden" and I'll respond!
@@ -295,6 +313,17 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • Default: Analyzes last 40 messages
 • Range: 20-100 messages
 • Example: \`-analyze 50\` analyzes last 50 messages
+
+*👮 Admin Commands (Group Admin Only):*
+• \`-warn @user [reason]\` - Warn a user (3 warnings = auto-kick)
+• Reply to message + \`-warn [reason]\` - Warn via reply
+• \`-kick @user\` - Immediately remove user from group
+• Reply to message + \`-kick\` - Kick via reply
+• \`-show @user\` - Show all warnings for a user
+• Reply to message + \`-show\` - Show warnings via reply
+• \`-clean @user\` - Clear all warnings for a user
+• Reply to message + \`-clean\` - Clear warnings via reply
+• Note: I must be an admin to use these commands!
 
 *🎯 Mention Me:*
 Say "Eden" or "@Eden" and I'll grace you with my presence. Maybe.
@@ -2272,6 +2301,440 @@ Provide a structured analysis with emojis.`;
       }
 
       return `❌ Failed to transform image: ${error.message}\n\nTry with a different prompt or image!`;
+    }
+  }
+
+  /**
+   * Admin command: Warn a user
+   */
+  async handleWarn(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      // Check if this is a group chat
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      // Check if the command issuer is an admin
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid
+      );
+
+      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+        return "❌ Only admins can use this command!";
+      }
+
+      // Check if Eden is an admin - get bot's JID from sock.user
+      const botJid = rawMessage.sock.user?.id;
+      const botParticipant = groupMetadata.participants.find(
+        (p) => {
+          const botNumber = botJid?.split(":")[0]?.split("@")[0];
+          const pNumber = p.id?.split("@")[0];
+          return pNumber === botNumber;
+        }
+      );
+
+      if (!botParticipant || (!botParticipant.admin && !botParticipant.isSuperAdmin)) {
+        return "❌ I need to be an admin to warn users!";
+      }
+
+      let targetJid = null;
+      let reason = "";
+
+      // Method 1: Check if replying to a message
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+        reason = args.join(" ").trim() || "No reason provided";
+      }
+      // Method 2: Check if mentioning a user
+      else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+        // Remove mention from args to get reason
+        const fullText = args.join(" ");
+        reason = fullText.replace(/@\d+/g, "").trim() || "No reason provided";
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-warn [reason]\`\n2️⃣ Mention a user: \`-warn @user [reason]\``;
+      }
+
+      // Don't allow warning admins
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.id === targetJid || p.lid === targetJid
+      );
+
+      if (targetParticipant && (targetParticipant.admin || targetParticipant.isSuperAdmin)) {
+        return "❌ Cannot warn group admins!";
+      }
+
+      // Add warning to database
+      const warningCount = this.warningStore.addWarning(
+        targetJid,
+        groupJid,
+        reason,
+        adminJid
+      );
+
+      console.log(
+        `⚠️ ${senderName} warned user ${targetJid} in ${groupJid}. Total warnings: ${warningCount}`
+      );
+
+      // Generate an insult based on the warning reason
+      let insult = "";
+      try {
+        insult = await this.llmService.generateMeanResponse(
+          `Someone was warned for: "${reason}". Generate a short, witty insult (1-2 sentences max) mocking them for this behavior.`,
+          "Be sarcastic, clever, and appropriately mean. Keep it brief and punchy. Don't use the word 'warned' in your insult."
+        );
+      } catch (error) {
+        console.error("Error generating insult:", error);
+        // Fallback insults
+        const fallbackInsults = [
+          "Seriously? That's embarrassing. 🤦",
+          "Not your finest moment, is it? 😏",
+          "Maybe think before you act next time? 🙄",
+          "Congratulations on being 'that person'. 👏",
+          "Your decision-making skills are... questionable. 🤔"
+        ];
+        insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
+      }
+
+      // If user has 3 or more warnings, kick them
+      if (warningCount >= 3) {
+        try {
+          // Remove user from group
+          await rawMessage.sock.groupParticipantsUpdate(
+            groupJid,
+            [targetJid],
+            "remove"
+          );
+
+          // Clear warnings after kicking
+          this.warningStore.clearWarnings(targetJid, groupJid);
+
+          // Generate a funny farewell message
+          const farewellMessages = [
+            "Good riddance! 👋",
+            "Don't let the door hit you on the way out! 🚪",
+            "And nothing of value was lost... 🗑️",
+            "Bye Felicia! 👋😂",
+            "You've been voted off the island! 🏝️",
+            "See ya, wouldn't wanna be ya! 👋",
+            "Pack your bags, you're outta here! 🎒",
+            "Thanks for playing, better luck next time! 🎮",
+            "Your free trial of this group has expired! ⏰",
+            "Hasta la vista, baby! 🤖",
+            "You just got Eden'd! 😎",
+            "One less problem for us! 🎉",
+            "The group IQ just went up! 🧠📈"
+          ];
+          const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
+
+          // Send message with mention
+          await rawMessage.reply(
+            `⚠️ *User Removed*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n\n🚫 User has been removed from the group after receiving 3 warnings.\n\n${farewell}\n\n*Warned by:* ${senderName}`,
+            rawMessage.raw,
+            [targetJid]
+          );
+          
+          return null; // Already sent reply
+        } catch (error) {
+          console.error("Error kicking user:", error);
+          return `⚠️ *Warning #${warningCount} Issued*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n\n🚫 User has 3 warnings but I couldn't remove them. Please check my admin permissions!\n\n*Warned by:* ${senderName}`;
+        }
+      }
+
+      // Send warning message with mention and insult
+      await rawMessage.reply(
+        `⚠️ *Warning Issued*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n🔢 Warnings: ${warningCount}/3\n\n${insult}\n\n${warningCount === 2 ? "⚡ *Final Warning!* One more warning and you'll be removed from the group." : `⏰ ${3 - warningCount} warning(s) remaining`}\n\n*Warned by:* ${senderName}`,
+        rawMessage.raw,
+        [targetJid]
+      );
+
+      return null; // Already sent reply
+    } catch (error) {
+      console.error("❌ Warn command error:", error);
+      return `❌ Failed to warn user: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Kick a user
+   */
+  async handleKick(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      // Check if this is a group chat
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      // Check if the command issuer is an admin
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid
+      );
+
+      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+        return "❌ Only admins can use this command!";
+      }
+
+      // Check if Eden is an admin - get bot's JID from sock.user
+      const botJid = rawMessage.sock.user?.id;
+      const botParticipant = groupMetadata.participants.find(
+        (p) => {
+          const botNumber = botJid?.split(":")[0]?.split("@")[0];
+          const pNumber = p.id?.split("@")[0];
+          return pNumber === botNumber;
+        }
+      );
+
+      if (!botParticipant || (!botParticipant.admin && !botParticipant.isSuperAdmin)) {
+        return "❌ I need to be an admin to kick users!";
+      }
+
+      let targetJid = null;
+
+      // Method 1: Check if replying to a message
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+      }
+      // Method 2: Check if mentioning a user
+      else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-kick\`\n2️⃣ Mention a user: \`-kick @user\``;
+      }
+
+      // Don't allow kicking admins
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.id === targetJid || p.lid === targetJid
+      );
+
+      if (targetParticipant && (targetParticipant.admin || targetParticipant.isSuperAdmin)) {
+        return "❌ Cannot kick group admins!";
+      }
+
+      // Get warning history for context
+      const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
+
+      try {
+        // Remove user from group
+        await rawMessage.sock.groupParticipantsUpdate(
+          groupJid,
+          [targetJid],
+          "remove"
+        );
+
+        // Clear warnings after kicking
+        this.warningStore.clearWarnings(targetJid, groupJid);
+
+        console.log(
+          `🚫 ${senderName} kicked user ${targetJid} from ${groupJid}`
+        );
+
+        const warningNote = warningCount > 0 
+          ? `\n📊 User had ${warningCount} warning(s).` 
+          : "";
+
+        // Generate a funny farewell message
+        const farewellMessages = [
+          "Good riddance! 👋",
+          "Don't let the door hit you on the way out! 🚪",
+          "And nothing of value was lost... 🗑️",
+          "Bye Felicia! 👋😂",
+          "You've been voted off the island! 🏝️",
+          "See ya, wouldn't wanna be ya! 👋",
+          "Pack your bags, you're outta here! 🎒",
+          "Thanks for playing, better luck next time! 🎮",
+          "Your free trial of this group has expired! ⏰",
+          "Hasta la vista, baby! 🤖",
+          "You just got Eden'd! 😎",
+          "One less problem for us! 🎉",
+          "The group IQ just went up! 🧠📈",
+          "Enjoy your freedom... from us! 🕊️",
+          "Better luck in your next group! 🍀",
+          "Congratulations on your exit! 🎊"
+        ];
+        const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
+
+        // Send message with mention
+        await rawMessage.reply(
+          `🚫 *User Removed*\n\n👤 User: @${targetJid.split("@")[0]}${warningNote}\n\n${farewell}\n\n*Kicked by:* ${senderName}`,
+          rawMessage.raw,
+          [targetJid]
+        );
+
+        return null; // Already sent reply
+      } catch (error) {
+        console.error("Error kicking user:", error);
+        return `❌ Failed to remove user: ${error.message}\n\nPlease check my admin permissions!`;
+      }
+    } catch (error) {
+      console.error("❌ Kick command error:", error);
+      return `❌ Failed to kick user: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Show warnings for a user
+   */
+  async handleShow(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      // Check if this is a group chat
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      // Check if the command issuer is an admin
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid
+      );
+
+      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+        return "❌ Only admins can use this command!";
+      }
+
+      let targetJid = null;
+
+      // Method 1: Check if replying to a message
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+      }
+      // Method 2: Check if mentioning a user
+      else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-show\`\n2️⃣ Mention a user: \`-show @user\``;
+      }
+
+      // Get all warnings for this user
+      const warnings = this.warningStore.getWarnings(targetJid, groupJid);
+      const warningCount = warnings.length;
+
+      if (warningCount === 0) {
+        return `✨ *Clean Record*\n\n👤 User: @${targetJid.split("@")[0]}\n\n🎉 This user has no warnings! They're being... surprisingly well-behaved. For now.`;
+      }
+
+      // Format warnings list
+      let warningsList = "";
+      warnings.forEach((warning, index) => {
+        const date = new Date(warning.timestamp);
+        const dateStr = date.toLocaleDateString();
+        warningsList += `\n${index + 1}. *${warning.reason}*\n   📅 ${dateStr}`;
+      });
+
+      // Generate an insult based on all the warnings
+      let insult = "";
+      try {
+        const reasons = warnings.map(w => w.reason).join(", ");
+        insult = await this.llmService.generateMeanResponse(
+          `Someone has been warned ${warningCount} time(s) for these reasons: "${reasons}". Generate a witty, sarcastic roast (2-3 sentences) about their behavior pattern.`,
+          "Be clever, sarcastic, and funny. Mock their inability to follow simple rules. Make it memorable."
+        );
+      } catch (error) {
+        console.error("Error generating insult:", error);
+        // Fallback insults based on warning count
+        const fallbackInsults = [
+          "Wow, quite the track record you've got there. Should I get you a trophy? 🏆",
+          "Some people learn from mistakes. You, apparently, collect them. 📚",
+          "Is rule-breaking a hobby or are you just naturally talented at it? 🎯",
+          "At this rate, you'll have your own Wikipedia page for 'What Not To Do'. 📖",
+          "I'm impressed by your consistency... in making poor choices. 👏"
+        ];
+        insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
+      }
+
+      // Send message with mention
+      await rawMessage.reply(
+        `⚠️ *Warning History*\n\n👤 User: @${targetJid.split("@")[0]}\n🔢 Total Warnings: ${warningCount}/3\n\n📋 *Violations:*${warningsList}\n\n💬 *Eden's Take:*\n${insult}\n\n${warningCount === 2 ? "⚡ *One more warning and they're out!*" : warningCount === 1 ? "⏰ 2 more warnings until removal" : "⏰ 1 more warning until removal"}`,
+        rawMessage.raw,
+        [targetJid]
+      );
+
+      return null; // Already sent reply
+    } catch (error) {
+      console.error("❌ Show command error:", error);
+      return `❌ Failed to show warnings: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Clear warnings for a user
+   */
+  async handleClean(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      // Check if this is a group chat
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      // Check if the command issuer is an admin
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid
+      );
+
+      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+        return "❌ Only admins can use this command!";
+      }
+
+      let targetJid = null;
+
+      // Method 1: Check if replying to a message
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+      }
+      // Method 2: Check if mentioning a user
+      else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-clean\`\n2️⃣ Mention a user: \`-clean @user\``;
+      }
+
+      // Get warning count before clearing
+      const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
+
+      if (warningCount === 0) {
+        return `✨ *Already Clean*\n\n👤 User: @${targetJid.split("@")[0]}\n\n🎉 This user has no warnings to clear!`;
+      }
+
+      // Clear warnings
+      this.warningStore.clearWarnings(targetJid, groupJid);
+
+      console.log(
+        `🧹 ${senderName} cleared ${warningCount} warning(s) for ${targetJid} in ${groupJid}`
+      );
+
+      // Send message with mention
+      await rawMessage.reply(
+        `🧹 *Warnings Cleared*\n\n👤 User: @${targetJid.split("@")[0]}\n📊 Warnings Removed: ${warningCount}\n\n✨ Slate wiped clean! They better not mess this up again...\n\n*Cleared by:* ${senderName}`,
+        rawMessage.raw,
+        [targetJid]
+      );
+
+      return null; // Already sent reply
+    } catch (error) {
+      console.error("❌ Clean command error:", error);
+      return `❌ Failed to clear warnings: ${error.message}`;
     }
   }
 }
