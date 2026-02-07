@@ -2325,7 +2325,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === adminJid || p.lid === rawMessage.lid
       );
 
-      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
         return "❌ Only admins can use this command!";
       }
 
@@ -2334,8 +2334,7 @@ Provide a structured analysis with emojis.`;
       console.log(`🔍 Bot JID: ${botJid}`);
       console.log(`🔍 Group participants:`, groupMetadata.participants.map(p => ({
         id: p.id,
-        admin: p.admin,
-        superAdmin: p.isSuperAdmin
+        admin: p.admin
       })));
       
       const botParticipant = groupMetadata.participants.find(
@@ -2353,7 +2352,7 @@ Provide a structured analysis with emojis.`;
         return "❌ I need to be an admin to warn users! (Bot not found in group)";
       }
       
-      if (!botParticipant.admin && !botParticipant.isSuperAdmin) {
+      if (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin') {
         return "❌ I need to be an admin to warn users! (Bot is not an admin)";
       }
 
@@ -2380,7 +2379,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === targetJid || p.lid === targetJid
       );
 
-      if (targetParticipant && (targetParticipant.admin || targetParticipant.isSuperAdmin)) {
+      if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
         return "❌ Cannot warn group admins!";
       }
 
@@ -2496,7 +2495,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === adminJid || p.lid === rawMessage.lid
       );
 
-      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
         return "❌ Only admins can use this command!";
       }
 
@@ -2514,7 +2513,7 @@ Provide a structured analysis with emojis.`;
         return "❌ I need to be an admin to kick users! (Bot not found in group)";
       }
       
-      if (!botParticipant.admin && !botParticipant.isSuperAdmin) {
+      if (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin') {
         return "❌ I need to be an admin to kick users! (Bot is not an admin)";
       }
 
@@ -2536,7 +2535,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === targetJid || p.lid === targetJid
       );
 
-      if (targetParticipant && (targetParticipant.admin || targetParticipant.isSuperAdmin)) {
+      if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
         return "❌ Cannot kick group admins!";
       }
 
@@ -2622,7 +2621,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === adminJid || p.lid === rawMessage.lid
       );
 
-      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
         return "❌ Only admins can use this command!";
       }
 
@@ -2711,7 +2710,7 @@ Provide a structured analysis with emojis.`;
         (p) => p.id === adminJid || p.lid === rawMessage.lid
       );
 
-      if (!issuerParticipant || (!issuerParticipant.admin && !issuerParticipant.isSuperAdmin)) {
+      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
         return "❌ Only admins can use this command!";
       }
 
