@@ -2332,7 +2332,6 @@ Provide a structured analysis with emojis.`;
       // Check if Eden is an admin - get bot's JID and LID from sock.user
       const botJid = rawMessage.sock.user?.id;
       const botLid = rawMessage.sock.user?.lid;
-      console.log(`🔍 Bot JID: ${botJid}, Bot LID: ${botLid}`);
       
       // Match bot using either jid or lid fields
       const botParticipant = groupMetadata.participants.find(
@@ -2341,12 +2340,9 @@ Provide a structured analysis with emojis.`;
           const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
           const pJidNumber = p.jid?.split("@")[0];
           const pIdNumber = p.id?.split("@")[0];
-          console.log(`🔍 Comparing bot=${botNumber}/${botLidNumber} vs p.jid=${pJidNumber}/p.id=${pIdNumber}`);
           return pJidNumber === botNumber || pIdNumber === botLidNumber;
         }
       );
-
-      console.log(`🔍 Bot participant found:`, botParticipant);
 
       if (!botParticipant) {
         return "❌ I need to be an admin to warn users! (Bot not found in group)";
