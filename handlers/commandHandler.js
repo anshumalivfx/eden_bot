@@ -2332,16 +2332,14 @@ Provide a structured analysis with emojis.`;
       // Check if Eden is an admin - get bot's JID from sock.user
       const botJid = rawMessage.sock.user?.id;
       console.log(`🔍 Bot JID: ${botJid}`);
-      console.log(`🔍 Group participants:`, groupMetadata.participants.map(p => ({
-        id: p.id,
-        admin: p.admin
-      })));
+      console.log(`🔍 Bot full user object:`, rawMessage.sock.user);
+      console.log(`🔍 ALL Group participants (full):`, JSON.stringify(groupMetadata.participants, null, 2));
       
       const botParticipant = groupMetadata.participants.find(
         (p) => {
           const botNumber = botJid?.split(":")[0]?.split("@")[0];
           const pNumber = p.id?.split("@")[0];
-          console.log(`🔍 Comparing: bot=${botNumber} vs participant=${pNumber}`);
+          console.log(`🔍 Comparing: bot=${botNumber} vs participant=${pNumber}, p.lid=${JSON.stringify(p.lid)}`);
           return pNumber === botNumber;
         }
       );
