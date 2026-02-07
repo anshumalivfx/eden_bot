@@ -2383,6 +2383,10 @@ Provide a structured analysis with emojis.`;
         return "❌ Cannot warn group admins!";
       }
 
+      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
+      const actualJid = targetParticipant?.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
       // Add warning to database
       const warningCount = this.warningStore.addWarning(
         targetJid,
@@ -2399,18 +2403,18 @@ Provide a structured analysis with emojis.`;
       let insult = "";
       try {
         insult = await this.llmService.generateMeanResponse(
-          `Someone was warned for: "${reason}". Generate a short, witty insult (1-2 sentences max) mocking them for this behavior.`,
-          "Be sarcastic, clever, and appropriately mean. Keep it brief and punchy. Don't use the word 'warned' in your insult."
+          `Someone was warned for: "${reason}". Generate a savage, brutal roast (1-2 sentences max) mocking them harshly for this behavior. Be ruthless and cutting.`,
+          "Be extremely sarcastic, savage, and brutal. Make it hurt. Channel your inner mean girl/bully. Keep it brief but devastating. Make them regret their actions."
         );
       } catch (error) {
         console.error("Error generating insult:", error);
-        // Fallback insults
+        // Fallback insults - make them more brutal
         const fallbackInsults = [
-          "Seriously? That's embarrassing. 🤦",
-          "Not your finest moment, is it? 😏",
-          "Maybe think before you act next time? 🙄",
-          "Congratulations on being 'that person'. 👏",
-          "Your decision-making skills are... questionable. 🤔"
+          "Wow, imagine being THAT person. Embarrassing. 🤦",
+          "Your decision-making skills are a crime against humanity. 😤",
+          "Congratulations on being the group disappointment. 👏😂",
+          "Nature is healing... by removing you from the gene pool. 🗑️",
+          "Your brain really said 'I'm gonna sit this one out' huh? 🧠❌"
         ];
         insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
       }
@@ -2446,25 +2450,25 @@ Provide a structured analysis with emojis.`;
           ];
           const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
 
-          // Send message with mention
+          // Send message with mention using actual JID
           await rawMessage.reply(
-            `⚠️ *User Removed*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n\n🚫 User has been removed from the group after receiving 3 warnings.\n\n${farewell}\n\n*Warned by:* ${senderName}`,
+            `⚠️ *User Removed*\n\n👤 User: @${mentionNumber}\n📋 Reason: ${reason}\n\n🚫 User has been removed from the group after receiving 3 warnings.\n\n${farewell}\n\n*Warned by:* ${senderName}`,
             rawMessage.raw,
-            [targetJid]
+            [actualJid]
           );
           
           return null; // Already sent reply
         } catch (error) {
           console.error("Error kicking user:", error);
-          return `⚠️ *Warning #${warningCount} Issued*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n\n🚫 User has 3 warnings but I couldn't remove them. Please check my admin permissions!\n\n*Warned by:* ${senderName}`;
+          return `⚠️ *Warning #${warningCount} Issued*\n\n👤 User: @${mentionNumber}\n📋 Reason: ${reason}\n\n🚫 User has 3 warnings but I couldn't remove them. Please check my admin permissions!\n\n*Warned by:* ${senderName}`;
         }
       }
 
-      // Send warning message with mention and insult
+      // Send warning message with mention and insult using actual JID
       await rawMessage.reply(
-        `⚠️ *Warning Issued*\n\n👤 User: @${targetJid.split("@")[0]}\n📋 Reason: ${reason}\n🔢 Warnings: ${warningCount}/3\n\n${insult}\n\n${warningCount === 2 ? "⚡ *Final Warning!* One more warning and you'll be removed from the group." : `⏰ ${3 - warningCount} warning(s) remaining`}\n\n*Warned by:* ${senderName}`,
+        `⚠️ *Warning Issued*\n\n👤 User: @${mentionNumber}\n📋 Reason: ${reason}\n🔢 Warnings: ${warningCount}/3\n\n${insult}\n\n${warningCount === 2 ? "⚡ *Final Warning!* One more warning and you'll be removed from the group." : `⏰ ${3 - warningCount} warning(s) remaining`}\n\n*Warned by:* ${senderName}`,
         rawMessage.raw,
-        [targetJid]
+        [actualJid]
       );
 
       return null; // Already sent reply
@@ -2544,6 +2548,10 @@ Provide a structured analysis with emojis.`;
         return "❌ Cannot kick group admins!";
       }
 
+      // Get the actual JID for proper mentions (use jid field if available, fallback to targetJid)
+      const actualJid = targetParticipant?.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
       // Get warning history for context
       const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
 
@@ -2587,11 +2595,11 @@ Provide a structured analysis with emojis.`;
         ];
         const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
 
-        // Send message with mention
+        // Send message with mention using actual JID
         await rawMessage.reply(
-          `🚫 *User Removed*\n\n👤 User: @${targetJid.split("@")[0]}${warningNote}\n\n${farewell}\n\n*Kicked by:* ${senderName}`,
+          `🚫 *User Removed*\n\n👤 User: @${mentionNumber}${warningNote}\n\n${farewell}\n\n*Kicked by:* ${senderName}`,
           rawMessage.raw,
-          [targetJid]
+          [actualJid]
         );
 
         return null; // Already sent reply
