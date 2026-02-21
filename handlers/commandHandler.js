@@ -2322,33 +2322,38 @@ Provide a structured analysis with emojis.`;
       // Check if the command issuer is an admin
       const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
       const issuerParticipant = groupMetadata.participants.find(
-        (p) => p.id === adminJid || p.lid === rawMessage.lid
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
       );
 
-      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
         return "❌ Only admins can use this command!";
       }
 
       // Check if Eden is an admin - get bot's JID and LID from sock.user
       const botJid = rawMessage.sock.user?.id;
       const botLid = rawMessage.sock.user?.lid;
-      
+
       // Match bot using either jid or lid fields
-      const botParticipant = groupMetadata.participants.find(
-        (p) => {
-          const botNumber = botJid?.split(":")[0]?.split("@")[0];
-          const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
-          const pJidNumber = p.jid?.split("@")[0];
-          const pIdNumber = p.id?.split("@")[0];
-          return pJidNumber === botNumber || pIdNumber === botLidNumber;
-        }
-      );
+      const botParticipant = groupMetadata.participants.find((p) => {
+        const botNumber = botJid?.split(":")[0]?.split("@")[0];
+        const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
+        const pJidNumber = p.jid?.split("@")[0];
+        const pIdNumber = p.id?.split("@")[0];
+        return pJidNumber === botNumber || pIdNumber === botLidNumber;
+      });
 
       if (!botParticipant) {
         return "❌ I need to be an admin to warn users! (Bot not found in group)";
       }
-      
-      if (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin') {
+
+      if (
+        botParticipant.admin !== "admin" &&
+        botParticipant.admin !== "superadmin"
+      ) {
         return "❌ I need to be an admin to warn users! (Bot is not an admin)";
       }
 
@@ -2373,19 +2378,23 @@ Provide a structured analysis with emojis.`;
       // Don't allow warning admins
       // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
       );
 
-      if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
+      if (
+        targetParticipant &&
+        (targetParticipant.admin === "admin" ||
+          targetParticipant.admin === "superadmin")
+      ) {
         return "❌ Cannot warn group admins!";
       }
 
       // Get the actual JID for proper mentions
       // If targetJid is already actual JID format (@s.whatsapp.net), use it
       // Otherwise use participant.jid to convert from LID to actual JID
-      const actualJid = targetJid.includes('@s.whatsapp.net') 
-        ? targetJid 
-        : (targetParticipant?.jid || targetJid);
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant?.jid || targetJid;
       const mentionNumber = actualJid.split("@")[0];
 
       // Add warning to database
@@ -2393,11 +2402,11 @@ Provide a structured analysis with emojis.`;
         targetJid,
         groupJid,
         reason,
-        adminJid
+        adminJid,
       );
 
       console.log(
-        `⚠️ ${senderName} warned user ${targetJid} in ${groupJid}. Total warnings: ${warningCount}`
+        `⚠️ ${senderName} warned user ${targetJid} in ${groupJid}. Total warnings: ${warningCount}`,
       );
 
       // Generate an insult based on the warning reason
@@ -2405,7 +2414,7 @@ Provide a structured analysis with emojis.`;
       try {
         insult = await this.llmService.generateMeanResponse(
           `Someone was warned for: "${reason}". Generate a savage, brutal roast (1-2 sentences max) mocking them harshly for this behavior. Be ruthless and cutting.`,
-          "Be extremely sarcastic, savage, and brutal. Make it hurt. Channel your inner mean girl/bully. Keep it brief but devastating. Make them regret their actions."
+          "Be extremely sarcastic, savage, and brutal. Make it hurt. Channel your inner mean girl/bully. Keep it brief but devastating. Make them regret their actions.",
         );
       } catch (error) {
         console.error("Error generating insult:", error);
@@ -2415,9 +2424,10 @@ Provide a structured analysis with emojis.`;
           "Your decision-making skills are a crime against humanity. 😤",
           "Congratulations on being the group disappointment. 👏😂",
           "Nature is healing... by removing you from the gene pool. 🗑️",
-          "Your brain really said 'I'm gonna sit this one out' huh? 🧠❌"
+          "Your brain really said 'I'm gonna sit this one out' huh? 🧠❌",
         ];
-        insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
+        insult =
+          fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
       }
 
       // If user has 3 or more warnings, kick them
@@ -2427,7 +2437,7 @@ Provide a structured analysis with emojis.`;
           await rawMessage.sock.groupParticipantsUpdate(
             groupJid,
             [targetJid],
-            "remove"
+            "remove",
           );
 
           // Clear warnings after kicking
@@ -2447,17 +2457,20 @@ Provide a structured analysis with emojis.`;
             "Hasta la vista, baby! 🤖",
             "You just got Eden'd! 😎",
             "One less problem for us! 🎉",
-            "The group IQ just went up! 🧠📈"
+            "The group IQ just went up! 🧠📈",
           ];
-          const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
+          const farewell =
+            farewellMessages[
+              Math.floor(Math.random() * farewellMessages.length)
+            ];
 
           // Send message with mention using actual JID
           await rawMessage.reply(
             `⚠️ *User Removed*\n\n👤 User: @${mentionNumber}\n📋 Reason: ${reason}\n\n🚫 User has been removed from the group after receiving 3 warnings.\n\n${farewell}\n\n*Warned by:* ${senderName}`,
             rawMessage.raw,
-            [actualJid]
+            [actualJid],
           );
-          
+
           return null; // Already sent reply
         } catch (error) {
           console.error("Error kicking user:", error);
@@ -2469,7 +2482,7 @@ Provide a structured analysis with emojis.`;
       await rawMessage.reply(
         `⚠️ *Warning Issued*\n\n👤 User: @${mentionNumber}\n📋 Reason: ${reason}\n🔢 Warnings: ${warningCount}/3\n\n${insult}\n\n${warningCount === 2 ? "⚡ *Final Warning!* One more warning and you'll be removed from the group." : `⏰ ${3 - warningCount} warning(s) remaining`}\n\n*Warned by:* ${senderName}`,
         rawMessage.raw,
-        [actualJid]
+        [actualJid],
       );
 
       return null; // Already sent reply
@@ -2497,33 +2510,38 @@ Provide a structured analysis with emojis.`;
       // Check if the command issuer is an admin
       const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
       const issuerParticipant = groupMetadata.participants.find(
-        (p) => p.id === adminJid || p.lid === rawMessage.lid
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
       );
 
-      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
         return "❌ Only admins can use this command!";
       }
 
       // Check if Eden is an admin - get bot's JID and LID from sock.user
       const botJid = rawMessage.sock.user?.id;
       const botLid = rawMessage.sock.user?.lid;
-      
+
       // Match bot using either jid or lid fields
-      const botParticipant = groupMetadata.participants.find(
-        (p) => {
-          const botNumber = botJid?.split(":")[0]?.split("@")[0];
-          const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
-          const pJidNumber = p.jid?.split("@")[0];
-          const pIdNumber = p.id?.split("@")[0];
-          return pJidNumber === botNumber || pIdNumber === botLidNumber;
-        }
-      );
+      const botParticipant = groupMetadata.participants.find((p) => {
+        const botNumber = botJid?.split(":")[0]?.split("@")[0];
+        const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
+        const pJidNumber = p.jid?.split("@")[0];
+        const pIdNumber = p.id?.split("@")[0];
+        return pJidNumber === botNumber || pIdNumber === botLidNumber;
+      });
 
       if (!botParticipant) {
         return "❌ I need to be an admin to kick users! (Bot not found in group)";
       }
-      
-      if (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin') {
+
+      if (
+        botParticipant.admin !== "admin" &&
+        botParticipant.admin !== "superadmin"
+      ) {
         return "❌ I need to be an admin to kick users! (Bot is not an admin)";
       }
 
@@ -2543,42 +2561,48 @@ Provide a structured analysis with emojis.`;
       // Don't allow kicking admins
       // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
       );
 
-      if (targetParticipant && (targetParticipant.admin === 'admin' || targetParticipant.admin === 'superadmin')) {
+      if (
+        targetParticipant &&
+        (targetParticipant.admin === "admin" ||
+          targetParticipant.admin === "superadmin")
+      ) {
         return "❌ Cannot kick group admins!";
       }
 
       // Get the actual JID for proper mentions
       // If targetJid is already actual JID format (@s.whatsapp.net), use it
       // Otherwise use participant.jid to convert from LID to actual JID
-      const actualJid = targetJid.includes('@s.whatsapp.net') 
-        ? targetJid 
-        : (targetParticipant?.jid || targetJid);
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant?.jid || targetJid;
       const mentionNumber = actualJid.split("@")[0];
 
       // Get warning history for context
-      const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
+      const warningCount = this.warningStore.getWarningCount(
+        targetJid,
+        groupJid,
+      );
 
       try {
         // Remove user from group
         await rawMessage.sock.groupParticipantsUpdate(
           groupJid,
           [targetJid],
-          "remove"
+          "remove",
         );
 
         // Clear warnings after kicking
         this.warningStore.clearWarnings(targetJid, groupJid);
 
         console.log(
-          `🚫 ${senderName} kicked user ${targetJid} from ${groupJid}`
+          `🚫 ${senderName} kicked user ${targetJid} from ${groupJid}`,
         );
 
-        const warningNote = warningCount > 0 
-          ? `\n📊 User had ${warningCount} warning(s).` 
-          : "";
+        const warningNote =
+          warningCount > 0 ? `\n📊 User had ${warningCount} warning(s).` : "";
 
         // Generate a funny farewell message
         const farewellMessages = [
@@ -2597,15 +2621,16 @@ Provide a structured analysis with emojis.`;
           "The group IQ just went up! 🧠📈",
           "Enjoy your freedom... from us! 🕊️",
           "Better luck in your next group! 🍀",
-          "Congratulations on your exit! 🎊"
+          "Congratulations on your exit! 🎊",
         ];
-        const farewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
+        const farewell =
+          farewellMessages[Math.floor(Math.random() * farewellMessages.length)];
 
         // Send message with mention using actual JID
         await rawMessage.reply(
           `🚫 *User Removed*\n\n👤 User: @${mentionNumber}${warningNote}\n\n${farewell}\n\n*Kicked by:* ${senderName}`,
           rawMessage.raw,
-          [actualJid]
+          [actualJid],
         );
 
         return null; // Already sent reply
@@ -2637,10 +2662,14 @@ Provide a structured analysis with emojis.`;
       // Check if the command issuer is an admin
       const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
       const issuerParticipant = groupMetadata.participants.find(
-        (p) => p.id === adminJid || p.lid === rawMessage.lid
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
       );
 
-      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
         return "❌ Only admins can use this command!";
       }
 
@@ -2660,15 +2689,15 @@ Provide a structured analysis with emojis.`;
       // Get the target participant for proper mention JID
       // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
       );
 
       // Get the actual JID for proper mentions
       // If targetJid is already actual JID format (@s.whatsapp.net), use it
       // Otherwise use participant.jid to convert from LID to actual JID
-      const actualJid = targetJid.includes('@s.whatsapp.net') 
-        ? targetJid 
-        : (targetParticipant?.jid || targetJid);
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant?.jid || targetJid;
       const mentionNumber = actualJid.split("@")[0];
 
       // Get all warnings for this user
@@ -2690,10 +2719,10 @@ Provide a structured analysis with emojis.`;
       // Generate an insult based on all the warnings
       let insult = "";
       try {
-        const reasons = warnings.map(w => w.reason).join(", ");
+        const reasons = warnings.map((w) => w.reason).join(", ");
         insult = await this.llmService.generateMeanResponse(
           `Someone has been warned ${warningCount} time(s) for these reasons: "${reasons}". Generate a witty, sarcastic roast (2-3 sentences) about their behavior pattern.`,
-          "Be clever, sarcastic, and funny. Mock their inability to follow simple rules. Make it memorable."
+          "Be clever, sarcastic, and funny. Mock their inability to follow simple rules. Make it memorable.",
         );
       } catch (error) {
         console.error("Error generating insult:", error);
@@ -2703,16 +2732,17 @@ Provide a structured analysis with emojis.`;
           "Some people learn from mistakes. You, apparently, collect them. 📚",
           "Is rule-breaking a hobby or are you just naturally talented at it? 🎯",
           "At this rate, you'll have your own Wikipedia page for 'What Not To Do'. 📖",
-          "I'm impressed by your consistency... in making poor choices. 👏"
+          "I'm impressed by your consistency... in making poor choices. 👏",
         ];
-        insult = fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
+        insult =
+          fallbackInsults[Math.floor(Math.random() * fallbackInsults.length)];
       }
 
       // Send message with mention using actual JID
       await rawMessage.reply(
         `⚠️ *Warning History*\n\n👤 User: @${mentionNumber}\n🔢 Total Warnings: ${warningCount}/3\n\n📋 *Violations:*${warningsList}\n\n💬 *Eden's Take:*\n${insult}\n\n${warningCount === 2 ? "⚡ *One more warning and they're out!*" : warningCount === 1 ? "⏰ 2 more warnings until removal" : "⏰ 1 more warning until removal"}`,
         rawMessage.raw,
-        [actualJid]
+        [actualJid],
       );
 
       return null; // Already sent reply
@@ -2740,10 +2770,14 @@ Provide a structured analysis with emojis.`;
       // Check if the command issuer is an admin
       const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
       const issuerParticipant = groupMetadata.participants.find(
-        (p) => p.id === adminJid || p.lid === rawMessage.lid
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
       );
 
-      if (!issuerParticipant || (issuerParticipant.admin !== 'admin' && issuerParticipant.admin !== 'superadmin')) {
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
         return "❌ Only admins can use this command!";
       }
 
@@ -2763,19 +2797,22 @@ Provide a structured analysis with emojis.`;
       // Get the target participant for proper mention JID
       // Match participant by jid (actual WhatsApp JID), id (LID), or lid fields
       const targetParticipant = groupMetadata.participants.find(
-        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
       );
 
       // Get the actual JID for proper mentions
       // If targetJid is already actual JID format (@s.whatsapp.net), use it
       // Otherwise use participant.jid to convert from LID to actual JID
-      const actualJid = targetJid.includes('@s.whatsapp.net') 
-        ? targetJid 
-        : (targetParticipant?.jid || targetJid);
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant?.jid || targetJid;
       const mentionNumber = actualJid.split("@")[0];
 
       // Get warning count before clearing
-      const warningCount = this.warningStore.getWarningCount(targetJid, groupJid);
+      const warningCount = this.warningStore.getWarningCount(
+        targetJid,
+        groupJid,
+      );
 
       if (warningCount === 0) {
         return `✨ *Already Clean*\n\n👤 User: @${mentionNumber}\n\n🎉 This user has no warnings to clear!`;
@@ -2785,14 +2822,14 @@ Provide a structured analysis with emojis.`;
       this.warningStore.clearWarnings(targetJid, groupJid);
 
       console.log(
-        `🧹 ${senderName} cleared ${warningCount} warning(s) for ${targetJid} in ${groupJid}`
+        `🧹 ${senderName} cleared ${warningCount} warning(s) for ${targetJid} in ${groupJid}`,
       );
 
       // Send message with mention using actual JID
       await rawMessage.reply(
         `🧹 *Warnings Cleared*\n\n👤 User: @${mentionNumber}\n📊 Warnings Removed: ${warningCount}\n\n✨ Slate wiped clean! They better not mess this up again...\n\n*Cleared by:* ${senderName}`,
         rawMessage.raw,
-        [actualJid]
+        [actualJid],
       );
 
       return null; // Already sent reply
