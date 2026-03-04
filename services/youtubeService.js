@@ -240,25 +240,7 @@ class YouTubeService {
         );
       }
 
-      if (progressCallback) progressCallback(0, "� Updating yt-dlp...");
-
-      // Update yt-dlp to latest version to fix potential issues
-      try {
-        console.log("🔄 Updating yt-dlp...");
-        await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
-        console.log("✅ yt-dlp updated");
-      } catch (updateError) {
-        console.log("⚠️ Could not update yt-dlp (may need pip):", updateError.message);
-        // Try pip update if direct update fails
-        try {
-          await execAsync("pip3 install --upgrade yt-dlp", { timeout: 30000 });
-          console.log("✅ yt-dlp updated via pip3");
-        } catch (pipError) {
-          console.log("⚠️ Could not update via pip3, continuing with current version");
-        }
-      }
-
-      if (progressCallback) progressCallback(5, "🔍 Fetching video info...");
+      if (progressCallback) progressCallback(5, "🔍 Starting download...");
 
       // Normalize URL for YouTube Shorts
       let normalizedUrl = videoUrl;
@@ -268,19 +250,6 @@ class YouTubeService {
           normalizedUrl = `https://www.youtube.com/watch?v=${shortIdMatch[1]}`;
           console.log(`🔄 Converted Shorts URL: ${normalizedUrl}`);
         }
-      }
-
-      // Get video info with more options
-      const infoCommand = `${ytdlpPath} --no-warnings --skip-download --print "%(id)s|%(title)s|%(duration)s" "${normalizedUrl}"`;
-      let videoInfo;
-      try {
-        const { stdout } = await execAsync(infoCommand, { timeout: 30000 });
-        const [videoId, title, duration] = stdout.trim().split('|');
-        videoInfo = { id: videoId, title: title, duration: duration };
-        console.log(`📹 Video: ${title} (${duration}s)`);
-      } catch (infoError) {
-        console.error("⚠️ Could not get video info, trying direct download...");
-        videoInfo = { id: Date.now().toString(), title: "video", duration: 0 };
       }
 
       const timestamp = Date.now();
