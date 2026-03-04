@@ -59,6 +59,7 @@ class CommandHandler {
       play: this.playMusic.bind(this),
       song: this.playMusic.bind(this), // Alias for play
       music: this.playMusic.bind(this), // Alias for play
+      yt: this.downloadYouTubeVideo.bind(this), // YouTube video download
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
       ping: this.ping.bind(this), // Quick response check
@@ -162,6 +163,7 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create voice message 🎤
 - \`-play [song name]\` - Download song from YouTube as MP3 🎵
+- \`-yt [youtube url]\` - Download YouTube video 🎬 (NEW!)
 - \`-imagine [prompt]\` or \`-img\` - Generate AI image 🎨 (NEW!)
 - \`-transform [prompt]\` - Transform an image (reply to image) 🔄
 
@@ -186,9 +188,11 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 • Auto-detects language
 • Example: Reply to any voice note with \`-tb\`
 
-*🎵 Music Download:*
-• \`-play [song name]\` = Search & download from YouTube
+*🎵 Music & Video Download:*
+• \`-play [song name]\` = Search & download from YouTube as MP3
+• \`-yt [youtube url]\` = Download YouTube video (NEW!) 🎬
 • Example: \`-play Tera hone laga hoon\`
+• Example: \`-yt https://youtube.com/watch?v=...\`
 
 *💫 Interactions (with GIFs):*
 • \`-hug @person\` - Give someone a hug
@@ -246,6 +250,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
 - \`-voice [text]\` or \`-v\` - Create funny voice message (🎤)
 - \`-play [song name]\` - Download song from YouTube as MP3 (🎵)
+- \`-yt [youtube url]\` - Download YouTube video (🎬 NEW!)
 - \`-imagine [prompt]\` or \`-img\` - Generate AI image from text (🎨 NEW!)
 - \`-transform [prompt]\` - Transform an image with AI (reply to image) (🔄 NEW!)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
@@ -286,11 +291,13 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • Use \`-imagine help\` for full guide
 • Powered by Pollinations AI (100% FREE & Unlimited!)
 
-*🎵 Music Download:*
-• \`-play [song name]\` = Search & download from YouTube
-• \`-song [query]\` or \`-music [query]\` = Same thing
+*🎵 Music & Video Download:*
+• \`-play [song name]\` = Search & download from YouTube as MP3
+• \`-yt [youtube url]\` = Download YouTube video (NEW!) 🎬
+• \`-song [query]\` or \`-music [query]\` = Same as -play
 • Example: \`-play Tera hone laga hoon\`
-• Returns: MP3 audio file ready to jam 🎧
+• Example: \`-yt https://youtube.com/watch?v=dQw4w9WgXcQ\`
+• Returns: MP3 audio or MP4 video ready to enjoy! 🎧🎬
 
 *💫 Interactions (with GIFs):*
 • \`-hug @person\` - Give someone a hug
@@ -1691,6 +1698,159 @@ ${ending}`;
         "Download failed. Even the internet doesn't want you to have this song. 💀",
         "Something went wrong. Maybe pick a song that actually exists? 🤷‍♀️",
         "Error downloading. Try again or get better taste in music. 😒",
+      ];
+
+      return errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    }
+  }
+
+  async downloadYouTubeVideo(args, message) {
+    try {
+      const url = args.join(" ").trim();
+
+      if (!url || url.length === 0) {
+        const { isNiceUser = false } = this.currentContext;
+        return isNiceUser
+          ? "Please provide a YouTube URL! 😊\n\nUsage: `-yt https://youtube.com/watch?v=...`"
+          : "Give me a YouTube URL, genius. 🙄\n\nUsage: `-yt https://youtube.com/watch?v=...`";
+      }
+
+      // Validate YouTube URL
+      const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+      if (!youtubeRegex.test(url)) {
+        const { isNiceUser = false } = this.currentContext;
+        return isNiceUser
+          ? "That doesn't look like a YouTube URL! 🤔\n\nPlease provide a valid YouTube link."
+          : "That's not a YouTube URL, dummy. 🙄\n\nTry something like: https://youtube.com/watch?v=...";
+      }
+
+      const { senderName = "User", isNiceUser = false } = this.currentContext;
+
+      // Send initial message
+      const initialMsg = isNiceUser
+        ? `🎬 Getting your video ready...`
+        : `🎬 Fine, downloading your video... This better be worth it.`;
+
+      const sentMsg = await message.reply(initialMsg);
+      
+      // Store the message key for editing
+      let lastMessageKey = sentMsg?.key;
+      let lastProgress = 0;
+
+      // Progress callback to update the message
+      const progressCallback = async (percent, status) => {
+        // Only update every 10% to avoid spam
+        if (Math.floor(percent / 10) > Math.floor(lastProgress / 10)) {
+          lastProgress = percent;
+          
+          try {
+            // Send a new message with progress (WhatsApp doesn't support editing)
+            const progressMsg = isNiceUser
+              ? `🎬 *Downloading Video*\n\n${status}`
+              : `🎬 *Video Download*\n\n${status}\n\n_Patience is a virtue..._`;
+            
+            await message.reply(progressMsg);
+          } catch (error) {
+            console.error("Error updating progress:", error);
+          }
+        }
+      };
+
+      // Download the video
+      const result = await this.youtubeService.downloadVideo(url, progressCallback);
+
+      // Read video file
+      const fs = require("fs");
+      const videoData = fs.readFileSync(result.filepath);
+
+      // Check file size (WhatsApp has limits)
+      const maxSizeMB = 64; // WhatsApp video limit
+      if (result.size > maxSizeMB) {
+        result.cleanup();
+        return isNiceUser
+          ? `⚠️ The video is too large (${result.size}MB)! WhatsApp only supports videos up to ${maxSizeMB}MB.\n\nTry a shorter video!`
+          : `🙄 The video is ${result.size}MB! WhatsApp maxes out at ${maxSizeMB}MB.\n\nMaybe try something that's not a feature film?`;
+      }
+
+      const sassyQuote = isNiceUser
+        ? `✅ Here's your video! Enjoy! 🎬`
+        : `🎬 Here. Now stop making me your personal YouTube downloader. 💀`;
+
+      // Send caption with thumbnail if available
+      if (result.thumbnail && result.thumbnail.filepath) {
+        try {
+          const thumbnailData = fs.readFileSync(result.thumbnail.filepath);
+
+          await message.reply({
+            image: thumbnailData,
+            caption: `🎬 *${result.title}*\n\n💾 Size: ${result.size}MB\n\n${sassyQuote}`,
+          });
+
+          setTimeout(() => {
+            result.thumbnail.cleanup();
+          }, 3000);
+        } catch (thumbError) {
+          console.error("Error sending thumbnail:", thumbError);
+          await message.reply(`🎬 *${result.title}*\n\n💾 Size: ${result.size}MB\n\n${sassyQuote}`);
+        }
+      } else {
+        await message.reply(`🎬 *${result.title}*\n\n💾 Size: ${result.size}MB\n\n${sassyQuote}`);
+      }
+
+      // Clean up video file after a delay
+      setTimeout(() => {
+        result.cleanup();
+      }, 10000);
+
+      // Return the video media
+      return {
+        media: {
+          video: videoData,
+          mimetype: "video/mp4",
+          caption: `🎬 ${result.title}`,
+        },
+      };
+    } catch (error) {
+      console.error("YouTube video download error:", error);
+
+      if (error.message.includes("yt-dlp not installed")) {
+        return isNiceUser
+          ? "I need yt-dlp to download videos! 😊\n\nInstall it:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp"
+          : "Ugh, I can't download videos without yt-dlp installed. 🙄\n\nInstall it first:\n• Mac: `brew install yt-dlp`\n• Linux: `pip install yt-dlp`\n• Or check: https://github.com/yt-dlp/yt-dlp";
+      }
+
+      if (
+        error.message.includes("ffmpeg not found") ||
+        error.message.includes("ffprobe")
+      ) {
+        return isNiceUser
+          ? "I need ffmpeg to process videos! 😊\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again!"
+          : "I need ffmpeg to process videos, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
+      }
+
+      if (error.message.includes("Video unavailable") || error.message.includes("Private video")) {
+        return isNiceUser
+          ? "This video is unavailable or private! 😔\n\nTry a different video?"
+          : "That video is unavailable or private. 🙄\n\nMaybe try a video that actually works?";
+      }
+
+      if (isNiceUser) {
+        const errorResponses = [
+          "Download failed! Want to try again? 😊",
+          "Something went wrong. Try once more?",
+          "Error downloading. Let's try a different video? 🎬",
+          "Oops! Download failed. Try again?",
+        ];
+        return errorResponses[
+          Math.floor(Math.random() * errorResponses.length)
+        ];
+      }
+
+      const errorResponses = [
+        "Well that didn't work. Try again or pick a better video. 🙄",
+        "Download failed. Even YouTube is against you today. 💀",
+        "Something went wrong. Maybe the video is cursed? 🤷‍♀️",
+        "Error downloading. Try again or give up. 😒",
       ];
 
       return errorResponses[Math.floor(Math.random() * errorResponses.length)];

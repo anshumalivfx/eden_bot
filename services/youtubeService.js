@@ -198,6 +198,186 @@ class YouTubeService {
   }
 
   /**
+   * Download YouTube video as MP4 with progress callback
+   * @param {string} videoUrl - YouTube video URL
+   * @param {Function} progressCallback - Callback for progress updates (percent, status)
+   * @returns {Promise<{filepath: string, title: string, thumbnail: string, cleanup: Function}>}
+   */
+  async downloadVideo(videoUrl, progressCallback = null) {
+    try {
+      // Check if yt-dlp is installed
+      let ytdlpPath = "yt-dlp";
+      try {
+        await execAsync("yt-dlp --version");
+      } catch (error) {
+        const commonPaths = [
+          "/opt/homebrew/bin/yt-dlp",
+          "/usr/local/bin/yt-dlp",
+          "/usr/bin/yt-dlp",
+        ];
+        let found = false;
+        for (const p of commonPaths) {
+          try {
+            await execAsync(`${p} --version`);
+            ytdlpPath = p;
+            found = true;
+            break;
+          } catch {}
+        }
+        if (!found) {
+          throw new Error(
+            "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp"
+          );
+        }
+      }
+
+      // Check if ffmpeg is installed
+      try {
+        await execAsync("ffmpeg -version");
+      } catch (error) {
+        throw new Error(
+          "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)"
+        );
+      }
+
+      if (progressCallback) progressCallback(0, "🔍 Fetching video info...");
+
+      // Get video info first
+      const infoCommand = `${ytdlpPath} -J "${videoUrl}"`;
+      const { stdout: infoJson } = await execAsync(infoCommand, {
+        timeout: 30000,
+      });
+      const videoInfo = JSON.parse(infoJson);
+      const title = videoInfo.title || "video";
+      const videoId = videoInfo.id || Date.now().toString();
+
+      const timestamp = Date.now();
+      const safeTitle = title.replace(/[^a-z0-9]/gi, "_").substring(0, 50);
+      const outputPath = path.join(this.tempDir, `${safeTitle}_${timestamp}`);
+      const finalPath = `${outputPath}.mp4`;
+
+      if (progressCallback) progressCallback(10, "⬇️ Starting download...");
+
+      console.log(`📥 Downloading video: ${title}`);
+      console.log(`🔗 URL: ${videoUrl}`);
+
+      // Download with progress using spawn for real-time output
+      const { spawn } = require("child_process");
+      
+      await new Promise((resolve, reject) => {
+        const process = spawn(ytdlpPath, [
+          "-f",
+          "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          videoUrl,
+        ]);
+
+        let lastProgress = 0;
+        
+        process.stdout.on("data", (data) => {
+          const output = data.toString();
+          console.log(output);
+          
+          // Parse download progress
+          const progressMatch = output.match(/(\d+\.?\d*)%/);
+          if (progressMatch && progressCallback) {
+            const percent = parseFloat(progressMatch[1]);
+            // Map download progress to 10-90%
+            const mappedPercent = Math.min(90, 10 + (percent * 0.8));
+            
+            if (mappedPercent > lastProgress) {
+              lastProgress = mappedPercent;
+              const bar = this.createProgressBar(mappedPercent);
+              progressCallback(mappedPercent, `⬇️ Downloading...\n${bar}`);
+            }
+          }
+        });
+
+        process.stderr.on("data", (data) => {
+          const output = data.toString();
+          console.log(output);
+          
+          // Also check stderr for progress
+          const progressMatch = output.match(/(\d+\.?\d*)%/);
+          if (progressMatch && progressCallback) {
+            const percent = parseFloat(progressMatch[1]);
+            const mappedPercent = Math.min(90, 10 + (percent * 0.8));
+            
+            if (mappedPercent > lastProgress) {
+              lastProgress = mappedPercent;
+              const bar = this.createProgressBar(mappedPercent);
+              progressCallback(mappedPercent, `⬇️ Downloading...\n${bar}`);
+            }
+          }
+        });
+
+        process.on("close", (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`yt-dlp exited with code ${code}`));
+          }
+        });
+
+        process.on("error", (err) => {
+          reject(err);
+        });
+      });
+
+      if (progressCallback) progressCallback(95, "✅ Download complete!");
+
+      // Check if file exists
+      if (!fs.existsSync(finalPath)) {
+        throw new Error("Download failed - video file not created");
+      }
+
+      const stats = fs.statSync(finalPath);
+      const fileSizeMB = (stats.size / 1024 / 1024).toFixed(2);
+      console.log(`✅ Downloaded: ${fileSizeMB} MB`);
+
+      // Download thumbnail with progress
+      if (progressCallback) progressCallback(98, "📸 Getting thumbnail...");
+      const thumbnail = await this.downloadThumbnail(videoId);
+
+      if (progressCallback) progressCallback(100, "🎉 Ready to send!");
+
+      return {
+        filepath: finalPath,
+        title: title,
+        thumbnail: thumbnail,
+        size: fileSizeMB,
+        cleanup: () => {
+          if (fs.existsSync(finalPath)) {
+            fs.unlinkSync(finalPath);
+            console.log(`🗑️  Cleaned up: ${finalPath}`);
+          }
+          if (thumbnail && thumbnail.filepath && fs.existsSync(thumbnail.filepath)) {
+            thumbnail.cleanup();
+          }
+        },
+      };
+    } catch (error) {
+      console.error("Video download error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a visual progress bar
+   * @param {number} percent - Progress percentage (0-100)
+   * @returns {string} Progress bar string
+   */
+  createProgressBar(percent) {
+    const filled = Math.floor(percent / 5); // 20 blocks for 100%
+    const empty = 20 - filled;
+    const bar = "█".repeat(filled) + "░".repeat(empty);
+    return `${bar} ${percent.toFixed(0)}%`;
+  }
+
+  /**
    * Search and download YouTube video as MP3
    * @param {string} query - Search query
    * @returns {Promise<{filepath: string, title: string, url: string, videoId: string, thumbnail: Object, cleanup: Function}>}
