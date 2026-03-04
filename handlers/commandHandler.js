@@ -1741,20 +1741,41 @@ ${ending}`;
       // Store the message key for editing
       let lastMessageKey = sentMsg?.key;
       let lastProgress = 0;
+      let lastUpdateTime = 0;
 
       // Progress callback to update the message
       const progressCallback = async (percent, status) => {
-        // Only update every 10% to avoid spam
-        if (Math.floor(percent / 10) > Math.floor(lastProgress / 10)) {
+        const now = Date.now();
+        const minUpdateInterval = 2000; // Minimum 2 seconds between updates
+        
+        // Update if: progress increased by 5% OR it's been 2+ seconds since last update
+        const progressDiff = Math.floor(percent / 5) > Math.floor(lastProgress / 5);
+        const timeDiff = now - lastUpdateTime > minUpdateInterval;
+        
+        if (progressDiff || (timeDiff && percent !== lastProgress)) {
           lastProgress = percent;
+          lastUpdateTime = now;
           
           try {
-            // Send a new message with progress (WhatsApp doesn't support editing)
+            // Edit the existing message with progress
+            const progressBar = this.youtubeService.createProgressBar(percent);
             const progressMsg = isNiceUser
-              ? `🎬 *Downloading Video*\n\n${status}`
-              : `🎬 *Video Download*\n\n${status}\n\n_Patience is a virtue..._`;
+              ? `🎬 *Downloading Video*\n\n${progressBar}\n${status}`
+              : `🎬 *Video Download*\n\n${progressBar}\n${status}\n\n_Patience is a virtue..._`;
             
-            await message.reply(progressMsg);
+            if (lastMessageKey) {
+              const edited = await message.reply(progressMsg, lastMessageKey);
+              // Update key in case edit returns a new key
+              if (edited?.key) {
+                lastMessageKey = edited.key;
+              }
+            } else {
+              // Fallback to new message if no key
+              const sent = await message.reply(progressMsg);
+              if (sent?.key) {
+                lastMessageKey = sent.key;
+              }
+            }
           } catch (error) {
             console.error("Error updating progress:", error);
           }
@@ -1763,6 +1784,19 @@ ${ending}`;
 
       // Download the video
       const result = await this.youtubeService.downloadVideo(url, progressCallback);
+
+      // Final progress update
+      if (lastMessageKey) {
+        try {
+          const finalMsg = isNiceUser
+            ? `✅ *Download Complete!*\n\n████████████████████ 100%\n\n📦 Preparing to send...`
+            : `✅ *Done!*\n\n████████████████████ 100%\n\n📦 Sending your video... finally.`;
+          
+          await message.reply(finalMsg, lastMessageKey);
+        } catch (error) {
+          console.error("Error sending final update:", error);
+        }
+      }
 
       // Read video file
       const fs = require("fs");

@@ -1,7 +1,7 @@
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execAsync = promisify(exec);
@@ -310,12 +310,72 @@ class YouTubeService {
 
       // Use Android client to bypass nsig extraction issues with older yt-dlp versions
       // Format: bestvideo+bestaudio up to 720p, fallback to best single file up to 720p, then any best format
-      const command = `${ytdlpPath} --extractor-args "youtube:player_client=android" -f "bv*[height<=720]+ba/b[height<=720]/bv*[height<=480]+ba/b[height<=480]/best" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${normalizedUrl}"`;
+      const baseCommand = ytdlpPath.split(' ');
+      const args = [
+        ...baseCommand.slice(1), // If using python3 -m yt_dlp, this adds the module args
+        '--extractor-args', 'youtube:player_client=android',
+        '-f', 'bv*[height<=720]+ba/b[height<=720]/bv*[height<=480]+ba/b[height<=480]/best',
+        '--merge-output-format', 'mp4',
+        '-o', `${outputPath}.%(ext)s`,
+        '--newline', // Force newline after each output line for better parsing
+        normalizedUrl
+      ];
 
-      console.log(`📝 Running: ${command}`);
+      console.log(`📝 Running: ${baseCommand[0]} ${args.join(' ')}`);
 
-      await execAsync(command, {
-        timeout: 180000, // 3 minute timeout
+      // Use spawn to get real-time progress
+      await new Promise((resolve, reject) => {
+        const downloadProcess = spawn(baseCommand[0], args, {
+          cwd: process.cwd()
+        });
+
+        let lastProgress = 10;
+
+        downloadProcess.stdout.on('data', (data) => {
+          const output = data.toString();
+          console.log(output);
+          
+          // Parse progress from stdout
+          const progressMatch = output.match(/(\d+\.?\d*)%/);
+          if (progressMatch && progressCallback) {
+            const percent = parseFloat(progressMatch[1]);
+            // Map download progress (0-100) to our range (10-90)
+            const mappedPercent = 10 + (percent * 0.8);
+            if (mappedPercent > lastProgress) {
+              lastProgress = mappedPercent;
+              progressCallback(Math.round(mappedPercent), `⬇️ Downloading... ${percent.toFixed(1)}%`);
+            }
+          }
+        });
+
+        downloadProcess.stderr.on('data', (data) => {
+          const output = data.toString();
+          console.log(output);
+          
+          // yt-dlp outputs progress to stderr
+          const progressMatch = output.match(/(\d+\.?\d*)%/);
+          if (progressMatch && progressCallback) {
+            const percent = parseFloat(progressMatch[1]);
+            // Map download progress (0-100) to our range (10-90)
+            const mappedPercent = 10 + (percent * 0.8);
+            if (mappedPercent > lastProgress) {
+              lastProgress = mappedPercent;
+              progressCallback(Math.round(mappedPercent), `⬇️ Downloading... ${percent.toFixed(1)}%`);
+            }
+          }
+        });
+
+        downloadProcess.on('close', (code) => {
+          if (code !== 0) {
+            reject(new Error(`yt-dlp exited with code ${code}`));
+          } else {
+            resolve();
+          }
+        });
+
+        downloadProcess.on('error', (error) => {
+          reject(error);
+        });
       });
 
       if (progressCallback) progressCallback(90, "✅ Download complete!");

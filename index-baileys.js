@@ -209,18 +209,25 @@ async function connectToWhatsApp() {
           const messageAdapter = {
             body: messageText,
             from: chatJid,
-            reply: async (content) => {
+            reply: async (content, editKey = null) => {
               if (typeof content === "string") {
-                await sock.sendMessage(chatJid, { text: content });
+                const options = { text: content };
+                if (editKey) {
+                  options.edit = editKey;
+                }
+                const sent = await sock.sendMessage(chatJid, options);
+                return sent;
               } else if (content?.media) {
                 // Handle media (voice, stickers, etc.)
-                await sock.sendMessage(chatJid, content.media);
+                const sent = await sock.sendMessage(chatJid, content.media);
+                return sent;
               }
             },
             getChat: async () => ({
               isGroup,
               sendMessage: async (content) => {
-                await sock.sendMessage(chatJid, content);
+                const sent = await sock.sendMessage(chatJid, content);
+                return sent;
               },
             }),
           };
