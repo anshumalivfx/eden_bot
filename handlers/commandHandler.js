@@ -190,9 +190,10 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 
 *🎵 Music & Video Download:*
 • \`-play [song name]\` = Search & download from YouTube as MP3
-• \`-yt [youtube url]\` = Download YouTube video (NEW!) 🎬
+• \`-yt [youtube url]\` = Download YouTube video or Shorts (NEW!) 🎬
 • Example: \`-play Tera hone laga hoon\`
 • Example: \`-yt https://youtube.com/watch?v=...\`
+• Example: \`-yt https://youtube.com/shorts/...\` ⚡
 
 *💫 Interactions (with GIFs):*
 • \`-hug @person\` - Give someone a hug
@@ -293,10 +294,12 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 
 *🎵 Music & Video Download:*
 • \`-play [song name]\` = Search & download from YouTube as MP3
-• \`-yt [youtube url]\` = Download YouTube video (NEW!) 🎬
+• \`-yt [youtube url]\` = Download YouTube video or Shorts (NEW!) 🎬
 • \`-song [query]\` or \`-music [query]\` = Same as -play
 • Example: \`-play Tera hone laga hoon\`
 • Example: \`-yt https://youtube.com/watch?v=dQw4w9WgXcQ\`
+• Example: \`-yt https://youtube.com/shorts/xyz123\` ⚡
+• Supports: Regular videos, Shorts, most formats
 • Returns: MP3 audio or MP4 video ready to enjoy! 🎧🎬
 
 *💫 Interactions (with GIFs):*
@@ -1812,6 +1815,9 @@ ${ending}`;
       };
     } catch (error) {
       console.error("YouTube video download error:", error);
+      
+      // Get isNiceUser from context for error messages
+      const { isNiceUser = false } = this.currentContext;
 
       if (error.message.includes("yt-dlp not installed")) {
         return isNiceUser
@@ -1828,10 +1834,20 @@ ${ending}`;
           : "I need ffmpeg to process videos, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
       }
 
-      if (error.message.includes("Video unavailable") || error.message.includes("Private video")) {
+      if (
+        error.message.includes("Video unavailable") || 
+        error.message.includes("Private video") ||
+        error.message.includes("ERROR: [youtube]") ||
+        error.message.includes("Download failed") ||
+        (error.stderr && error.stderr.includes("Video unavailable"))
+      ) {
+        const vid = url.includes("youtu.be/") ? url.split("youtu.be/")[1]?.split(/[\?&]/)[0] : 
+                    url.includes("v=") ? url.split("v=")[1]?.split(/[\?&]/)[0] : 
+                    url.includes("/shorts/") ? url.split("/shorts/")[1]?.split(/[\?&]/)[0] : null;
+                    
         return isNiceUser
-          ? "This video is unavailable or private! 😔\n\nTry a different video?"
-          : "That video is unavailable or private. 🙄\n\nMaybe try a video that actually works?";
+          ? `⚠️ This video seems to be unavailable! Here's what you can try:\n\n✅ *Possible Solutions:*\n• Check if the video is private or deleted\n• Try the video ID directly: ${vid ? `https://youtube.com/watch?v=${vid}` : 'copy the video ID'}\n• Update yt-dlp: \`pip3 install --upgrade yt-dlp\`\n• The video might be region-locked\n\nWant to try a different video? 😊`
+          : `🙄 Video unavailable. Could be:\n\n• Private or deleted video\n• Age-restricted content\n• Region-locked\n• YouTube being YouTube\n\n*Try this:*\n${vid ? `• Direct link: https://youtube.com/watch?v=${vid}` : '• Use the full YouTube URL'}\n• Update yt-dlp: \`pip3 install --upgrade yt-dlp\`\n\nOr just pick a video that actually works. 🤷‍♀️`;
       }
 
       if (isNiceUser) {

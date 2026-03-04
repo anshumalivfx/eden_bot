@@ -240,42 +240,82 @@ class YouTubeService {
         );
       }
 
-      if (progressCallback) progressCallback(0, "🔍 Fetching video info...");
+      if (progressCallback) progressCallback(0, "� Updating yt-dlp...");
 
-      // Get video info first
-      const infoCommand = `${ytdlpPath} -J "${videoUrl}"`;
-      const { stdout: infoJson } = await execAsync(infoCommand, {
-        timeout: 30000,
-      });
-      const videoInfo = JSON.parse(infoJson);
-      const title = videoInfo.title || "video";
-      const videoId = videoInfo.id || Date.now().toString();
+      // Update yt-dlp to latest version to fix potential issues
+      try {
+        console.log("🔄 Updating yt-dlp...");
+        await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
+        console.log("✅ yt-dlp updated");
+      } catch (updateError) {
+        console.log("⚠️ Could not update yt-dlp (may need pip):", updateError.message);
+        // Try pip update if direct update fails
+        try {
+          await execAsync("pip3 install --upgrade yt-dlp", { timeout: 30000 });
+          console.log("✅ yt-dlp updated via pip3");
+        } catch (pipError) {
+          console.log("⚠️ Could not update via pip3, continuing with current version");
+        }
+      }
+
+      if (progressCallback) progressCallback(5, "🔍 Fetching video info...");
+
+      // Normalize URL for YouTube Shorts
+      let normalizedUrl = videoUrl;
+      if (videoUrl.includes('/shorts/')) {
+        const shortIdMatch = videoUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+        if (shortIdMatch) {
+          normalizedUrl = `https://www.youtube.com/watch?v=${shortIdMatch[1]}`;
+          console.log(`🔄 Converted Shorts URL: ${normalizedUrl}`);
+        }
+      }
+
+      // Get video info with more options
+      const infoCommand = `${ytdlpPath} --no-warnings --skip-download --print "%(id)s|%(title)s|%(duration)s" "${normalizedUrl}"`;
+      let videoInfo;
+      try {
+        const { stdout } = await execAsync(infoCommand, { timeout: 30000 });
+        const [videoId, title, duration] = stdout.trim().split('|');
+        videoInfo = { id: videoId, title: title, duration: duration };
+        console.log(`📹 Video: ${title} (${duration}s)`);
+      } catch (infoError) {
+        console.error("⚠️ Could not get video info, trying direct download...");
+        videoInfo = { id: Date.now().toString(), title: "video", duration: 0 };
+      }
 
       const timestamp = Date.now();
-      const safeTitle = title.replace(/[^a-z0-9]/gi, "_").substring(0, 50);
+      const safeTitle = (videoInfo.title || "video").replace(/[^a-z0-9]/gi, "_").substring(0, 50);
       const outputPath = path.join(this.tempDir, `${safeTitle}_${timestamp}`);
       const finalPath = `${outputPath}.mp4`;
 
       if (progressCallback) progressCallback(10, "⬇️ Starting download...");
 
-      console.log(`📥 Downloading video: ${title}`);
-      console.log(`🔗 URL: ${videoUrl}`);
+      console.log(`📥 Downloading video: ${videoInfo.title}`);
+      console.log(`🔗 URL: ${normalizedUrl}`);
 
       // Download with progress using spawn for real-time output
       const { spawn } = require("child_process");
       
       await new Promise((resolve, reject) => {
-        const process = spawn(ytdlpPath, [
-          "-f",
-          "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
-          "--merge-output-format",
-          "mp4",
-          "-o",
-          `${outputPath}.%(ext)s`,
-          videoUrl,
-        ]);
+        // More aggressive format selection with fallbacks
+        const args = [
+          "--no-warnings",
+          "--no-check-certificate", // Skip certificate validation
+          "--prefer-free-formats",
+          "--no-playlist", // Only download single video
+          "-f", "(bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a])/(bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a])/best[height<=720]/best[height<=480]/best",
+          "--merge-output-format", "mp4",
+          "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "--referer", "https://www.youtube.com/",
+          "-o", `${outputPath}.%(ext)s`,
+          normalizedUrl,
+        ];
+
+        console.log(`📝 Running: ${ytdlpPath} ${args.join(' ')}`);
+        const process = spawn(ytdlpPath, args);
 
         let lastProgress = 0;
+        let errorOutput = "";
         
         process.stdout.on("data", (data) => {
           const output = data.toString();
@@ -298,6 +338,7 @@ class YouTubeService {
 
         process.stderr.on("data", (data) => {
           const output = data.toString();
+          errorOutput += output;
           console.log(output);
           
           // Also check stderr for progress
@@ -318,7 +359,7 @@ class YouTubeService {
           if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`yt-dlp exited with code ${code}`));
+            reject(new Error(`Download failed: ${errorOutput || 'Unknown error'}`));
           }
         });
 
@@ -340,13 +381,13 @@ class YouTubeService {
 
       // Download thumbnail with progress
       if (progressCallback) progressCallback(98, "📸 Getting thumbnail...");
-      const thumbnail = await this.downloadThumbnail(videoId);
+      const thumbnail = await this.downloadThumbnail(videoInfo.id);
 
       if (progressCallback) progressCallback(100, "🎉 Ready to send!");
 
       return {
         filepath: finalPath,
-        title: title,
+        title: videoInfo.title || "Video",
         thumbnail: thumbnail,
         size: fileSizeMB,
         cleanup: () => {
