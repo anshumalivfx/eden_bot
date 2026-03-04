@@ -1708,9 +1708,10 @@ ${ending}`;
   }
 
   async downloadYouTubeVideo(args, message) {
+    // Extract URL outside try block so it's available in catch
+    const url = args.join(" ").trim();
+    
     try {
-      const url = args.join(" ").trim();
-
       if (!url || url.length === 0) {
         const { isNiceUser = false } = this.currentContext;
         return isNiceUser
