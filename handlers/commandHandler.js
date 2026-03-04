@@ -1847,8 +1847,8 @@ ${ending}`;
                     url.includes("/shorts/") ? url.split("/shorts/")[1]?.split(/[\?&]/)[0] : null;
                     
         return isNiceUser
-          ? `⚠️ This video seems to be unavailable! Here's what you can try:\n\n✅ *Possible Solutions:*\n• Check if the video is private or deleted\n• Try the video ID directly: ${vid ? `https://youtube.com/watch?v=${vid}` : 'copy the video ID'}\n• Update yt-dlp: \`pip3 install --upgrade yt-dlp\`\n• The video might be region-locked\n\nWant to try a different video? 😊`
-          : `🙄 Video unavailable. Could be:\n\n• Private or deleted video\n• Age-restricted content\n• Region-locked\n• YouTube being YouTube\n\n*Try this:*\n${vid ? `• Direct link: https://youtube.com/watch?v=${vid}` : '• Use the full YouTube URL'}\n• Update yt-dlp: \`pip3 install --upgrade yt-dlp\`\n\nOr just pick a video that actually works. 🤷‍♀️`;
+          ? `⚠️ YouTube is blocking the download! Here's what to do:\n\n✅ *Fix This:*\n1️⃣ Update yt-dlp (REQUIRED):\n   \`pip3 install -U yt-dlp\`\n   or\n   \`sudo pip3 install -U yt-dlp\`\n\n2️⃣ If still failing, try:\n   \`yt-dlp -U\`\n\n3️⃣ Then retry: \`-yt ${url}\`\n\n💡 YouTube often blocks old yt-dlp versions!\nThe video is available, just need the latest version. 😊`
+          : `🙄 YouTube is blocking this. NOT your fault for once.\n\n*Fix it:*\n1️⃣ Update yt-dlp NOW:\n   \`pip3 install -U yt-dlp\`\n   or if that fails:\n   \`sudo pip3 install -U yt-dlp\`\n   or:\n   \`yt-dlp -U\`\n\n2️⃣ Retry: \`-yt ${url}\`\n\n💀 YouTube breaks yt-dlp regularly.\nUpdate = fix. Simple.\n\n${vid ? `Video ID: ${vid}` : ''}`;
       }
 
       if (isNiceUser) {

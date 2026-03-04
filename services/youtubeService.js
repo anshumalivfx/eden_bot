@@ -303,10 +303,13 @@ class YouTubeService {
           "--no-check-certificate", // Skip certificate validation
           "--prefer-free-formats",
           "--no-playlist", // Only download single video
-          "-f", "(bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a])/(bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a])/best[height<=720]/best[height<=480]/best",
+          "--extractor-args", "youtube:player_client=android", // Use Android client
+          "--extractor-args", "youtube:player_skip=webpage,configs,js", // Skip webpage extraction
+          "-f", "best[height<=720]/best[height<=480]/best", // Simplified format
           "--merge-output-format", "mp4",
-          "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "--referer", "https://www.youtube.com/",
+          "--user-agent", "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip", // Android user agent
+          "--add-header", "X-Youtube-Client-Name:3",
+          "--add-header", "X-Youtube-Client-Version:17.31.35",
           "-o", `${outputPath}.%(ext)s`,
           normalizedUrl,
         ];
