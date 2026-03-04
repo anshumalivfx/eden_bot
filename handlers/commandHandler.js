@@ -1738,10 +1738,12 @@ ${ending}`;
 
       const sentMsg = await message.reply(initialMsg);
       
-      // Store the message key for editing
-      let lastMessageKey = sentMsg?.key;
+      // Store the ORIGINAL message key for editing - never update this!
+      const originalMessageKey = sentMsg?.key;
       let lastProgress = 0;
       let lastUpdateTime = 0;
+
+      console.log("🎬 Initial message sent, key:", JSON.stringify(originalMessageKey));
 
       // Progress callback to update the message
       const progressCallback = async (percent, status) => {
@@ -1763,21 +1765,18 @@ ${ending}`;
               ? `🎬 *Downloading Video*\n\n${progressBar}\n${status}`
               : `🎬 *Video Download*\n\n${progressBar}\n${status}\n\n_Patience is a virtue..._`;
             
-            if (lastMessageKey) {
-              const edited = await message.reply(progressMsg, lastMessageKey);
-              // Update key in case edit returns a new key
-              if (edited?.key) {
-                lastMessageKey = edited.key;
-              }
+            if (originalMessageKey) {
+              // Always use the ORIGINAL key for editing
+              console.log(`📝 Updating progress to ${percent}%`);
+              await message.reply(progressMsg, originalMessageKey);
             } else {
-              // Fallback to new message if no key
-              const sent = await message.reply(progressMsg);
-              if (sent?.key) {
-                lastMessageKey = sent.key;
-              }
+              // Fallback to new message if no key available
+              console.log("⚠️ No message key, sending new message");
+              await message.reply(progressMsg);
             }
           } catch (error) {
-            console.error("Error updating progress:", error);
+            console.error("❌ Error updating progress:", error);
+            console.error("Error details:", error.message);
           }
         }
       };
@@ -1786,15 +1785,16 @@ ${ending}`;
       const result = await this.youtubeService.downloadVideo(url, progressCallback);
 
       // Final progress update
-      if (lastMessageKey) {
+      if (originalMessageKey) {
         try {
           const finalMsg = isNiceUser
             ? `✅ *Download Complete!*\n\n████████████████████ 100%\n\n📦 Preparing to send...`
             : `✅ *Done!*\n\n████████████████████ 100%\n\n📦 Sending your video... finally.`;
           
-          await message.reply(finalMsg, lastMessageKey);
+          console.log("📝 Sending final update");
+          await message.reply(finalMsg, originalMessageKey);
         } catch (error) {
-          console.error("Error sending final update:", error);
+          console.error("❌ Error sending final update:", error);
         }
       }
 

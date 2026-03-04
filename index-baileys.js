@@ -213,9 +213,15 @@ async function connectToWhatsApp() {
               if (typeof content === "string") {
                 const options = { text: content };
                 if (editKey) {
+                  console.log("📝 Editing message with key:", JSON.stringify(editKey));
                   options.edit = editKey;
+                } else {
+                  console.log("📤 Sending new message");
                 }
                 const sent = await sock.sendMessage(chatJid, options);
+                if (!editKey) {
+                  console.log("✅ New message sent with key:", JSON.stringify(sent?.key));
+                }
                 return sent;
               } else if (content?.media) {
                 // Handle media (voice, stickers, etc.)
