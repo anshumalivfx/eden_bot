@@ -74,8 +74,10 @@ class YouTubeService {
       try {
         await execAsync("yt-dlp --version");
       } catch (error) {
-        // Try common installation paths
+        // Try common installation paths including venv
         const commonPaths = [
+          path.join(process.cwd(), "venv/bin/yt-dlp"),
+          "./venv/bin/yt-dlp",
           "/opt/homebrew/bin/yt-dlp",
           "/usr/local/bin/yt-dlp",
           "/usr/bin/yt-dlp",
@@ -87,6 +89,14 @@ class YouTubeService {
             ytdlpPath = p;
             found = true;
             break;
+          } catch {}
+        }
+        // Try Python module as last resort
+        if (!found) {
+          try {
+            await execAsync("python3 -m yt_dlp --version");
+            ytdlpPath = "python3 -m yt_dlp";
+            found = true;
           } catch {}
         }
         if (!found) {
@@ -211,6 +221,8 @@ class YouTubeService {
         await execAsync("yt-dlp --version");
       } catch (error) {
         const commonPaths = [
+          path.join(process.cwd(), "venv/bin/yt-dlp"),
+          "./venv/bin/yt-dlp",
           "/opt/homebrew/bin/yt-dlp",
           "/usr/local/bin/yt-dlp",
           "/usr/bin/yt-dlp",
@@ -222,6 +234,14 @@ class YouTubeService {
             ytdlpPath = p;
             found = true;
             break;
+          } catch {}
+        }
+        // Try Python module as last resort
+        if (!found) {
+          try {
+            await execAsync("python3 -m yt_dlp --version");
+            ytdlpPath = "python3 -m yt_dlp";
+            found = true;
           } catch {}
         }
         if (!found) {
@@ -245,7 +265,12 @@ class YouTubeService {
       // Try to update yt-dlp first (silent fail if it doesn't work)
       try {
         console.log("⬆️  Checking for yt-dlp updates...");
-        await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
+        // Only use -U flag if not using Python module form
+        if (ytdlpPath.includes("python3 -m")) {
+          await execAsync("python3 -m pip install --upgrade yt-dlp", { timeout: 30000 });
+        } else {
+          await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
+        }
         console.log("✅ yt-dlp updated successfully");
       } catch (updateError) {
         console.log("ℹ️  Could not auto-update yt-dlp, trying manual update...");
