@@ -106,7 +106,8 @@ class CommandHandler {
   }
 
   async handleCommand(command, message, context = {}) {
-    const [cmd, ...args] = command.toLowerCase().split(" ");
+    const [cmd, ...args] = command.split(" ");
+    const normalizedCmd = cmd.toLowerCase();
     const {
       senderName = "User",
       isOwner = false,
@@ -121,11 +122,11 @@ class CommandHandler {
       mood,
       isNiceUser,
       message,
-      originalCommand: cmd,
+      originalCommand: normalizedCmd,
     };
 
-    if (this.commands[cmd]) {
-      return await this.commands[cmd](args, message);
+    if (this.commands[normalizedCmd]) {
+      return await this.commands[normalizedCmd](args, message);
     } else {
       // If it's not a recognized command, treat it as a general question
       return await this.askQuestion([command], message);
@@ -1847,8 +1848,8 @@ ${ending}`;
                     url.includes("/shorts/") ? url.split("/shorts/")[1]?.split(/[\?&]/)[0] : null;
                     
         return isNiceUser
-          ? `⚠️ YouTube is blocking this download!\n\n✅ *IMPORTANT - Update yt-dlp first:*\n\n1️⃣ Raspberry Pi/Debian:\n   \`sudo apt update && sudo apt upgrade yt-dlp\`\n   \n2️⃣ Or reinstall latest:\n   \`sudo pip3 install -U yt-dlp\`\n\n3️⃣ Restart bot and retry:\n   \`-yt ${url}\`\n\n💡 Old yt-dlp versions can't download from YouTube!\nUpdate is required. 😊`
-          : `🙄 YouTube blocked this. Your yt-dlp is OUTDATED.\n\n*Update RIGHT NOW:*\n\n📦 Raspberry Pi/Debian:\n\`sudo apt update && sudo apt upgrade yt-dlp\`\n\n🐍 Or use pip:\n\`sudo pip3 install -U yt-dlp\`\n\n🔄 Then restart bot and retry:\n\`-yt ${url}\`\n\n💀 YouTube breaks old yt-dlp versions.\nUpdate = everything works.\n\n${vid ? `Video ID: ${vid}` : ''}`;
+          ? `⚠️ YouTube is blocking the download! Here's what to do:\n\n✅ *Fix This:*\n1️⃣ Update yt-dlp (REQUIRED):\n   \`pip3 install -U yt-dlp\`\n   or\n   \`sudo pip3 install -U yt-dlp\`\n\n2️⃣ If still failing, try:\n   \`yt-dlp -U\`\n\n3️⃣ Then retry: \`-yt ${url}\`\n\n💡 YouTube often blocks old yt-dlp versions!\nThe video is available, just need the latest version. 😊`
+          : `🙄 YouTube is blocking this. NOT your fault for once.\n\n*Fix it:*\n1️⃣ Update yt-dlp NOW:\n   \`pip3 install -U yt-dlp\`\n   or if that fails:\n   \`sudo pip3 install -U yt-dlp\`\n   or:\n   \`yt-dlp -U\`\n\n2️⃣ Retry: \`-yt ${url}\`\n\n💀 YouTube breaks yt-dlp regularly.\nUpdate = fix. Simple.\n\n${vid ? `Video ID: ${vid}` : ''}`;
       }
 
       if (isNiceUser) {

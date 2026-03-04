@@ -242,6 +242,21 @@ class YouTubeService {
 
       if (progressCallback) progressCallback(5, "🔍 Starting download...");
 
+      // Try to update yt-dlp first (silent fail if it doesn't work)
+      try {
+        console.log("⬆️  Checking for yt-dlp updates...");
+        await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
+        console.log("✅ yt-dlp updated successfully");
+      } catch (updateError) {
+        console.log("ℹ️  Could not auto-update yt-dlp, trying manual update...");
+        try {
+          await execAsync("pip3 install --upgrade yt-dlp", { timeout: 30000 });
+          console.log("✅ yt-dlp updated via pip3");
+        } catch (pipError) {
+          console.log("⚠️  Auto-update failed, continuing with current version");
+        }
+      }
+
       // Normalize URL for YouTube Shorts
       let normalizedUrl = videoUrl;
       if (videoUrl.includes('/shorts/')) {
@@ -265,7 +280,7 @@ class YouTubeService {
 
       if (progressCallback) progressCallback(10, "⬇️ Downloading video...");
 
-      console.log(`📥 Downloading video: ${videoInfo.title}`);
+      console.log(`📥 Downloading video from URL`);
       console.log(`🔗 URL: ${normalizedUrl}`);
 
       // Simple download command like the MP3 version - works more reliably
