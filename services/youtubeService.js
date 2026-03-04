@@ -284,94 +284,31 @@ class YouTubeService {
       }
 
       const timestamp = Date.now();
-      const safeTitle = (videoInfo.title || "video").replace(/[^a-z0-9]/gi, "_").substring(0, 50);
-      const outputPath = path.join(this.tempDir, `${safeTitle}_${timestamp}`);
+      const safeTitle = `video_${timestamp}`;
+      const outputPath = path.join(this.tempDir, safeTitle);
       const finalPath = `${outputPath}.mp4`;
 
-      if (progressCallback) progressCallback(10, "⬇️ Starting download...");
+      // Extract video ID for thumbnail
+      let videoId = normalizedUrl.match(/[?&]v=([^&]+)/)?.[1] || 
+                    normalizedUrl.match(/youtu\.be\/([^?&]+)/)?.[1] ||
+                    normalizedUrl.match(/shorts\/([^?&]+)/)?.[1] ||
+                    timestamp.toString();
+
+      if (progressCallback) progressCallback(10, "⬇️ Downloading video...");
 
       console.log(`📥 Downloading video: ${videoInfo.title}`);
       console.log(`🔗 URL: ${normalizedUrl}`);
 
-      // Download with progress using spawn for real-time output
-      const { spawn } = require("child_process");
-      
-      await new Promise((resolve, reject) => {
-        // More aggressive format selection with fallbacks
-        const args = [
-          "--no-warnings",
-          "--no-check-certificate", // Skip certificate validation
-          "--prefer-free-formats",
-          "--no-playlist", // Only download single video
-          "--extractor-args", "youtube:player_client=android", // Use Android client
-          "--extractor-args", "youtube:player_skip=webpage,configs,js", // Skip webpage extraction
-          "-f", "best[height<=720]/best[height<=480]/best", // Simplified format
-          "--merge-output-format", "mp4",
-          "--user-agent", "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip", // Android user agent
-          "--add-header", "X-Youtube-Client-Name:3",
-          "--add-header", "X-Youtube-Client-Version:17.31.35",
-          "-o", `${outputPath}.%(ext)s`,
-          normalizedUrl,
-        ];
+      // Simple download command like the MP3 version - works more reliably
+      const command = `${ytdlpPath} -f "best[height<=720]/best[height<=480]/best" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${normalizedUrl}"`;
 
-        console.log(`📝 Running: ${ytdlpPath} ${args.join(' ')}`);
-        const process = spawn(ytdlpPath, args);
+      console.log(`📝 Running: ${command}`);
 
-        let lastProgress = 0;
-        let errorOutput = "";
-        
-        process.stdout.on("data", (data) => {
-          const output = data.toString();
-          console.log(output);
-          
-          // Parse download progress
-          const progressMatch = output.match(/(\d+\.?\d*)%/);
-          if (progressMatch && progressCallback) {
-            const percent = parseFloat(progressMatch[1]);
-            // Map download progress to 10-90%
-            const mappedPercent = Math.min(90, 10 + (percent * 0.8));
-            
-            if (mappedPercent > lastProgress) {
-              lastProgress = mappedPercent;
-              const bar = this.createProgressBar(mappedPercent);
-              progressCallback(mappedPercent, `⬇️ Downloading...\n${bar}`);
-            }
-          }
-        });
-
-        process.stderr.on("data", (data) => {
-          const output = data.toString();
-          errorOutput += output;
-          console.log(output);
-          
-          // Also check stderr for progress
-          const progressMatch = output.match(/(\d+\.?\d*)%/);
-          if (progressMatch && progressCallback) {
-            const percent = parseFloat(progressMatch[1]);
-            const mappedPercent = Math.min(90, 10 + (percent * 0.8));
-            
-            if (mappedPercent > lastProgress) {
-              lastProgress = mappedPercent;
-              const bar = this.createProgressBar(mappedPercent);
-              progressCallback(mappedPercent, `⬇️ Downloading...\n${bar}`);
-            }
-          }
-        });
-
-        process.on("close", (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`Download failed: ${errorOutput || 'Unknown error'}`));
-          }
-        });
-
-        process.on("error", (err) => {
-          reject(err);
-        });
+      await execAsync(command, {
+        timeout: 180000, // 3 minute timeout
       });
 
-      if (progressCallback) progressCallback(95, "✅ Download complete!");
+      if (progressCallback) progressCallback(90, "✅ Download complete!");
 
       // Check if file exists
       if (!fs.existsSync(finalPath)) {
@@ -383,14 +320,14 @@ class YouTubeService {
       console.log(`✅ Downloaded: ${fileSizeMB} MB`);
 
       // Download thumbnail with progress
-      if (progressCallback) progressCallback(98, "📸 Getting thumbnail...");
-      const thumbnail = await this.downloadThumbnail(videoInfo.id);
+      if (progressCallback) progressCallback(95, "📸 Getting thumbnail...");
+      const thumbnail = await this.downloadThumbnail(videoId);
 
       if (progressCallback) progressCallback(100, "🎉 Ready to send!");
 
       return {
         filepath: finalPath,
-        title: videoInfo.title || "Video",
+        title: "Video",
         thumbnail: thumbnail,
         size: fileSizeMB,
         cleanup: () => {
