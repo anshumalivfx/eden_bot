@@ -283,8 +283,9 @@ class YouTubeService {
       console.log(`📥 Downloading video from URL`);
       console.log(`🔗 URL: ${normalizedUrl}`);
 
-      // Simple download command like the MP3 version - works more reliably
-      const command = `${ytdlpPath} -f "best[height<=720]/best[height<=480]/best" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${normalizedUrl}"`;
+      // Use Android client to bypass nsig extraction issues with older yt-dlp versions
+      // Format: bestvideo+bestaudio up to 720p, fallback to best single file up to 720p, then any best format
+      const command = `${ytdlpPath} --extractor-args "youtube:player_client=android" -f "bv*[height<=720]+ba/b[height<=720]/bv*[height<=480]+ba/b[height<=480]/best" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${normalizedUrl}"`;
 
       console.log(`📝 Running: ${command}`);
 
