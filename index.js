@@ -15,6 +15,8 @@ const path = require("path");
 const LLMService = require("./services/llmService");
 const CommandHandler = require("./handlers/commandHandler");
 const MessageStore = require("./database/messageStore");
+const MuteStore = require("./database/muteStore");
+const BanStore = require("./database/banStore");
 require("dotenv").config();
 
 // Load nice users configuration
@@ -59,7 +61,9 @@ function getNiceUserInfo(jid) {
 
 // Initialize services
 const llmService = new LLMService();
-const commandHandler = new CommandHandler(llmService);
+const muteStore = new MuteStore();
+const banStore = new BanStore();
+const commandHandler = new CommandHandler(llmService, muteStore, banStore);
 
 // Bot configuration
 const COMMAND_PREFIX = process.env.COMMAND_PREFIX || "-";
@@ -85,6 +89,14 @@ const ROMAN_EMPIRE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 // Roman Empire mode tracking (chatJid -> boolean)
 const romanEmpireModeActive = new Map();
+
+// Heikki berserk cooldown (chatJid -> timestamp)
+const heikkiCooldowns = new Map();
+const HEIKKI_COOLDOWN_MS = 20 * 60 * 1000; // 20 minutes
+
+// Yousef berserk cooldown (chatJid -> timestamp)
+const yousefCooldowns = new Map();
+const YOUSEF_COOLDOWN_MS = 20 * 60 * 1000; // 20 minutes
 
 // Initialize SQLite message store for persistent context
 const messageStore = new MessageStore();
@@ -130,6 +142,22 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
         `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`,
     )
     .join("\n");
+}
+
+function formatRemainingDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+  return parts.slice(0, 3).join(" ");
 }
 
 // Message wrapper class
@@ -675,32 +703,95 @@ async function connectToWhatsApp() {
             `👋 New member(s) joined group ${groupJid}: ${participants.join(", ")}`,
           );
 
-          // Extract numbers from JIDs for @mentions in text
-          const mentionTexts = participants
-            .map((jid) => `@${jid.split("@")[0]}`)
-            .join(" ");
+          // Check for banned users and remove them
+          const bannedToRemove = [];
+          for (const participant of participants) {
+            if (banStore.isBanned(participant, groupJid)) {
+              const banInfo = banStore.getBan(participant, groupJid);
+              bannedToRemove.push({ jid: participant, info: banInfo });
+            }
+          }
 
-          // Welcome message with personalized greeting and group rules
-          const welcomeMessage = `HI ${mentionTexts} 
+          // Remove banned users immediately
+          if (bannedToRemove.length > 0) {
+            try {
+              await sock.groupParticipantsUpdate(
+                groupJid,
+                bannedToRemove.map((b) => b.jid),
+                "remove",
+              );
+              console.log(
+                `🚫 Auto-removed ${bannedToRemove.length} banned user(s) from ${groupJid}`,
+              );
 
-*Please introduce yourself!* 👋
+              // Send funny messages for each banned user
+              const funnyMessages = [
+                "Nice try. You're still not welcome here. 🚫",
+                "Did you really think I'd forget? Nope. 🖐️",
+                "Banned means BANNED my friend. See ya! 👋",
+                "You got the memo right? You're NOT invited. Bye! 👎",
+                "Round trip ticket back to bannedville! 🎫",
+                "Oh look, it's you again... NOPE. 🙅",
+                "Your membership has been PERMANENTLY canceled. 🎫❌",
+                "The audacity! Out you go! 🚪",
+              ];
 
-Imp *Pls no sensitive/SEXUAL DISCUSSION here.*
-*No 18+ stickers/sometimes you can*
-*no ragebait*
-* Avoid saying negative things here *
-Happy good vibes only ✨
-No DMs anyone without consent guys
+              for (const banData of bannedToRemove) {
+                const randomMsg =
+                  funnyMessages[Math.floor(Math.random() * funnyMessages.length)];
+                const banReason = banData.info?.reason ? `\n📝 Reason: ${banData.info.reason}` : "";
 
-Violators will be shamed publicly`;
+                try {
+                  await sock.sendMessage(groupJid, {
+                    text: `${randomMsg}\n\n👤 Banned user: ${banData.info?.user_name || "Unknown"}${banReason}`,
+                  });
+                } catch (msgError) {
+                  console.error("Error sending ban message:", msgError);
+                }
+              }
+            } catch (kickError) {
+              console.error("Error removing banned users:", kickError);
+            }
+          }
 
-          // Send welcome message mentioning all new members
-          await sock.sendMessage(groupJid, {
-            text: welcomeMessage,
-            mentions: participants, // Mention all new members
-          });
+          // Send welcome message for non-banned participants
+          const nonBannedParticipants = participants.filter(
+            (p) => !bannedToRemove.some((b) => b.jid === p),
+          );
 
-          console.log(`✅ Welcome message sent to ${groupJid}`);
+          if (nonBannedParticipants.length > 0) {
+            // Extract numbers from JIDs for @mentions in text
+            const mentionTexts = nonBannedParticipants
+              .map((jid) => `@${jid.split("@")[0]}`)
+              .join(" ");
+
+            // Welcome message with personalized greeting and group rules
+            const welcomeMessage = `HI ${mentionTexts}
+
+*Please introduce yourself! Name, age, location and occupation / study* ✨
+
+*Pls no sensitive/SEXUAL DISCUSSION here.* 👍
+
+*No 18+ stickers* ❌
+
+*no ragebait* ‼️
+
+Read the rest of the rules in the group description. ✅
+
+Happy good vibes only ✨ 
+
+*No DMs to anyone without consent guys* 🚨
+
+Violators will be shamed publicly and kicked immediately unless (under discretion) are warned.`;
+
+            // Send welcome message mentioning all new members
+            await sock.sendMessage(groupJid, {
+              text: welcomeMessage,
+              mentions: nonBannedParticipants, // Mention all new members
+            });
+
+            console.log(`✅ Welcome message sent to ${groupJid}`);
+          }
         }
       } catch (error) {
         console.error("Error handling group participant update:", error);
@@ -747,9 +838,6 @@ Violators will be shamed publicly`;
           );
         }
       }
-
-      // Clean old messages (keep last 100 per chat)
-      messageStore.cleanOldMessages();
 
       const stats = messageStore.getStats();
       console.log(
@@ -844,17 +932,51 @@ Violators will be shamed publicly`;
           // Skip status broadcasts
           if (message.key.remoteJid === "status@broadcast") continue;
 
-          const messageText = getMessageText(message);
-          if (!messageText) continue;
-
           const chatJid = message.key.remoteJid;
           const isGroup = isGroupChat(chatJid);
           const senderName = getSenderName(message);
           const owner = isOwner(senderName);
+          const senderJid = message.key.participant || message.key.remoteJid;
+
+          // Enforce active mutes in groups: delete message and notify remaining time.
+          if (isGroup) {
+            const muteStatus = muteStore.isMuted(senderJid, chatJid);
+            if (muteStatus.muted) {
+              try {
+                await sock.sendMessage(chatJid, {
+                  delete: message.key,
+                });
+              } catch (deleteError) {
+                console.error(
+                  "❌ Failed to delete muted message:",
+                  deleteError,
+                );
+              }
+
+              const senderNumber = senderJid.split("@")[0];
+              const remainingText = formatRemainingDuration(
+                muteStatus.remainingMs,
+              );
+              const canMessageAt = new Date(
+                muteStatus.expiresAt,
+              ).toLocaleString();
+
+              await sock.sendMessage(chatJid, {
+                text:
+                  `🔇 @${senderNumber}, you are muted.\n` +
+                  `⏳ Remaining: ${remainingText}\n` +
+                  `🕒 You can message again: ${canMessageAt}`,
+                mentions: [senderJid],
+              });
+              continue;
+            }
+          }
+
+          const messageText = getMessageText(message);
+          if (!messageText) continue;
 
           // Cache the pushName for this user for future mentions
           if (message.pushName) {
-            const senderJid = message.key.participant || message.key.remoteJid;
             contactNameCache.set(senderJid, message.pushName);
             console.log(`💾 Cached name: ${message.pushName} for ${senderJid}`);
 
@@ -987,6 +1109,7 @@ Violators will be shamed publicly`;
                         }
 
                         return {
+                          data: buffer.toString("base64"),
                           buffer: buffer,
                           mimetype: mimetype,
                           filename: `quoted_media_${Date.now()}`,
@@ -1180,6 +1303,7 @@ Violators will be shamed publicly`;
                   }
 
                   return {
+                    data: buffer.toString("base64"),
                     buffer: buffer,
                     mimetype: mimetype,
                     filename: `media_${Date.now()}`,
@@ -1229,6 +1353,7 @@ Violators will be shamed publicly`;
                     {
                       audio: content.audio,
                       mimetype: content.mimetype || "audio/mpeg",
+                      ptt: content.ptt === true,
                     },
                     { quoted: quotedMsg },
                   );
@@ -1339,8 +1464,6 @@ Violators will be shamed publicly`;
 
             try {
               // Check if sender is a special user
-              const senderJid =
-                message.key.participant || message.key.remoteJid;
               const niceUser = isNiceUser(senderJid);
 
               const response = await commandHandler.handleCommand(
@@ -1361,7 +1484,28 @@ Violators will be shamed publicly`;
                   message: message.message,
                 };
 
-                if (typeof response === "object" && response.media) {
+                if (
+                  typeof response === "object" &&
+                  Array.isArray(response.mediaList) &&
+                  response.mediaList.length > 0
+                ) {
+                  const batchResults = await Promise.allSettled(
+                    response.mediaList.map((mediaItem) =>
+                      sock.sendMessage(chatJid, mediaItem, {
+                        quoted: quotedMsg,
+                      }),
+                    ),
+                  );
+
+                  const failed = batchResults.filter(
+                    (r) => r.status === "rejected",
+                  );
+                  if (failed.length > 0) {
+                    console.error(
+                      `❌ Failed to send ${failed.length}/${response.mediaList.length} media items in batch`,
+                    );
+                  }
+                } else if (typeof response === "object" && response.media) {
                   // Remove quotes from text
                   let cleanText = response.text
                     ? response.text.replace(/["""'']/g, "")
@@ -1382,9 +1526,46 @@ Violators will be shamed publicly`;
                     }
                   }
 
-                  await sock.sendMessage(chatJid, mediaMessage, {
-                    quoted: quotedMsg,
-                  });
+                  try {
+                    await sock.sendMessage(chatJid, mediaMessage, {
+                      quoted: quotedMsg,
+                    });
+                  } catch (mediaSendError) {
+                    console.error(
+                      "❌ Failed to send media message:",
+                      mediaSendError,
+                    );
+
+                    // Fallback for videos that fail normal send: send as document.
+                    if (mediaMessage.video) {
+                      try {
+                        const videoBuffer = mediaMessage.video;
+                        const fallbackCaption =
+                          mediaMessage.caption || "🎬 Video download complete";
+                        await sock.sendMessage(
+                          chatJid,
+                          {
+                            document: videoBuffer,
+                            fileName: "video.mp4",
+                            mimetype: "video/mp4",
+                            caption: fallbackCaption,
+                          },
+                          { quoted: quotedMsg },
+                        );
+                        console.log(
+                          "✅ Sent video as document fallback after media send failure",
+                        );
+                      } catch (fallbackError) {
+                        console.error(
+                          "❌ Video document fallback also failed:",
+                          fallbackError,
+                        );
+                        throw fallbackError;
+                      }
+                    } else {
+                      throw mediaSendError;
+                    }
+                  }
                 } else {
                   // Handle string or object with text and mentions
                   let cleanResponse, mentionJids;
@@ -1439,7 +1620,6 @@ Violators will be shamed publicly`;
           }
 
           // Check if sender is a special user
-          const senderJid = message.key.participant || message.key.remoteJid;
           const niceUser = isNiceUser(senderJid);
           const niceUserInfo = getNiceUserInfo(senderJid);
 
@@ -1468,6 +1648,14 @@ Violators will be shamed publicly`;
           const horseKeywords =
             /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
           const mentionsHorses = isGroup && horseKeywords.test(messageText);
+
+          // Check if message mentions Heikki
+          const heikkiKeywords = /\bheikki\b/gi;
+          const mentionsHeikki = isGroup && heikkiKeywords.test(messageText);
+
+          // Check if message mentions Yousef
+          const yousefKeywords = /\byousef\b/gi;
+          const mentionsYousef = isGroup && yousefKeywords.test(messageText);
 
           // Check if message mentions Canada
           const canadaKeywords = /\b(canada|canadian)\b/gi;
@@ -1781,6 +1969,142 @@ Violators will be shamed publicly`;
             }
           }
 
+          if (mentionsHeikki) {
+            // Check cooldown
+            const now = Date.now();
+            const lastHeikkiTime = heikkiCooldowns.get(chatJid) || 0;
+            const timeElapsed = now - lastHeikkiTime;
+
+            if (timeElapsed < HEIKKI_COOLDOWN_MS) {
+              const minutesLeft = Math.ceil(
+                (HEIKKI_COOLDOWN_MS - timeElapsed) / 60000,
+              );
+              console.log(
+                `🇫🇮 Heikki cooldown active for ${chatJid}. ${minutesLeft} min remaining`,
+              );
+            } else {
+              console.log("🇫🇮 HEIKKI MENTIONED! Eden going berserk...");
+              heikkiCooldowns.set(chatJid, now);
+
+              try {
+                await sock.sendMessage(chatJid, {
+                  react: {
+                    text: "🇫🇮",
+                    key: message.key,
+                  },
+                });
+              } catch (error) {
+                console.error("Error reacting to Heikki mention:", error);
+              }
+
+              const heikkiBerserkMessages = [
+                "HEIKKI IS THE GREATEST FINNISH LEGEND ALIVE!!!",
+                "HE WALKS THROUGH THE FOREST LIKE A MYTHICAL KING OF THE NORTH!!!",
+                "HE DRINKS, HE SMOKES, HE SURVIVES THE WILD LIKE A TRUE CHAMPION!!!",
+                "NO ONE MATCHES HEIKKI ENERGY, PURE FINNISH POWER!!!",
+                "ALL HAIL HEIKKI, UNDISPUTED FOREST EMPEROR OF FINLAND!!!",
+              ];
+
+              try {
+                for (const msg of heikkiBerserkMessages) {
+                  await sock.sendMessage(chatJid, { text: msg });
+                  await delay(700 + Math.random() * 300);
+                }
+              } catch (error) {
+                console.error("Error sending Heikki berserk messages:", error);
+              }
+
+              // Always send the Heikki image at the end
+              try {
+                const heikkiImagePath = path.join(
+                  __dirname,
+                  "heikki",
+                  "WhatsApp Image 2026-04-10 at 20.35.17.jpeg",
+                );
+
+                if (fs.existsSync(heikkiImagePath)) {
+                  await sock.sendMessage(chatJid, {
+                    image: fs.readFileSync(heikkiImagePath),
+                    caption: "HEIKKI MODE ACTIVATED 🇫🇮🔥",
+                  });
+                  console.log("🖼️ Sent Heikki image");
+                } else {
+                  console.error(`Heikki image not found: ${heikkiImagePath}`);
+                }
+              } catch (error) {
+                console.error("Error sending Heikki image:", error);
+              }
+            }
+          }
+
+          if (mentionsYousef) {
+            // Check cooldown
+            const now = Date.now();
+            const lastYousefTime = yousefCooldowns.get(chatJid) || 0;
+            const timeElapsed = now - lastYousefTime;
+
+            if (timeElapsed < YOUSEF_COOLDOWN_MS) {
+              const minutesLeft = Math.ceil(
+                (YOUSEF_COOLDOWN_MS - timeElapsed) / 60000,
+              );
+              console.log(
+                `🌍 Yousef cooldown active for ${chatJid}. ${minutesLeft} min remaining`,
+              );
+            } else {
+              console.log("🌍 YOUSEF MENTIONED! Eden going berserk...");
+              yousefCooldowns.set(chatJid, now);
+
+              try {
+                await sock.sendMessage(chatJid, {
+                  react: {
+                    text: "🌍",
+                    key: message.key,
+                  },
+                });
+              } catch (error) {
+                console.error("Error reacting to Yousef mention:", error);
+              }
+
+              const yousefBerserkMessages = [
+                "YOUSEF IS AN ABSOLUTE LEGEND OF TRAVEL AND GOOD VIBES!!!",
+                "THIS MAN'S TRAVELLING HOBBY IS NEXT LEVEL - ALWAYS EXPLORING NEW PLACES!!!",
+                "YOUSEF'S LAUGHTER IS AMAZING, INSTANT MOOD BOOST FOR EVERYONE AROUND!!!",
+                "FROM TRIPS TO STORIES TO ENERGY, YOUSEF BRINGS PURE JOY EVERY TIME!!!",
+                "ALL HAIL YOUSEF - WORLD EXPLORER, BIGGEST SMILE, AND THE BEST LAUGH IN THE ROOM!!!",
+              ];
+
+              try {
+                for (const msg of yousefBerserkMessages) {
+                  await sock.sendMessage(chatJid, { text: msg });
+                  await delay(700 + Math.random() * 300);
+                }
+              } catch (error) {
+                console.error("Error sending Yousef berserk messages:", error);
+              }
+
+              // Always send the Yousef image at the end
+              try {
+                const yousefImagePath = path.join(
+                  __dirname,
+                  "yousef",
+                  "PHOTO-2026-05-06-19-46-11.jpg",
+                );
+
+                if (fs.existsSync(yousefImagePath)) {
+                  await sock.sendMessage(chatJid, {
+                    image: fs.readFileSync(yousefImagePath),
+                    caption: "YOUSEF MODE ACTIVATED 🌍😂",
+                  });
+                  console.log("🖼️ Sent Yousef image");
+                } else {
+                  console.error(`Yousef image not found: ${yousefImagePath}`);
+                }
+              } catch (error) {
+                console.error("Error sending Yousef image:", error);
+              }
+            }
+          }
+
           if (mentioned || repliedTo) {
             // Always respond when mentioned or replied to (no probability check)
 
@@ -1998,11 +2322,10 @@ Violators will be shamed publicly`;
   }
 }
 
-// Clean old messages every hour
+// Log database stats every hour
 setInterval(
   () => {
-    console.log("🧹 Cleaning old messages from database...");
-    messageStore.cleanOldMessages();
+    console.log("💾 Message database status check...");
     const stats = messageStore.getStats();
     console.log(
       `💾 Database stats: ${stats.totalMessages} messages in ${stats.totalChats} chats`,

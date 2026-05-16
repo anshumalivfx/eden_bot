@@ -308,75 +308,102 @@ class YouTubeService {
       console.log(`📥 Downloading video from URL`);
       console.log(`🔗 URL: ${normalizedUrl}`);
 
-      // Use Android client to bypass nsig extraction issues with older yt-dlp versions
-      // Format: bestvideo+bestaudio up to 720p, fallback to best single file up to 720p, then any best format
+      // Prefer web client to avoid Android PO-token requirement, then fall back if needed.
       const baseCommand = ytdlpPath.split(' ');
-      const args = [
-        ...baseCommand.slice(1), // If using python3 -m yt_dlp, this adds the module args
-        '--extractor-args', 'youtube:player_client=android',
-        '-f', 'bv*[height<=720]+ba/b[height<=720]/bv*[height<=480]+ba/b[height<=480]/best',
-        '--merge-output-format', 'mp4',
-        '-o', `${outputPath}.%(ext)s`,
-        '--newline', // Force newline after each output line for better parsing
-        normalizedUrl
+      const attemptArgsList = [
+        [
+          ...baseCommand.slice(1),
+          '--extractor-args', 'youtube:player_client=web',
+          '-f', 'b[height<=720]/best[height<=720]/b/best',
+          '--merge-output-format', 'mp4',
+          '-o', `${outputPath}.%(ext)s`,
+          '--newline',
+          normalizedUrl,
+        ],
+        [
+          ...baseCommand.slice(1),
+          '-f', 'b[height<=720]/best[height<=720]/b/best',
+          '--merge-output-format', 'mp4',
+          '-o', `${outputPath}.%(ext)s`,
+          '--newline',
+          normalizedUrl,
+        ],
       ];
 
-      console.log(`📝 Running: ${baseCommand[0]} ${args.join(' ')}`);
+      const runDownloadAttempt = (args) =>
+        new Promise((resolve, reject) => {
+          const downloadProcess = spawn(baseCommand[0], args, {
+            cwd: process.cwd(),
+          });
 
-      // Use spawn to get real-time progress
-      await new Promise((resolve, reject) => {
-        const downloadProcess = spawn(baseCommand[0], args, {
-          cwd: process.cwd()
-        });
+          let lastProgress = 10;
 
-        let lastProgress = 10;
+          downloadProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            console.log(output);
 
-        downloadProcess.stdout.on('data', (data) => {
-          const output = data.toString();
-          console.log(output);
-          
-          // Parse progress from stdout
-          const progressMatch = output.match(/(\d+\.?\d*)%/);
-          if (progressMatch && progressCallback) {
-            const percent = parseFloat(progressMatch[1]);
-            // Map download progress (0-100) to our range (10-90)
-            const mappedPercent = 10 + (percent * 0.8);
-            if (mappedPercent > lastProgress) {
-              lastProgress = mappedPercent;
-              progressCallback(Math.round(mappedPercent), `⬇️ Downloading... ${percent.toFixed(1)}%`);
+            const progressMatch = output.match(/(\d+\.?\d*)%/);
+            if (progressMatch && progressCallback) {
+              const percent = parseFloat(progressMatch[1]);
+              const mappedPercent = 10 + percent * 0.8;
+              if (mappedPercent > lastProgress) {
+                lastProgress = mappedPercent;
+                progressCallback(
+                  Math.round(mappedPercent),
+                  `⬇️ Downloading... ${percent.toFixed(1)}%`,
+                );
+              }
             }
-          }
-        });
+          });
 
-        downloadProcess.stderr.on('data', (data) => {
-          const output = data.toString();
-          console.log(output);
-          
-          // yt-dlp outputs progress to stderr
-          const progressMatch = output.match(/(\d+\.?\d*)%/);
-          if (progressMatch && progressCallback) {
-            const percent = parseFloat(progressMatch[1]);
-            // Map download progress (0-100) to our range (10-90)
-            const mappedPercent = 10 + (percent * 0.8);
-            if (mappedPercent > lastProgress) {
-              lastProgress = mappedPercent;
-              progressCallback(Math.round(mappedPercent), `⬇️ Downloading... ${percent.toFixed(1)}%`);
+          downloadProcess.stderr.on('data', (data) => {
+            const output = data.toString();
+            console.log(output);
+
+            const progressMatch = output.match(/(\d+\.?\d*)%/);
+            if (progressMatch && progressCallback) {
+              const percent = parseFloat(progressMatch[1]);
+              const mappedPercent = 10 + percent * 0.8;
+              if (mappedPercent > lastProgress) {
+                lastProgress = mappedPercent;
+                progressCallback(
+                  Math.round(mappedPercent),
+                  `⬇️ Downloading... ${percent.toFixed(1)}%`,
+                );
+              }
             }
-          }
+          });
+
+          downloadProcess.on('close', (code) => {
+            if (code !== 0) {
+              reject(new Error(`yt-dlp exited with code ${code}`));
+            } else {
+              resolve();
+            }
+          });
+
+          downloadProcess.on('error', (error) => {
+            reject(error);
+          });
         });
 
-        downloadProcess.on('close', (code) => {
-          if (code !== 0) {
-            reject(new Error(`yt-dlp exited with code ${code}`));
-          } else {
-            resolve();
-          }
-        });
+      let downloaded = false;
+      let lastAttemptError = null;
+      for (const args of attemptArgsList) {
+        try {
+          console.log(`📝 Running: ${baseCommand[0]} ${args.join(' ')}`);
+          await runDownloadAttempt(args);
+          downloaded = true;
+          break;
+        } catch (attemptError) {
+          lastAttemptError = attemptError;
+          console.log(`⚠️ Download attempt failed: ${attemptError.message}`);
+        }
+      }
 
-        downloadProcess.on('error', (error) => {
-          reject(error);
-        });
-      });
+      if (!downloaded) {
+        throw lastAttemptError || new Error('yt-dlp download failed');
+      }
 
       if (progressCallback) progressCallback(90, "✅ Download complete!");
 
@@ -413,6 +440,55 @@ class YouTubeService {
     } catch (error) {
       console.error("Video download error:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Resolve YouTube title without downloading media.
+   * @param {string} videoUrl - YouTube video URL
+   * @returns {Promise<string|null>} Video title or null when unavailable
+   */
+  async getVideoTitle(videoUrl) {
+    try {
+      let ytdlpPath = "yt-dlp";
+      try {
+        await execAsync("yt-dlp --version");
+      } catch (error) {
+        const commonPaths = [
+          path.join(process.cwd(), "venv/bin/yt-dlp"),
+          "./venv/bin/yt-dlp",
+          "/opt/homebrew/bin/yt-dlp",
+          "/usr/local/bin/yt-dlp",
+          "/usr/bin/yt-dlp",
+        ];
+        let found = false;
+        for (const p of commonPaths) {
+          try {
+            await execAsync(`${p} --version`);
+            ytdlpPath = p;
+            found = true;
+            break;
+          } catch {}
+        }
+        if (!found) {
+          try {
+            await execAsync("python3 -m yt_dlp --version");
+            ytdlpPath = "python3 -m yt_dlp";
+            found = true;
+          } catch {}
+        }
+        if (!found) {
+          return null;
+        }
+      }
+
+      const command = `${ytdlpPath} --no-playlist --skip-download --print \"%(title)s\" \"${videoUrl}\"`;
+      const { stdout } = await execAsync(command, { timeout: 30000 });
+      const title = (stdout || "").trim().split("\n").filter(Boolean)[0];
+      return title || null;
+    } catch (error) {
+      console.log("⚠️ Could not fetch video title:", error?.message || error);
+      return null;
     }
   }
 

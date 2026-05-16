@@ -9,6 +9,7 @@ class LLMService {
     this.huggingfaceApiKey = process.env.HUGGINGFACE_API_KEY;
     this.cohereApiKey = process.env.COHERE_API_KEY;
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+    this.mistralVisionCooldownUntil = 0;
 
     // Natural, expressive personality with real emotions
     this.personality = `You're Eden, a genuinely nice person who talks like a real human texting. You're usually upbeat and happy, but you have real emotions - you can get sad about bad things (like animal cruelty, injustice, people being mean) or frustrated when things aren't right. You're friendly, helpful, and care about people.
@@ -77,6 +78,39 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     }
 
     try {
+      // Route image prompts to GROQ vision first, then fallback providers.
+      if (imageBase64) {
+        if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
+          try {
+            return await this.callGroq(userPrompt, this.personality, imageBase64);
+          } catch (visionError) {
+            console.warn("Groq vision failed, trying fallback:", visionError.message);
+          }
+        }
+        if (
+          this.mistralApiKey &&
+          this.mistralApiKey !== "your_mistral_api_key_here" &&
+          !this.isMistralVisionOnCooldown()
+        ) {
+          try {
+            return await this.callMistralVision(
+              userPrompt,
+              this.personality,
+              imageBase64,
+            );
+          } catch (visionError) {
+            this.handleMistralVisionError(visionError);
+            console.warn("Mistral vision failed, trying fallback:", visionError.message);
+          }
+        }
+        if (
+          this.openaiApiKey &&
+          this.openaiApiKey !== "your_openai_api_key_here"
+        ) {
+          return await this.callOpenAI(userPrompt, this.personality, imageBase64);
+        }
+      }
+
       // Try Mistral first (best for chatbots), then other services
       if (
         this.mistralApiKey &&
@@ -195,6 +229,39 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     const fullPrompt = `${systemMessage}\n\n${userPrompt}`;
 
     try {
+      // Route image prompts to GROQ vision first, then fallback providers.
+      if (imageBase64) {
+        if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
+          try {
+            return await this.callGroq(userPrompt, systemMessage, imageBase64);
+          } catch (visionError) {
+            console.warn("Groq vision failed, trying fallback:", visionError.message);
+          }
+        }
+        if (
+          this.mistralApiKey &&
+          this.mistralApiKey !== "your_mistral_api_key_here" &&
+          !this.isMistralVisionOnCooldown()
+        ) {
+          try {
+            return await this.callMistralVision(
+              userPrompt,
+              systemMessage,
+              imageBase64,
+            );
+          } catch (visionError) {
+            this.handleMistralVisionError(visionError);
+            console.warn("Mistral vision failed, trying fallback:", visionError.message);
+          }
+        }
+        if (
+          this.openaiApiKey &&
+          this.openaiApiKey !== "your_openai_api_key_here"
+        ) {
+          return await this.callOpenAI(userPrompt, systemMessage, imageBase64);
+        }
+      }
+
       if (
         this.mistralApiKey &&
         this.mistralApiKey !== "your_mistral_api_key_here"
@@ -259,19 +326,32 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     ];
   }
 
-  async callOpenAI(userPrompt, systemPrompt = null) {
+  async callOpenAI(userPrompt, systemPrompt = null, imageBase64 = null) {
     const messages = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
     }
-    messages.push({ role: "user", content: userPrompt });
+    if (imageBase64) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+          },
+        ],
+      });
+    } else {
+      messages.push({ role: "user", content: userPrompt });
+    }
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: imageBase64 ? "gpt-4o-mini" : "gpt-3.5-turbo",
         messages: messages,
-        max_tokens: 300,
+        max_tokens: imageBase64 ? 1024 : 300,
         temperature: 0.9,
       },
       {
@@ -372,6 +452,80 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       );
       throw error;
     }
+  }
+
+  async callMistralVision(userPrompt, systemPrompt = null, imageBase64 = null) {
+    const messages = [];
+
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+
+    messages.push({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: userPrompt,
+        },
+        {
+          type: "image_url",
+          image_url: `data:image/jpeg;base64,${imageBase64}`,
+        },
+      ],
+    });
+
+    const response = await axios.post(
+      "https://api.mistral.ai/v1/chat/completions",
+      {
+        model: "pixtral-12b-2409",
+        messages: messages,
+        max_tokens: 1024,
+        temperature: 0.9,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${this.mistralApiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      },
+    );
+
+    return response.data.choices[0].message.content.trim();
+  }
+
+  isMistralVisionOnCooldown() {
+    return Date.now() < this.mistralVisionCooldownUntil;
+  }
+
+  getRetryAfterMs(error, defaultMs = 60000) {
+    const retryAfter = error?.response?.headers?.["retry-after"];
+    if (!retryAfter) return defaultMs;
+
+    const asNumber = Number(retryAfter);
+    if (Number.isFinite(asNumber) && asNumber > 0) {
+      return asNumber * 1000;
+    }
+
+    const asDate = Date.parse(retryAfter);
+    if (!Number.isNaN(asDate)) {
+      return Math.max(1000, asDate - Date.now());
+    }
+
+    return defaultMs;
+  }
+
+  handleMistralVisionError(error) {
+    if (error?.response?.status !== 429) return;
+
+    const retryAfterMs = this.getRetryAfterMs(error, 60000);
+    this.mistralVisionCooldownUntil = Date.now() + retryAfterMs;
+
+    const retrySec = Math.ceil(retryAfterMs / 1000);
+    console.warn(
+      `Mistral vision rate-limited (429). Cooling down for ${retrySec}s before retrying Mistral vision.`,
+    );
   }
 
   async callGroq(userPrompt, systemPrompt = null, imageBase64 = null) {

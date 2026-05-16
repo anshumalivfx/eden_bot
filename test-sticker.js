@@ -95,9 +95,11 @@ async function testCommandIntegration() {
     // Check if sticker commands exist
     const hasSticker = "sticker" in handler.commands;
     const hasS2 = "s2" in handler.commands;
+    const hasMeme = "meme" in handler.commands;
 
     console.log(`Sticker command exists: ${hasSticker ? "✅" : "❌"}`);
     console.log(`S2 alias exists: ${hasS2 ? "✅" : "❌"}`);
+    console.log(`Meme command exists: ${hasMeme ? "✅" : "❌"}`);
   } catch (error) {
     console.error("❌ Command integration test failed:", error.message);
   }

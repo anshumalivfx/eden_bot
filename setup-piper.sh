@@ -11,6 +11,15 @@ echo "🎙️ Setting up Piper TTS..."
 ARCH=$(uname -m)
 OS=$(uname -s)
 
+# On Apple Silicon running under Rosetta, uname -m can be x86_64.
+# Use hardware capability to detect true host architecture.
+IS_APPLE_SILICON=false
+if [ "$OS" = "Darwin" ]; then
+    if [ "$(sysctl -in hw.optional.arm64 2>/dev/null)" = "1" ]; then
+        IS_APPLE_SILICON=true
+    fi
+fi
+
 echo "📡 Detected: $OS $ARCH"
 
 # Create directories
@@ -40,12 +49,14 @@ if [ "$OS" = "Linux" ]; then
     fi
 elif [ "$OS" = "Darwin" ]; then
     # macOS
-    if [ "$ARCH" = "arm64" ]; then
+    if [ "$ARCH" = "arm64" ] || [ "$IS_APPLE_SILICON" = true ]; then
         echo "📥 Downloading Piper for macOS (Apple Silicon)..."
         PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_macos_aarch64.tar.gz"
+        EXPECTED_BINARY_ARCH="arm64"
     else
         echo "📥 Downloading Piper for macOS (Intel)..."
         PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_macos_x64.tar.gz"
+        EXPECTED_BINARY_ARCH="x86_64"
     fi
 else
     echo "❌ Unsupported OS: $OS"
@@ -53,7 +64,7 @@ else
 fi
 
 # Download and extract Piper
-if [ ! -f "piper" ]; then
+if [ ! -f "piper" ] && [ ! -f "piper/piper" ]; then
     echo "⬇️  Downloading Piper..."
     curl -L "$PIPER_URL" -o piper.tar.gz
     tar -xzf piper.tar.gz
@@ -73,6 +84,36 @@ elif [ -f "piper" ]; then
     chmod +x piper
     ls -la piper
     echo "✅ Piper binary at ./piper is executable"
+fi
+
+# Verify binary architecture matches platform; if not, re-download correct archive.
+PIPER_BIN=""
+if [ -f "piper/piper" ]; then
+    PIPER_BIN="piper/piper"
+elif [ -f "piper" ]; then
+    PIPER_BIN="piper"
+fi
+
+if [ -n "$PIPER_BIN" ] && [ -n "$EXPECTED_BINARY_ARCH" ]; then
+    BIN_INFO=$(file "$PIPER_BIN" 2>/dev/null || true)
+    if [[ "$BIN_INFO" != *"$EXPECTED_BINARY_ARCH"* ]]; then
+        echo "⚠️ Piper binary architecture mismatch detected."
+        echo "   Found: $BIN_INFO"
+        echo "   Expected architecture: $EXPECTED_BINARY_ARCH"
+        echo "⬇️ Re-downloading correct Piper binary..."
+
+        rm -rf piper piper_phonemize espeak-ng espeak-ng-data libonnxruntime.1.14.1.dylib.dSYM pkgconfig libtashkeel_model.ort
+        curl -L "$PIPER_URL" -o piper.tar.gz
+        tar -xzf piper.tar.gz
+        rm piper.tar.gz
+
+        if [ -f "piper/piper" ]; then
+            chmod +x piper/piper
+        elif [ -f "piper" ]; then
+            chmod +x piper
+        fi
+        echo "✅ Correct Piper binary installed"
+    fi
 fi
 
 cd ../piper-models

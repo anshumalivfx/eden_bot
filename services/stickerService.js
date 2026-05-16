@@ -153,6 +153,168 @@ class StickerService {
     return mimetype && mimetype.startsWith("video/");
   }
 
+  isAnimatedWebp(webpBuffer) {
+    if (!Buffer.isBuffer(webpBuffer)) return false;
+    // Animated WebP files include ANIM/ANMF chunks.
+    return (
+      webpBuffer.includes(Buffer.from("ANIM")) ||
+      webpBuffer.includes(Buffer.from("ANMF"))
+    );
+  }
+
+  async convertStickerToDisplayMedia(stickerBuffer, filename = "upscaled") {
+    if (this.isAnimatedWebp(stickerBuffer)) {
+      try {
+        const videoBuffer = await this.convertAnimatedWebpToMp4(
+          stickerBuffer,
+          filename,
+        );
+        return {
+          type: "video",
+          buffer: videoBuffer,
+          mimetype: "video/mp4",
+        };
+      } catch (error) {
+        console.warn("Animated sticker direct conversion failed, trying GIF path:", error.message);
+        try {
+          const videoBuffer = await this.convertAnimatedWebpToMp4ViaGif(
+            stickerBuffer,
+            filename,
+          );
+          return {
+            type: "video",
+            buffer: videoBuffer,
+            mimetype: "video/mp4",
+          };
+        } catch (gifError) {
+          console.warn(
+            "Animated sticker GIF path failed, using first-frame fallback:",
+            gifError.message,
+          );
+          const fallbackImage = await this.convertStickerToPng(stickerBuffer, true);
+          return {
+            type: "image",
+            buffer: fallbackImage,
+            mimetype: "image/png",
+          };
+        }
+      }
+    }
+
+    const imageBuffer = await this.convertStickerToPng(stickerBuffer, false);
+    return {
+      type: "image",
+      buffer: imageBuffer,
+      mimetype: "image/png",
+    };
+  }
+
+  async convertStickerToPng(stickerBuffer, firstFrameOnly = false) {
+    if (firstFrameOnly) {
+      return await sharp(stickerBuffer, {
+        animated: true,
+        page: 0,
+        pages: 1,
+      })
+        .png()
+        .toBuffer();
+    }
+
+    return await sharp(stickerBuffer).png().toBuffer();
+  }
+
+  async convertAnimatedWebpToMp4ViaGif(webpBuffer, filename = "upscaled") {
+    return new Promise(async (resolve, reject) => {
+      const inputGifPath = path.join(this.tempDir, `${filename}_input.gif`);
+      const outputPath = path.join(this.tempDir, `${filename}_output.mp4`);
+
+      try {
+        const gifBuffer = await sharp(webpBuffer, { animated: true })
+          .gif({ loop: 0 })
+          .toBuffer();
+
+        await fs.writeFile(inputGifPath, gifBuffer);
+
+        ffmpeg(inputGifPath)
+          .outputOptions([
+            "-movflags",
+            "faststart",
+            "-pix_fmt",
+            "yuv420p",
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-an",
+          ])
+          .videoCodec("libx264")
+          .format("mp4")
+          .output(outputPath)
+          .on("end", async () => {
+            try {
+              const videoBuffer = await fs.readFile(outputPath);
+              await fs.unlink(inputGifPath).catch(() => {});
+              await fs.unlink(outputPath).catch(() => {});
+              resolve(videoBuffer);
+            } catch (error) {
+              reject(error);
+            }
+          })
+          .on("error", async (error) => {
+            await fs.unlink(inputGifPath).catch(() => {});
+            await fs.unlink(outputPath).catch(() => {});
+            reject(new Error(`GIF to MP4 conversion failed: ${error.message}`));
+          })
+          .run();
+      } catch (error) {
+        await fs.unlink(inputGifPath).catch(() => {});
+        await fs.unlink(outputPath).catch(() => {});
+        reject(new Error(`Failed to prepare GIF conversion: ${error.message}`));
+      }
+    });
+  }
+
+  async convertAnimatedWebpToMp4(webpBuffer, filename = "upscaled") {
+    return new Promise((resolve, reject) => {
+      const inputPath = path.join(this.tempDir, `${filename}_input.webp`);
+      const outputPath = path.join(this.tempDir, `${filename}_output.mp4`);
+
+      fs.writeFile(inputPath, webpBuffer)
+        .then(() => {
+          ffmpeg(inputPath)
+            .outputOptions([
+              "-movflags",
+              "faststart",
+              "-pix_fmt",
+              "yuv420p",
+              "-vf",
+              "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+              "-an",
+            ])
+            .videoCodec("libx264")
+            .format("mp4")
+            .output(outputPath)
+            .on("end", async () => {
+              try {
+                const videoBuffer = await fs.readFile(outputPath);
+                await fs.unlink(inputPath).catch(() => {});
+                await fs.unlink(outputPath).catch(() => {});
+                resolve(videoBuffer);
+              } catch (error) {
+                reject(error);
+              }
+            })
+            .on("error", (error) => {
+              fs.unlink(inputPath).catch(() => {});
+              fs.unlink(outputPath).catch(() => {});
+              reject(new Error(`Failed to convert animated sticker: ${error.message}`));
+            })
+            .run();
+        })
+        .catch((error) => {
+          reject(new Error(`Failed to prepare sticker conversion: ${error.message}`));
+        });
+    });
+  }
+
   async createStickerFromVideo(videoBuffer, filename = "sticker") {
     return new Promise((resolve, reject) => {
       const inputPath = path.join(this.tempDir, `${filename}_input.mp4`);
@@ -279,6 +441,88 @@ class StickerService {
       console.error("Error creating text sticker:", error);
       throw new Error("Failed to create text sticker");
     }
+  }
+
+  async createMemeStickerFromSticker(
+    stickerBuffer,
+    memeText,
+    filename = "meme_sticker",
+  ) {
+    try {
+      const outputPath = path.join(this.tempDir, `${filename}_meme.webp`);
+
+      const cleanText = (memeText || "").trim().substring(0, 120);
+      if (!cleanText) {
+        throw new Error("Meme text is empty");
+      }
+
+      const lines = this.wrapText(cleanText, 18).slice(0, 4);
+      const textOverlay = this.createMemeTextOverlaySVG(lines);
+
+      const stickerBase = await sharp(stickerBuffer, {
+        animated: true,
+        page: 0,
+        pages: 1,
+      })
+        .resize(512, 512, {
+          fit: "contain",
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+
+      await sharp(stickerBase)
+        .composite([{ input: Buffer.from(textOverlay), blend: "over" }])
+        .webp({ quality: 90 })
+        .toFile(outputPath);
+
+      let memeStickerBuffer = await fs.readFile(outputPath);
+      memeStickerBuffer = await this.addStickerMetadata(memeStickerBuffer);
+
+      await fs.unlink(outputPath).catch(() => {});
+
+      return memeStickerBuffer;
+    } catch (error) {
+      console.error("Error creating meme sticker:", error);
+      throw new Error("Failed to create meme sticker");
+    }
+  }
+
+  createMemeTextOverlaySVG(lines) {
+    const safeLines = Array.isArray(lines) ? lines.filter(Boolean) : [];
+    const lineCount = Math.max(1, Math.min(4, safeLines.length));
+    const fontSize = lineCount >= 4 ? 42 : lineCount === 3 ? 48 : 54;
+    const lineHeight = fontSize + 8;
+    const baselineY = 508;
+    const startY = baselineY - (lineCount - 1) * lineHeight;
+
+    return `
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="memeShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.35)"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="256" width="512" height="256" fill="url(#memeShade)"/>
+
+  ${safeLines
+    .map(
+      (line, index) => `
+  <text x="256" y="${startY + index * lineHeight}"
+        text-anchor="middle"
+        font-family="Impact, Arial Black, sans-serif"
+        font-size="${fontSize}"
+        font-weight="900"
+        fill="#ffffff"
+        stroke="#000000"
+        stroke-width="6"
+        paint-order="stroke fill"
+        letter-spacing="1">${this.escapeXml(line.toUpperCase())}</text>`,
+    )
+    .join("")}
+</svg>`;
   }
 
   wrapText(text, maxLength) {
@@ -472,6 +716,29 @@ class StickerService {
 
   getRandomTextStickerQuote(isNiceUser = false) {
     const quotes = this.getTextStickerQuotes(isNiceUser);
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  }
+
+  getMemeStickerQuotes(isNiceUser = false) {
+    if (isNiceUser) {
+      return [
+        "Meme sticker ready! 📝",
+        "Done! Added your text nicely.",
+        "Your meme sticker is ready ✨",
+        "Text added to sticker successfully!",
+      ];
+    }
+
+    return [
+      "Your meme sticker is ready. Comedy not guaranteed. 📝",
+      "I added your text to the sticker. You're welcome, I guess.",
+      "Meme deployed. The internet will recover eventually.",
+      "Text on sticker: complete. Taste level: pending review.",
+    ];
+  }
+
+  getRandomMemeStickerQuote(isNiceUser = false) {
+    const quotes = this.getMemeStickerQuotes(isNiceUser);
     return quotes[Math.floor(Math.random() * quotes.length)];
   }
 }

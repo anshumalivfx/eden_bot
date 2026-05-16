@@ -249,7 +249,23 @@ async function connectToWhatsApp() {
           );
 
           if (response) {
-            if (typeof response === "object" && response.media) {
+            if (
+              typeof response === "object" &&
+              Array.isArray(response.mediaList) &&
+              response.mediaList.length > 0
+            ) {
+              const batchResults = await Promise.allSettled(
+                response.mediaList.map((mediaItem) =>
+                  sock.sendMessage(chatJid, mediaItem),
+                ),
+              );
+              const failed = batchResults.filter((r) => r.status === "rejected");
+              if (failed.length > 0) {
+                console.error(
+                  `❌ Failed to send ${failed.length}/${response.mediaList.length} media items in batch`,
+                );
+              }
+            } else if (typeof response === "object" && response.media) {
               if (response.text) {
                 await sock.sendMessage(chatJid, { text: response.text });
               }

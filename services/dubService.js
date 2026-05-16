@@ -769,12 +769,42 @@ class DubService {
       const wavPath = path.join(this.tempDir, `speech_${timestamp}.wav`);
       const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
 
+      const piperDir = path.dirname(this.piperPath);
+      const uniquePaths = (paths) => [...new Set(paths.filter(Boolean))];
+
+      // Ensure Piper can locate runtime libs on macOS (notably libespeak-ng.1.dylib).
+      const dynLibPaths = uniquePaths([
+        process.env.DYLD_LIBRARY_PATH,
+        process.env.DYLD_FALLBACK_LIBRARY_PATH,
+        piperDir,
+        path.join(piperDir, "lib"),
+        "/opt/homebrew/opt/espeak-ng/lib",
+        "/usr/local/opt/espeak-ng/lib",
+        "/opt/homebrew/lib",
+        "/usr/local/lib",
+      ]);
+
+      const linuxLibPaths = uniquePaths([
+        process.env.LD_LIBRARY_PATH,
+        piperDir,
+        path.join(piperDir, "lib"),
+        "/usr/lib",
+        "/usr/local/lib",
+      ]);
+
+      const piperEnv = {
+        ...process.env,
+        DYLD_LIBRARY_PATH: dynLibPaths.join(":"),
+        DYLD_FALLBACK_LIBRARY_PATH: dynLibPaths.join(":"),
+        LD_LIBRARY_PATH: linuxLibPaths.join(":"),
+      };
+
       // Run Piper TTS to generate WAV
       const command = `echo "${text.replace(/"/g, '\\"')}" | ${
         this.piperPath
       } -m ${modelPath} -c ${configPath} -f ${wavPath}`;
 
-      await execAsync(command);
+      await execAsync(command, { env: piperEnv, maxBuffer: 10 * 1024 * 1024 });
 
       // Check if WAV file was created
       if (!fs.existsSync(wavPath)) {
@@ -827,6 +857,21 @@ class DubService {
       if (error.message.includes("Permission denied")) {
         throw new Error(
           `Piper binary not executable. Run: chmod +x piper/piper`,
+        );
+      }
+
+      if (
+        error.message.includes("libespeak-ng.1.dylib") ||
+        error.message.includes("Library not loaded")
+      ) {
+        throw new Error(
+          "Piper runtime library missing (libespeak-ng). Install it with: brew install espeak-ng, then restart the bot.",
+        );
+      }
+
+      if (error.message.includes("incompatible architecture")) {
+        throw new Error(
+          "Piper binary architecture does not match installed libraries. Re-run ./setup-piper.sh in a native terminal (not Rosetta), then restart the bot.",
         );
       }
 
@@ -1025,10 +1070,37 @@ class DubService {
         );
 
         // Step 4: Generate speech in target language
-        const speech = await this.generateSpeechPiper(
-          translatedText,
-          targetLang,
-        );
+        let speech;
+        try {
+          speech = await this.generateSpeechPiper(translatedText, targetLang);
+        } catch (piperError) {
+          console.warn(`⚠️ Piper synthesis failed: ${piperError.message}`);
+
+          // Fallback to ElevenLabs when available so dubbing still works.
+          if (
+            this.elevenLabsApiKey &&
+            this.elevenLabsApiKey !== "your_elevenlabs_api_key_here"
+          ) {
+            console.log("🔁 Falling back to ElevenLabs TTS...");
+            speech = await this.generateSpeechElevenLabs(
+              translatedText,
+              targetLang,
+              convertedFilePath,
+            );
+          } else if (
+            this.asyncLabsApiKey &&
+            this.asyncLabsApiKey !== "your_async_labs_api_key_here"
+          ) {
+            console.log("🔁 Falling back to Async Labs TTS...");
+            speech = await this.generateSpeechAsyncLabs(
+              translatedText,
+              targetLang,
+              convertedFilePath,
+            );
+          } else {
+            throw piperError;
+          }
+        }
 
         return {
           filepath: speech.filepath,
