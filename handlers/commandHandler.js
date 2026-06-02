@@ -2012,6 +2012,15 @@ ${ending}`;
       }
 
       if (
+        errorMessage.includes("confirm you're not a bot") ||
+        errorMessage.includes("Sign in to confirm you’re not a bot")
+      ) {
+        return isNiceUser
+          ? "YouTube is blocking me thinking I'm a bot! 🤖\n\nTo fix this, please provide a `cookies.txt` file in the project folder.\nSee `YOUTUBE_MUSIC_FEATURE.md` for instructions. 😊"
+          : "YouTube thinks I'm a bot. Rude. 🙄\n\nI need cookies to prove I'm human (sort of).\nAdd a `cookies.txt` to the project folder.\nCheck `YOUTUBE_MUSIC_FEATURE.md` for how. 💅";
+      }
+
+      if (
         errorMessage.includes(
           "YouTube could not be resolved from this server",
         ) ||
@@ -2179,6 +2188,15 @@ ${ending}`;
         return isNiceUser
           ? "I need ffmpeg to process videos! 😊\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again!"
           : "I need ffmpeg to process videos, genius. 🙄\n\n*Install ffmpeg:*\n• Mac: `brew install ffmpeg`\n• Linux: `sudo apt install ffmpeg`\n\nThen try again.";
+      }
+
+      if (
+        error.message.includes("confirm you're not a bot") ||
+        error.message.includes("Sign in to confirm you’re not a bot")
+      ) {
+        return isNiceUser
+          ? "YouTube is blocking the download thinking I'm a bot! 🤖\n\n*To fix this:*\n1️⃣ Get your YouTube cookies as `cookies.txt`.\n2️⃣ Place it in the project folder.\n3️⃣ Try again!\n\nCheck `YOUTUBE_MUSIC_FEATURE.md` for full instructions. 😊"
+          : "YouTube thinks I'm a bot. Typical. 🙄\n\n*Fix it:*\n1️⃣ Get your `cookies.txt` (Google it if you're lost).\n2️⃣ Stick it in the project folder.\n3️⃣ Try again.\n\nInstructions are in `YOUTUBE_MUSIC_FEATURE.md`. 💅";
       }
 
       if (

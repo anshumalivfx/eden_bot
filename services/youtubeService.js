@@ -114,6 +114,29 @@ class YouTubeService {
     return null;
   }
 
+  getCookiesArg() {
+    // 1. Check for explicit path in environment variable
+    const envCookiePath = process.env.YTDLP_COOKIES_PATH;
+    if (envCookiePath && fs.existsSync(envCookiePath)) {
+      return ["--cookies", envCookiePath];
+    }
+
+    // 2. Check for default cookies.txt in root directory
+    const defaultCookiePath = path.join(process.cwd(), "cookies.txt");
+    if (fs.existsSync(defaultCookiePath)) {
+      return ["--cookies", defaultCookiePath];
+    }
+
+    // 3. Check if we should use cookies from a specific browser
+    // Valid options: chrome, firefox, safari, edge, etc.
+    const envBrowser = process.env.YTDLP_COOKIES_BROWSER;
+    if (envBrowser) {
+      return ["--cookies-from-browser", envBrowser];
+    }
+
+    return [];
+  }
+
   /**
    * Search for a video on YouTube and get the first result
    * @param {string} query - Search query
@@ -199,11 +222,13 @@ class YouTubeService {
       const ytdlpProxy =
         process.env.YTDLP_PROXY || process.env.YTDLP_HTTP_PROXY || null;
       const proxyArg = ytdlpProxy ? ["--proxy", ytdlpProxy] : [];
+      const cookiesArg = this.getCookiesArg();
       const fallbackUrls = this.buildYouTubeFallbackUrls(videoUrl);
       const attemptCommands = fallbackUrls.flatMap((candidateUrl) => [
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--ignore-config",
           "--force-ipv4",
           "-x",
@@ -218,6 +243,7 @@ class YouTubeService {
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--ignore-config",
           "-x",
           "--audio-format",
@@ -484,6 +510,7 @@ class YouTubeService {
       const ytdlpProxy =
         process.env.YTDLP_PROXY || process.env.YTDLP_HTTP_PROXY || null;
       const proxyArg = ytdlpProxy ? ["--proxy", ytdlpProxy] : [];
+      const cookiesArg = this.getCookiesArg();
 
       const timestamp = Date.now();
       const safeTitle = `video_${timestamp}`;
@@ -508,6 +535,7 @@ class YouTubeService {
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--force-ipv4",
           "--extractor-args",
           "youtube:player_client=web;player_skip=webpage,configs",
@@ -523,6 +551,7 @@ class YouTubeService {
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--force-ipv4",
           "--extractor-args",
           "youtube:player_client=web;player_skip=webpage,configs",
@@ -538,6 +567,7 @@ class YouTubeService {
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--force-ipv4",
           "--extractor-args",
           "youtube:player_client=web",
@@ -553,6 +583,7 @@ class YouTubeService {
         [
           ...baseCommand.slice(1),
           ...proxyArg,
+          ...cookiesArg,
           "--force-ipv4",
           "-f",
           "b[height<=720]/best[height<=720]/b/best",
@@ -715,12 +746,14 @@ class YouTubeService {
   async getVideoTitle(videoUrl) {
     try {
       const ytdlpPath = await this.resolveYtDlpPath();
+      const cookiesArg = this.getCookiesArg().join(" ");
+      const proxyArg = process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : "";
 
       const titleCommands = [
-        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
-        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --extractor-args "youtube:player_client=web" --print "%(title)s" "${videoUrl}"`,
-        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --print "%(title)s" "${videoUrl}"`,
-        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${proxyArg} ${cookiesArg} --force-ipv4 --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${proxyArg} ${cookiesArg} --force-ipv4 --extractor-args "youtube:player_client=web" --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${proxyArg} ${cookiesArg} --force-ipv4 --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${proxyArg} ${cookiesArg} --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
       ];
 
       for (const command of titleCommands) {

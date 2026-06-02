@@ -208,6 +208,28 @@ Install yt-dlp using the instructions above.
 - Try a different search query
 - Update yt-dlp: `brew upgrade yt-dlp` or `pip install -U yt-dlp`
 
+### "Sign in to confirm you're not a bot"
+YouTube has aggressive bot detection. To fix this:
+
+1. **Get your cookies**:
+   - Install the "Get cookies.txt LOCALLY" extension in Chrome/Firefox.
+   - Go to YouTube and log in.
+   - Use the extension to export your cookies as `cookies.txt`.
+   - Place this `cookies.txt` file in the project root directory.
+
+2. **Alternative: Environment Variable**:
+   - You can also specify a custom path in your `.env` file:
+     ```
+     YTDLP_COOKIES_PATH=/path/to/your/cookies.txt
+     ```
+
+3. **Alternative: Use Browser Cookies (Local only)**:
+   - If running locally (not on a headless server), you can tell Eden to use your browser's cookies directly by adding this to `.env`:
+     ```
+     YTDLP_COOKIES_BROWSER=chrome
+     ```
+     (Options: chrome, firefox, safari, edge)
+
 ### File too large
 WhatsApp limits media to 16MB. Try:
 - Shorter songs
