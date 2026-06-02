@@ -6,6 +6,9 @@ session/
 .env
 .DS_Store
 baileys_auth/
+temp/
+database/*.db*
+database/*.sqlite*
 
 # Piper TTS files
 piper/
