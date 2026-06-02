@@ -15,6 +15,105 @@ class YouTubeService {
     }
   }
 
+  async resolveYtDlpPath() {
+    const candidates = [
+      "/opt/anaconda3/bin/yt-dlp",
+      "/opt/homebrew/bin/yt-dlp",
+      "/usr/local/bin/yt-dlp",
+      "/usr/bin/yt-dlp",
+      path.join(process.cwd(), "venv/bin/yt-dlp"),
+      path.join(process.cwd(), ".venv/bin/yt-dlp"),
+    ];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        try {
+          await execAsync(`"${candidate}" --version`);
+          return candidate;
+        } catch {}
+      }
+    }
+
+    try {
+      const { stdout } = await execAsync("command -v yt-dlp");
+      const resolvedPath = stdout.trim().split("\n")[0];
+      if (resolvedPath) {
+        return resolvedPath;
+      }
+    } catch {}
+
+    return "yt-dlp";
+  }
+
+  normalizeYouTubeUrl(videoUrl, preferredHost = "youtube.com") {
+    if (!videoUrl) return videoUrl;
+
+    const urlText = String(videoUrl).trim();
+
+    try {
+      const parsedUrl = new URL(
+        urlText.startsWith("http") ? urlText : `https://${urlText}`,
+      );
+      const host =
+        preferredHost === "m.youtube.com" ? "m.youtube.com" : "youtube.com";
+
+      if (
+        parsedUrl.hostname.includes("youtu.be") ||
+        parsedUrl.pathname.includes("/shorts/")
+      ) {
+        return parsedUrl.toString();
+      }
+
+      if (
+        parsedUrl.hostname === "www.youtube.com" ||
+        parsedUrl.hostname === "youtube.com" ||
+        parsedUrl.hostname === "m.youtube.com"
+      ) {
+        parsedUrl.hostname = host;
+        parsedUrl.protocol = "https:";
+        return parsedUrl.toString();
+      }
+    } catch (error) {
+      // Fall back to the original URL if parsing fails.
+    }
+
+    return urlText;
+  }
+
+  buildYouTubeFallbackUrls(videoUrl) {
+    const urls = [];
+    const canonicalUrl = this.normalizeYouTubeUrl(videoUrl, "youtube.com");
+    const mobileUrl = this.normalizeYouTubeUrl(videoUrl, "m.youtube.com");
+
+    for (const candidateUrl of [canonicalUrl, mobileUrl, videoUrl]) {
+      if (candidateUrl && !urls.includes(candidateUrl)) {
+        urls.push(candidateUrl);
+      }
+    }
+
+    return urls;
+  }
+
+  getYouTubeNetworkErrorMessage(videoUrl, error) {
+    const errorMessage = error?.message || "";
+    const stderr = error?.stderr || "";
+    const combinedText = `${errorMessage}\n${stderr}`;
+
+    if (
+      combinedText.includes("Failed to resolve") ||
+      combinedText.includes("nodename nor servname provided")
+    ) {
+      return [
+        "YouTube could not be resolved from this server.",
+        "Check DNS/network access for youtube.com and www.youtube.com.",
+        "If the server is behind a proxy or restricted network, configure outbound internet access.",
+        `Video URL tried: ${videoUrl}`,
+      ].join(" ");
+    }
+
+    return null;
+  }
+
   /**
    * Search for a video on YouTube and get the first result
    * @param {string} query - Search query
@@ -25,7 +124,7 @@ class YouTubeService {
       // Using YouTube's search without API (scraping approach)
       // Note: This is a simplified version. For production, use YouTube Data API
       const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-        query
+        query,
       )}`;
 
       const response = await axios.get(searchUrl, {
@@ -47,7 +146,7 @@ class YouTubeService {
 
       const videoId = videoIdMatch[1];
       const title = titleMatch[1].replace(/\\u[\dA-F]{4}/gi, (match) =>
-        String.fromCharCode(parseInt(match.replace(/\\u/g, ""), 16))
+        String.fromCharCode(parseInt(match.replace(/\\u/g, ""), 16)),
       );
 
       return {
@@ -70,48 +169,14 @@ class YouTubeService {
   async downloadAsMP3(videoUrl, outputName = "audio") {
     try {
       // Check if yt-dlp is installed - try common locations
-      let ytdlpPath = "yt-dlp";
-      try {
-        await execAsync("yt-dlp --version");
-      } catch (error) {
-        // Try common installation paths including venv
-        const commonPaths = [
-          path.join(process.cwd(), "venv/bin/yt-dlp"),
-          "./venv/bin/yt-dlp",
-          "/opt/homebrew/bin/yt-dlp",
-          "/usr/local/bin/yt-dlp",
-          "/usr/bin/yt-dlp",
-        ];
-        let found = false;
-        for (const p of commonPaths) {
-          try {
-            await execAsync(`${p} --version`);
-            ytdlpPath = p;
-            found = true;
-            break;
-          } catch {}
-        }
-        // Try Python module as last resort
-        if (!found) {
-          try {
-            await execAsync("python3 -m yt_dlp --version");
-            ytdlpPath = "python3 -m yt_dlp";
-            found = true;
-          } catch {}
-        }
-        if (!found) {
-          throw new Error(
-            "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp"
-          );
-        }
-      }
+      const ytdlpPath = await this.resolveYtDlpPath();
 
       // Check if ffmpeg is installed
       try {
         await execAsync("ffmpeg -version");
       } catch (error) {
         throw new Error(
-          "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)"
+          "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)",
         );
       }
 
@@ -121,18 +186,133 @@ class YouTubeService {
         .substring(0, 50);
       const outputPath = path.join(
         this.tempDir,
-        `${safeOutputName}_${timestamp}`
+        `${safeOutputName}_${timestamp}`,
       );
       const finalPath = `${outputPath}.mp3`;
 
       console.log(`📥 Downloading: ${videoUrl}`);
 
-      // Download using yt-dlp
-      const command = `${ytdlpPath} -x --audio-format mp3 --audio-quality 0 -o "${outputPath}.%(ext)s" "${videoUrl}"`;
+      const baseCommand = ytdlpPath.includes(" ")
+        ? ytdlpPath.split(" ")
+        : [ytdlpPath];
+      // Support proxy through env var for environments like PM2 where system proxy may differ
+      const ytdlpProxy =
+        process.env.YTDLP_PROXY || process.env.YTDLP_HTTP_PROXY || null;
+      const proxyArg = ytdlpProxy ? ["--proxy", ytdlpProxy] : [];
+      const fallbackUrls = this.buildYouTubeFallbackUrls(videoUrl);
+      const attemptCommands = fallbackUrls.flatMap((candidateUrl) => [
+        [
+          ...baseCommand.slice(1),
+          ...proxyArg,
+          "--ignore-config",
+          "--force-ipv4",
+          "-x",
+          "--audio-format",
+          "mp3",
+          "--audio-quality",
+          "0",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          candidateUrl,
+        ],
+        [
+          ...baseCommand.slice(1),
+          ...proxyArg,
+          "--ignore-config",
+          "-x",
+          "--audio-format",
+          "mp3",
+          "--audio-quality",
+          "0",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          candidateUrl,
+        ],
+      ]);
 
-      await execAsync(command, {
-        timeout: 120000, // 2 minute timeout
-      });
+      let lastAttemptError = null;
+      let downloaded = false;
+      for (const args of attemptCommands) {
+        try {
+          await new Promise((resolve, reject) => {
+            // Preserve env but ensure NO_PROXY for local direct YouTube access; keep proxy flags passed to yt-dlp
+            const spawnEnv = {
+              ...process.env,
+              NO_PROXY:
+                process.env.NO_PROXY ||
+                "youtube.com,www.youtube.com,m.youtube.com,youtu.be",
+              no_proxy:
+                process.env.no_proxy ||
+                "youtube.com,www.youtube.com,m.youtube.com,youtu.be",
+            };
+
+            if (process.env.PM2_HOME) {
+              // Helpful log when running under PM2 for debugging network issues
+              console.log(
+                `ℹ️ Running under PM2 (PM2_HOME=${process.env.PM2_HOME}), using YTDLP_PROXY=${ytdlpProxy || "none"}`,
+              );
+            }
+
+            const downloadProcess = spawn(baseCommand[0], args, {
+              cwd: process.cwd(),
+              env: spawnEnv,
+            });
+
+            let stdout = "";
+            let stderr = "";
+
+            downloadProcess.stdout.on("data", (data) => {
+              stdout += data.toString();
+            });
+
+            downloadProcess.stderr.on("data", (data) => {
+              stderr += data.toString();
+            });
+
+            const timeoutId = setTimeout(() => {
+              downloadProcess.kill("SIGKILL");
+              reject(new Error("yt-dlp download timed out"));
+            }, 120000);
+
+            downloadProcess.on("close", (code) => {
+              clearTimeout(timeoutId);
+              if (code !== 0) {
+                const error = new Error(`yt-dlp exited with code ${code}`);
+                error.stdout = stdout;
+                error.stderr = stderr;
+                reject(error);
+              } else {
+                resolve();
+              }
+            });
+
+            downloadProcess.on("error", (error) => {
+              clearTimeout(timeoutId);
+              reject(error);
+            });
+          });
+          downloaded = true;
+          break;
+        } catch (error) {
+          lastAttemptError = error;
+          console.log(`⚠️ MP3 download attempt failed: ${error.message}`);
+          if (error.stderr) {
+            console.log(error.stderr);
+          }
+        }
+      }
+
+      if (!downloaded) {
+        const networkHint = this.getYouTubeNetworkErrorMessage(
+          videoUrl,
+          lastAttemptError,
+        );
+        if (networkHint) {
+          throw new Error(networkHint);
+        }
+
+        throw lastAttemptError || new Error("Download failed");
+      }
 
       // Check if file exists
       if (!fs.existsSync(finalPath)) {
@@ -171,7 +351,7 @@ class YouTubeService {
       const timestamp = Date.now();
       const thumbnailPath = path.join(
         this.tempDir,
-        `thumb_${videoId}_${timestamp}.jpg`
+        `thumb_${videoId}_${timestamp}.jpg`,
       );
 
       console.log(`📸 Downloading thumbnail...`);
@@ -246,7 +426,7 @@ class YouTubeService {
         }
         if (!found) {
           throw new Error(
-            "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp"
+            "yt-dlp not installed. Install with: brew install yt-dlp (Mac) or pip install yt-dlp",
           );
         }
       }
@@ -256,7 +436,7 @@ class YouTubeService {
         await execAsync("ffmpeg -version");
       } catch (error) {
         throw new Error(
-          "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)"
+          "ffmpeg not found. Install with: brew install ffmpeg (Mac) or sudo apt install ffmpeg (Linux)",
         );
       }
 
@@ -267,24 +447,30 @@ class YouTubeService {
         console.log("⬆️  Checking for yt-dlp updates...");
         // Only use -U flag if not using Python module form
         if (ytdlpPath.includes("python3 -m")) {
-          await execAsync("python3 -m pip install --upgrade yt-dlp", { timeout: 30000 });
+          await execAsync("python3 -m pip install --upgrade yt-dlp", {
+            timeout: 30000,
+          });
         } else {
           await execAsync(`${ytdlpPath} -U`, { timeout: 30000 });
         }
         console.log("✅ yt-dlp updated successfully");
       } catch (updateError) {
-        console.log("ℹ️  Could not auto-update yt-dlp, trying manual update...");
+        console.log(
+          "ℹ️  Could not auto-update yt-dlp, trying manual update...",
+        );
         try {
           await execAsync("pip3 install --upgrade yt-dlp", { timeout: 30000 });
           console.log("✅ yt-dlp updated via pip3");
         } catch (pipError) {
-          console.log("⚠️  Auto-update failed, continuing with current version");
+          console.log(
+            "⚠️  Auto-update failed, continuing with current version",
+          );
         }
       }
 
       // Normalize URL for YouTube Shorts
       let normalizedUrl = videoUrl;
-      if (videoUrl.includes('/shorts/')) {
+      if (videoUrl.includes("/shorts/")) {
         const shortIdMatch = videoUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
         if (shortIdMatch) {
           normalizedUrl = `https://www.youtube.com/watch?v=${shortIdMatch[1]}`;
@@ -292,16 +478,24 @@ class YouTubeService {
         }
       }
 
+      const fallbackUrls = this.buildYouTubeFallbackUrls(normalizedUrl);
+
+      // Support proxy through env var for PM2/systemd environments
+      const ytdlpProxy =
+        process.env.YTDLP_PROXY || process.env.YTDLP_HTTP_PROXY || null;
+      const proxyArg = ytdlpProxy ? ["--proxy", ytdlpProxy] : [];
+
       const timestamp = Date.now();
       const safeTitle = `video_${timestamp}`;
       const outputPath = path.join(this.tempDir, safeTitle);
       const finalPath = `${outputPath}.mp4`;
 
       // Extract video ID for thumbnail
-      let videoId = normalizedUrl.match(/[?&]v=([^&]+)/)?.[1] || 
-                    normalizedUrl.match(/youtu\.be\/([^?&]+)/)?.[1] ||
-                    normalizedUrl.match(/shorts\/([^?&]+)/)?.[1] ||
-                    timestamp.toString();
+      let videoId =
+        normalizedUrl.match(/[?&]v=([^&]+)/)?.[1] ||
+        normalizedUrl.match(/youtu\.be\/([^?&]+)/)?.[1] ||
+        normalizedUrl.match(/shorts\/([^?&]+)/)?.[1] ||
+        timestamp.toString();
 
       if (progressCallback) progressCallback(10, "⬇️ Downloading video...");
 
@@ -309,36 +503,94 @@ class YouTubeService {
       console.log(`🔗 URL: ${normalizedUrl}`);
 
       // Prefer web client to avoid Android PO-token requirement, then fall back if needed.
-      const baseCommand = ytdlpPath.split(' ');
-      const attemptArgsList = [
+      const baseCommand = ytdlpPath.split(" ");
+      const attemptArgsList = fallbackUrls.flatMap((candidateUrl) => [
         [
           ...baseCommand.slice(1),
-          '--extractor-args', 'youtube:player_client=web',
-          '-f', 'b[height<=720]/best[height<=720]/b/best',
-          '--merge-output-format', 'mp4',
-          '-o', `${outputPath}.%(ext)s`,
-          '--newline',
-          normalizedUrl,
+          ...proxyArg,
+          "--force-ipv4",
+          "--extractor-args",
+          "youtube:player_client=web;player_skip=webpage,configs",
+          "-f",
+          "b[height<=720]/best[height<=720]/b/best",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          "--newline",
+          candidateUrl,
         ],
         [
           ...baseCommand.slice(1),
-          '-f', 'b[height<=720]/best[height<=720]/b/best',
-          '--merge-output-format', 'mp4',
-          '-o', `${outputPath}.%(ext)s`,
-          '--newline',
-          normalizedUrl,
+          ...proxyArg,
+          "--force-ipv4",
+          "--extractor-args",
+          "youtube:player_client=web;player_skip=webpage,configs",
+          "-f",
+          "b[height<=720]/best[height<=720]/b/best",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          "--newline",
+          candidateUrl,
         ],
-      ];
+        [
+          ...baseCommand.slice(1),
+          ...proxyArg,
+          "--force-ipv4",
+          "--extractor-args",
+          "youtube:player_client=web",
+          "-f",
+          "b[height<=720]/best[height<=720]/b/best",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          "--newline",
+          candidateUrl,
+        ],
+        [
+          ...baseCommand.slice(1),
+          ...proxyArg,
+          "--force-ipv4",
+          "-f",
+          "b[height<=720]/best[height<=720]/b/best",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          `${outputPath}.%(ext)s`,
+          "--newline",
+          candidateUrl,
+        ],
+      ]);
 
       const runDownloadAttempt = (args) =>
         new Promise((resolve, reject) => {
+          const spawnEnv = {
+            ...process.env,
+            NO_PROXY:
+              process.env.NO_PROXY ||
+              "youtube.com,www.youtube.com,m.youtube.com,youtu.be",
+            no_proxy:
+              process.env.no_proxy ||
+              "youtube.com,www.youtube.com,m.youtube.com,youtu.be",
+          };
+
+          if (process.env.PM2_HOME) {
+            console.log(
+              `ℹ️ Running under PM2 (PM2_HOME=${process.env.PM2_HOME}), using YTDLP_PROXY=${ytdlpProxy || "none"}`,
+            );
+          }
+
           const downloadProcess = spawn(baseCommand[0], args, {
             cwd: process.cwd(),
+            env: spawnEnv,
           });
 
           let lastProgress = 10;
 
-          downloadProcess.stdout.on('data', (data) => {
+          downloadProcess.stdout.on("data", (data) => {
             const output = data.toString();
             console.log(output);
 
@@ -356,7 +608,7 @@ class YouTubeService {
             }
           });
 
-          downloadProcess.stderr.on('data', (data) => {
+          downloadProcess.stderr.on("data", (data) => {
             const output = data.toString();
             console.log(output);
 
@@ -374,7 +626,7 @@ class YouTubeService {
             }
           });
 
-          downloadProcess.on('close', (code) => {
+          downloadProcess.on("close", (code) => {
             if (code !== 0) {
               reject(new Error(`yt-dlp exited with code ${code}`));
             } else {
@@ -382,7 +634,7 @@ class YouTubeService {
             }
           });
 
-          downloadProcess.on('error', (error) => {
+          downloadProcess.on("error", (error) => {
             reject(error);
           });
         });
@@ -391,7 +643,7 @@ class YouTubeService {
       let lastAttemptError = null;
       for (const args of attemptArgsList) {
         try {
-          console.log(`📝 Running: ${baseCommand[0]} ${args.join(' ')}`);
+          console.log(`📝 Running: ${baseCommand[0]} ${args.join(" ")}`);
           await runDownloadAttempt(args);
           downloaded = true;
           break;
@@ -402,7 +654,15 @@ class YouTubeService {
       }
 
       if (!downloaded) {
-        throw lastAttemptError || new Error('yt-dlp download failed');
+        const networkHint = this.getYouTubeNetworkErrorMessage(
+          normalizedUrl,
+          lastAttemptError,
+        );
+        if (networkHint) {
+          throw new Error(networkHint);
+        }
+
+        throw lastAttemptError || new Error("yt-dlp download failed");
       }
 
       if (progressCallback) progressCallback(90, "✅ Download complete!");
@@ -432,7 +692,11 @@ class YouTubeService {
             fs.unlinkSync(finalPath);
             console.log(`🗑️  Cleaned up: ${finalPath}`);
           }
-          if (thumbnail && thumbnail.filepath && fs.existsSync(thumbnail.filepath)) {
+          if (
+            thumbnail &&
+            thumbnail.filepath &&
+            fs.existsSync(thumbnail.filepath)
+          ) {
             thumbnail.cleanup();
           }
         },
@@ -450,42 +714,31 @@ class YouTubeService {
    */
   async getVideoTitle(videoUrl) {
     try {
-      let ytdlpPath = "yt-dlp";
-      try {
-        await execAsync("yt-dlp --version");
-      } catch (error) {
-        const commonPaths = [
-          path.join(process.cwd(), "venv/bin/yt-dlp"),
-          "./venv/bin/yt-dlp",
-          "/opt/homebrew/bin/yt-dlp",
-          "/usr/local/bin/yt-dlp",
-          "/usr/bin/yt-dlp",
-        ];
-        let found = false;
-        for (const p of commonPaths) {
-          try {
-            await execAsync(`${p} --version`);
-            ytdlpPath = p;
-            found = true;
-            break;
-          } catch {}
-        }
-        if (!found) {
-          try {
-            await execAsync("python3 -m yt_dlp --version");
-            ytdlpPath = "python3 -m yt_dlp";
-            found = true;
-          } catch {}
-        }
-        if (!found) {
-          return null;
+      const ytdlpPath = await this.resolveYtDlpPath();
+
+      const titleCommands = [
+        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --extractor-args "youtube:player_client=web" --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --force-ipv4 --print "%(title)s" "${videoUrl}"`,
+        `${ytdlpPath} --no-playlist --skip-download ${process.env.YTDLP_PROXY ? `--proxy "${process.env.YTDLP_PROXY}"` : ""} --extractor-args "youtube:player_client=web;player_skip=webpage,configs" --print "%(title)s" "${videoUrl}"`,
+      ];
+
+      for (const command of titleCommands) {
+        try {
+          const { stdout } = await execAsync(command, { timeout: 30000 });
+          const title = (stdout || "").trim().split("\n").filter(Boolean)[0];
+          if (title) {
+            return title;
+          }
+        } catch (error) {
+          console.log(
+            "⚠️ Could not fetch video title with IPv4 fallback:",
+            error?.message || error,
+          );
         }
       }
 
-      const command = `${ytdlpPath} --no-playlist --skip-download --print \"%(title)s\" \"${videoUrl}\"`;
-      const { stdout } = await execAsync(command, { timeout: 30000 });
-      const title = (stdout || "").trim().split("\n").filter(Boolean)[0];
-      return title || null;
+      return null;
     } catch (error) {
       console.log("⚠️ Could not fetch video title:", error?.message || error);
       return null;

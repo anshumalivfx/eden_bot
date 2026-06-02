@@ -738,8 +738,12 @@ async function connectToWhatsApp() {
 
               for (const banData of bannedToRemove) {
                 const randomMsg =
-                  funnyMessages[Math.floor(Math.random() * funnyMessages.length)];
-                const banReason = banData.info?.reason ? `\n📝 Reason: ${banData.info.reason}` : "";
+                  funnyMessages[
+                    Math.floor(Math.random() * funnyMessages.length)
+                  ];
+                const banReason = banData.info?.reason
+                  ? `\n📝 Reason: ${banData.info.reason}`
+                  : "";
 
                 try {
                   await sock.sendMessage(groupJid, {
@@ -1644,18 +1648,14 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
             )}"`,
           );
 
-          // Check if message mentions horses
-          const horseKeywords =
-            /\b(horse|horses|equine|stallion|mare|pony|ponies|foal|colt|filly)\b/gi;
-          const mentionsHorses = isGroup && horseKeywords.test(messageText);
+          // Horse mentions handling removed
+          const mentionsHorses = false;
 
-          // Check if message mentions Heikki
-          const heikkiKeywords = /\bheikki\b/gi;
-          const mentionsHeikki = isGroup && heikkiKeywords.test(messageText);
+          // Heikki mentions handling removed
+          const mentionsHeikki = false;
 
-          // Check if message mentions Yousef
-          const yousefKeywords = /\byousef\b/gi;
-          const mentionsYousef = isGroup && yousefKeywords.test(messageText);
+          // Yousef mentions handling removed
+          const mentionsYousef = false;
 
           // Check if message mentions Canada
           const canadaKeywords = /\b(canada|canadian)\b/gi;
@@ -1690,10 +1690,8 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
             continue;
           }
 
-          // Check if message mentions Roman Empire
-          const romanEmpireKeywords =
-            /\b(roman empire|rome|romans|caesar|augustus|colosseum|gladiator|senate|legion)\b/gi;
-          const mentionsRomanEmpire = romanEmpireKeywords.test(messageText);
+          // Roman Empire mentions handling removed
+          const mentionsRomanEmpire = false;
 
           if (mentionsRomanEmpire && !romanEmpireModeActive.get(chatJid)) {
             // Check cooldown

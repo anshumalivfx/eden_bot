@@ -113,6 +113,8 @@ class CommandHandler {
       up: this.upscaleSticker.bind(this),
       // Admin commands
       warn: this.handleWarn.bind(this),
+      admin: this.handlePromoteAdmin.bind(this),
+      demote: this.handleDemoteAdmin.bind(this),
       kick: this.handleKick.bind(this),
       clean: this.handleClean.bind(this),
       show: this.handleShow.bind(this),
@@ -122,6 +124,7 @@ class CommandHandler {
       ban: this.handleBan.bind(this),
       unban: this.handleUnban.bind(this),
       banlist: this.handleBanList.bind(this),
+      warnlist: this.handleWarnList.bind(this),
     };
   }
 
@@ -198,7 +201,6 @@ class CommandHandler {
     if (participant?.jid) candidateSet.add(participant.jid);
     if (participant?.id) candidateSet.add(participant.id);
     if (participant?.lid) candidateSet.add(participant.lid);
-
     const mentionJids = Array.from(candidateSet);
     const preferredJid =
       mentionJids.find((jid) => jid.endsWith("@s.whatsapp.net")) ||
@@ -265,18 +267,18 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 - \`-compliment [person]\` - Get a genuine compliment
 - \`-advice [topic]\` - Get helpful advice
 - \`-fact\` - Learn an interesting fact
-- \`-quote\` - Get an inspirational quote
-- \`-story\` - Hear a short story
-- \`-weather\` - Get weather commentary
-- \`-fortune\` - Get your fortune told
-- \`-excuse [situation]\` - Generate a creative excuse
-- \`-mood\` - Check my current mood
-- \`-rate [thing]\` - Rate something
-
-*Media Commands:*
-- \`-sticker\` or \`-s2\` - Create sticker from media OR reply to text/media
-- \`-meme [text]\` - Reply to sticker and add text in lower half 📝
-- \`-voice [text]\` or \`-v\` - Create voice message 🎤
+  • \`-kick @user\` - Immediately remove user from group
+  • Reply to message + \`-kick\` - Kick via reply
+  • \`-show @user\` - Show all warnings for a user
+  • Reply to message + \`-show\` - Show warnings via reply
+  • \`-clean @user\` - Clear all warnings for a user
+  • Reply to message + \`-clean\` - Clear warnings via reply
+  • \`-mute @user 5m\` - Mute a user for m/h/d duration
+  • \`-reply to message + \`-mute 5m\` - Mute via reply
+  • \`-unmute @user\` - Remove active mute from a user
+  • \`-reply to message + \`-unmute\` - Unmute via reply
+  • \`-mutelist\` - Show all currently muted users
+  • Note: I must be an admin to use these commands!
 - \`-play [song name]\` - Download song from YouTube as MP3 🎵
 - \`-yt [youtube url]\` - Download YouTube video 🎬 (NEW!)
 - \`-imagine [prompt]\` or \`-img\` - Generate AI image 🎨 (NEW!)
@@ -293,41 +295,8 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 • Reply to media + \`-sticker\` = Media sticker
 • Reply to sticker + \`-meme [text]\` = Meme sticker with outlined text
 
-*🎤 Voice Usage:*
-• \`-voice [text]\` = Speak your text
-• Reply to any message + \`-voice\` = Speak that message
-
-*🎙️ Voice Dubbing (NEW!):*
-• Reply to voice + \`-dub [lang]\` = Dub to another language
 • \`-dub\` = English (default)
 • \`-dub hi\` = Hindi, \`-dub fr\` = French, \`-dub es\` = Spanish
-• 5 dubs/day limit • 29+ languages supported
-
-*📝 Voice Transcription (NEW!):*
-• Reply to voice + \`-transcribe\` or \`-tb\` = Convert voice to text
-• Completely FREE & unlimited
-• Auto-detects language
-• Example: Reply to any voice note with \`-tb\`
-
-*🎵 Music & Video Download:*
-• \`-play [song name]\` = Search & download from YouTube as MP3
-• \`-yt [youtube url]\` = Download YouTube video or Shorts (NEW!) 🎬
-• Example: \`-play Tera hone laga hoon\`
-• Example: \`-yt https://youtube.com/watch?v=...\`
-• Example: \`-yt https://youtube.com/shorts/...\` ⚡
-
-*💫 Interactions (with GIFs):*
-• \`-hug @person\` - Give someone a hug
-• \`-kiss @person\` - Kiss someone
-• \`-pat @person\` - Pat someone's head
-• \`-love @person\` - Show love to someone
-• \`-cuddle @person\` - Cuddle with someone
-
-*👮 Admin Commands (Group Admin Only):*
-• \`-warn @user [reason]\` - Warn a user (3 warnings = auto-kick)
-• Reply to message + \`-warn [reason]\` - Warn via reply
-• \`-kick @user\` - Immediately remove user from group
-• Reply to message + \`-kick\` - Kick via reply
 • \`-show @user\` - Show all warnings for a user
 • Reply to message + \`-show\` - Show warnings via reply
 • \`-clean @user\` - Clear all warnings for a user
@@ -474,6 +443,10 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • Reply to message + \`-show\` - Show warnings via reply
 • \`-clean @user\` - Clear all warnings for a user
 • Reply to message + \`-clean\` - Clear warnings via reply
+• \`-admin @user\` - Promote a user to group admin
+• Reply to message + \`-admin\` - Promote via reply
+• \`-demote @user\` - Remove a user's group admin role
+• Reply to message + \`-demote\` - Demote via reply
 • \`-mute @user 5m\` - Mute a user for m/h/d duration
 • Reply to message + \`-mute 5m\` - Mute via reply
 • \`-unmute @user\` - Remove active mute from a user
@@ -1439,7 +1412,11 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       };
 
       // Auto-translate to English if no language specified and detected language is not English
-      if (!keepLanguage && transcription.language && transcription.language !== "en") {
+      if (
+        !keepLanguage &&
+        transcription.language &&
+        transcription.language !== "en"
+      ) {
         console.log(
           `🌐 Auto-translating ${transcription.language} → English...`,
         );
@@ -1462,7 +1439,10 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
               );
 
               // Check if translation actually happened (not just returning original)
-              if (translated && translated.trim() !== transcription.text.trim()) {
+              if (
+                translated &&
+                translated.trim() !== transcription.text.trim()
+              ) {
                 finalText = translated;
                 displayLanguage = `${transcription.language} → English`;
                 wasTranslated = true;
@@ -1474,7 +1454,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
                 );
                 // Check if it's actually mixed language that can't be translated
                 if (isPredominantlyEnglish(transcription.text)) {
-                  console.log(`ℹ️ Detected mixed language content - text already mostly in English`);
+                  console.log(
+                    `ℹ️ Detected mixed language content - text already mostly in English`,
+                  );
                   isMixedLanguage = true;
                   displayLanguage = `${transcription.language} (mixed with English)`;
                   break; // Exit retry loop
@@ -1499,7 +1481,9 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 continue;
               } else {
-                console.warn("⚠️ Translation failed after retries, keeping original");
+                console.warn(
+                  "⚠️ Translation failed after retries, keeping original",
+                );
                 displayLanguage = `${transcription.language} (translation failed)`;
               }
             }
@@ -1588,7 +1572,11 @@ Reply to a voice message with:
 
   async dubVoiceMessage(args, message) {
     try {
-      const { senderName = "User", senderJid = "" } = this.currentContext;
+      const { senderName = "User", senderJid = "", isOwner = false } = this.currentContext;
+
+      if (!isOwner) {
+        return "🔒 Sorry, -dub is currently under development and only available to Ansh for now.";
+      }
 
       // Check for help command
       if (args[0]?.toLowerCase() === "help") {
@@ -1681,7 +1669,7 @@ Reply to a voice message with:
           audio: dubbedAudio,
           mimetype:
             ttsEngine === "elevenlabs"
-              ? "audio/mpeg"
+              ? "audio/ogg; codecs=opus"
               : "audio/ogg; codecs=opus",
           ptt: true, // Send as voice note
         },
@@ -1888,11 +1876,14 @@ ${ending}`;
       const query = args.join(" ");
       const normalizedQuery = query.trim().toLowerCase();
 
+      // Defensive context variables: ensure these exist even if currentContext is missing
+      const _ctx = this.currentContext || {};
+      const isNiceUser = _ctx.isNiceUser || false;
+      const senderName = _ctx.senderName || "User";
+
       if (
         normalizedQuery === "lysa" ||
-        normalizedQuery === "sarah" ||
-        normalizedQuery === "scott" ||
-        normalizedQuery === "yousef"
+        normalizedQuery === "scott"
       ) {
         const fs = require("fs");
         const path = require("path");
@@ -1937,7 +1928,7 @@ ${ending}`;
           : "What am I supposed to download? Air? Give me a song name, genius. 🙄\n\nUsage: `-play Tera hone laga hoon`";
       }
 
-      const { senderName = "User", isNiceUser = false } = this.currentContext;
+      // use defensive context variables defined above
 
       // Send initial response for music search.
       const searchMsg = isNiceUser
@@ -2018,6 +2009,18 @@ ${ending}`;
         return isNiceUser
           ? "YouTube blocked this download (403). Please update yt-dlp and try again. 😊\n\nRun: `python3 -m pip install -U yt-dlp`"
           : "YouTube blocked the download with a 403. Update yt-dlp and try again. 🙄\n\nRun: `python3 -m pip install -U yt-dlp`";
+      }
+
+      if (
+        errorMessage.includes(
+          "YouTube could not be resolved from this server",
+        ) ||
+        errorMessage.includes("Failed to resolve") ||
+        errorMessage.includes("nodename nor servname provided")
+      ) {
+        return isNiceUser
+          ? `⚠️ I can't reach YouTube from this server right now.\n\n${errorMessage}`
+          : `⚠️ I can't reach YouTube from this server right now.\n\n${errorMessage}`;
       }
 
       if (
@@ -2183,6 +2186,11 @@ ${ending}`;
         error.message.includes("Private video") ||
         error.message.includes("ERROR: [youtube]") ||
         error.message.includes("Download failed") ||
+        error.message.includes(
+          "YouTube could not be resolved from this server",
+        ) ||
+        error.message.includes("Failed to resolve") ||
+        error.message.includes("nodename nor servname provided") ||
         (error.stderr && error.stderr.includes("Video unavailable"))
       ) {
         const vid = url.includes("youtu.be/")
@@ -2824,9 +2832,7 @@ Provide a structured analysis with emojis.`;
         return "❌ Count must be between 4 and 10. Example: `-pint 6 Manali`";
       }
 
-      await message.reply(
-        `📌 Searching for *${query}* (${count} images)...`,
-      );
+      await message.reply(`📌 Searching for *${query}* (${count} images)...`);
 
       const axios = require("axios");
 
@@ -2854,7 +2860,8 @@ Provide a structured analysis with emojis.`;
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            Accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
           },
         });
@@ -2871,8 +2878,7 @@ Provide a structured analysis with emojis.`;
 
         // Also try to extract from JSON data
         const jsonMatches = [];
-        const jsonDataRegex =
-          /"(https:\/\/i\.pinimg\.com\/[^\s"<>]+)"/gi;
+        const jsonDataRegex = /"(https:\/\/i\.pinimg\.com\/[^\s"<>]+)"/gi;
         let match;
         while ((match = jsonDataRegex.exec(html)) !== null) {
           jsonMatches.push(match[1]);
@@ -2887,7 +2893,7 @@ Provide a structured analysis with emojis.`;
           (url) =>
             url.startsWith("https://i.pinimg.com/") &&
             !/\.(ico|svg)($|\?)/i.test(url) &&
-            !url.includes("blank.gif")
+            !url.includes("blank.gif"),
         );
 
         // Prioritize by file type (jpg/jpeg > webp > png > gif)
@@ -2902,7 +2908,10 @@ Provide a structured analysis with emojis.`;
 
         images = candidates.sort((a, b) => priority(a) - priority(b));
       } catch (pinterestError) {
-        console.log("Pinterest primary attempt failed:", pinterestError.message);
+        console.log(
+          "Pinterest primary attempt failed:",
+          pinterestError.message,
+        );
       }
 
       // Fallback: Bing Images
@@ -2926,11 +2935,13 @@ Provide a structured analysis with emojis.`;
             /https:\/\/i\.pinimg\.com\/[^\s"'<>{}|\\^`\[\]]+/gi;
           const bingDirect = bingHtml.match(bingPinimgRegex) || [];
 
-          let newCandidates = bingDirect.map(normalizeUrl).filter(
-            (url) =>
-              url.startsWith("https://i.pinimg.com/") &&
-              !/\.(ico|svg)($|\?)/i.test(url)
-          );
+          let newCandidates = bingDirect
+            .map(normalizeUrl)
+            .filter(
+              (url) =>
+                url.startsWith("https://i.pinimg.com/") &&
+                !/\.(ico|svg)($|\?)/i.test(url),
+            );
 
           images = [...new Set([...images, ...newCandidates])];
         } catch (bingError) {
@@ -3580,7 +3591,8 @@ Provide a structured analysis with emojis.`;
       ) {
         const selfMuteMs = 5 * 60 * 1000;
         const selfNumber = adminJid.split("@")[0];
-        const selfMuteeName = issuerParticipant?.notify || issuerParticipant?.name || selfNumber;
+        const selfMuteeName =
+          issuerParticipant?.notify || issuerParticipant?.name || selfNumber;
         const selfMute = this.muteStore.setMute(
           adminJid,
           groupJid,
@@ -3645,7 +3657,10 @@ Provide a structured analysis with emojis.`;
 
       const mentionMeta = this.buildMentionMeta(targetJid, groupMetadata);
       const senderNumber = mentionMeta.mentionNumber;
-      const targetParticipantName = mentionMeta.participant?.notify || mentionMeta.participant?.name || senderNumber;
+      const targetParticipantName =
+        mentionMeta.participant?.notify ||
+        mentionMeta.participant?.name ||
+        senderNumber;
 
       const reason = args
         .filter((arg) => arg !== durationToken && !arg.startsWith("@"))
@@ -3774,11 +3789,16 @@ Provide a structured analysis with emojis.`;
       for (let i = 0; i < activeMutes.length; i += 1) {
         const mute = activeMutes[i];
         const mentionMeta = this.buildMentionMeta(mute.user_jid, groupMetadata);
-        
+
         // Use stored name from database, fallback to participant name or number
         let displayName = mute.user_name;
-        if (!displayName && mentionMeta.participant && (mentionMeta.participant.notify || mentionMeta.participant.name)) {
-          displayName = mentionMeta.participant.notify || mentionMeta.participant.name;
+        if (
+          !displayName &&
+          mentionMeta.participant &&
+          (mentionMeta.participant.notify || mentionMeta.participant.name)
+        ) {
+          displayName =
+            mentionMeta.participant.notify || mentionMeta.participant.name;
         }
         if (!displayName) {
           displayName = mentionMeta.mentionNumber || mute.user_key;
@@ -3787,7 +3807,7 @@ Provide a structured analysis with emojis.`;
             displayName = displayName.slice(-10);
           }
         }
-        
+
         const remaining = this.formatRemainingTime(
           Math.max(0, mute.expires_at - Date.now()),
         );
@@ -3797,7 +3817,10 @@ Provide a structured analysis with emojis.`;
         lines.push(`   ⏳ Remaining: ${remaining}`);
         lines.push(`   🕒 Until: ${until}`);
 
-        if (mentionMeta.preferredJid && !mentionJids.includes(mentionMeta.preferredJid)) {
+        if (
+          mentionMeta.preferredJid &&
+          !mentionJids.includes(mentionMeta.preferredJid)
+        ) {
           mentionJids.push(mentionMeta.preferredJid);
         }
       }
@@ -3847,7 +3870,10 @@ Provide a structured analysis with emojis.`;
         return "❌ *Invalid Usage*\n\nUse one of these:\n1️⃣ Reply to a message: `-ban`\n2️⃣ Mention a user: `-ban @user [reason]`";
       }
 
-      const targetParticipant = this.findParticipantByJid(groupMetadata, targetJid);
+      const targetParticipant = this.findParticipantByJid(
+        groupMetadata,
+        targetJid,
+      );
       const targetIsAdmin =
         !!targetParticipant &&
         (targetParticipant.admin === "admin" ||
@@ -3859,7 +3885,10 @@ Provide a structured analysis with emojis.`;
 
       const mentionMeta = this.buildMentionMeta(targetJid, groupMetadata);
       const senderNumber = mentionMeta.mentionNumber;
-      const targetParticipantName = mentionMeta.participant?.notify || mentionMeta.participant?.name || senderNumber;
+      const targetParticipantName =
+        mentionMeta.participant?.notify ||
+        mentionMeta.participant?.name ||
+        senderNumber;
 
       const reason = args
         .filter((arg) => !arg.startsWith("@"))
@@ -4004,6 +4033,135 @@ Provide a structured analysis with emojis.`;
     } catch (error) {
       console.error("❌ Banlist command error:", error);
       return `❌ Failed to show ban list: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Show users with warnings in the group
+   */
+  async handleWarnList(args, message) {
+    try {
+      const { message: rawMessage } = this.currentContext;
+
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
+      );
+
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
+        return "❌ Only admins can use this command!";
+      }
+
+      const warnedUsers = this.warningStore.getGroupWarnings(groupJid);
+      if (!warnedUsers.length) {
+        return "⚠️ *Warn List*\n\nNo users have been warned yet.";
+      }
+
+      const normalizeNumber = (jid = "") =>
+        String(jid || "")
+          .split("@")[0]
+          .replace(/[^0-9]/g, "");
+
+      const participantLookup = new Map();
+      for (const participant of groupMetadata.participants || []) {
+        const jidCandidates = [participant.id, participant.jid, participant.lid];
+        for (const jid of jidCandidates) {
+          if (jid) {
+            participantLookup.set(jid, participant);
+          }
+        }
+
+        const participantNumbers = [
+          participant.id,
+          participant.jid,
+          participant.lid,
+          participant.phoneNumber,
+        ]
+          .map(normalizeNumber)
+          .filter(Boolean);
+
+        for (const number of participantNumbers) {
+          if (!participantLookup.has(number)) {
+            participantLookup.set(number, participant);
+          }
+        }
+      }
+
+      const lines = ["⚠️ *Warn List*", ""];
+      const mentionJids = [];
+
+      for (let i = 0; i < warnedUsers.length; i += 1) {
+        const w = warnedUsers[i];
+        const mentionMeta = this.buildMentionMeta(w.user_jid, groupMetadata);
+
+        const storedNumber = normalizeNumber(w.user_jid);
+        const targetParticipant =
+          participantLookup.get(w.user_jid) ||
+          participantLookup.get(storedNumber) ||
+          this.findParticipantByJid(groupMetadata, w.user_jid);
+
+        const canonicalJid =
+          targetParticipant?.jid ||
+          (String(w.user_jid).includes("@s.whatsapp.net") ? w.user_jid : null) ||
+          null;
+
+        const mentionNumber =
+          normalizeNumber(canonicalJid || w.user_jid) ||
+          storedNumber ||
+          String(canonicalJid || w.user_jid).split("@")[0];
+
+        // Prefer display name when available
+        const displayName =
+          targetParticipant?.notify ||
+          targetParticipant?.name ||
+          targetParticipant?.pushName ||
+          mentionNumber;
+
+        // Fetch detailed warnings for this user
+        const userWarnings = this.warningStore.getWarnings(w.user_jid, groupJid) || [];
+
+        lines.push(
+          `${i + 1}. @${mentionNumber}${displayName && displayName !== mentionNumber ? ` (${displayName})` : ""}`,
+        );
+        lines.push(`   🔢 Warnings: ${w.warning_count}`);
+
+        if (userWarnings.length) {
+          // Show up to 5 recent warnings with date and reason
+          const maxShow = 5;
+          for (let j = 0; j < Math.min(userWarnings.length, maxShow); j += 1) {
+            const uw = userWarnings[j];
+            const dateStr = uw.timestamp ? new Date(uw.timestamp).toLocaleDateString() : (uw.created_at || "");
+            lines.push(`   • ${dateStr} — ${uw.reason}`);
+          }
+          if (userWarnings.length > maxShow) {
+            lines.push(`   • ...and ${userWarnings.length - maxShow} more`);
+          }
+        }
+
+        lines.push("");
+
+        // Use live participant JID when we can resolve it from the current group member list
+        const preferJid = targetParticipant?.jid || canonicalJid;
+        if (preferJid && !mentionJids.includes(preferJid)) {
+          mentionJids.push(preferJid);
+        }
+      }
+
+      await rawMessage.reply(lines.join("\n"), rawMessage.raw, mentionJids);
+      return null;
+    } catch (error) {
+      console.error("❌ Warnlist command error:", error);
+      return `❌ Failed to show warn list: ${error.message}`;
     }
   }
 
@@ -4344,6 +4502,236 @@ Provide a structured analysis with emojis.`;
     } catch (error) {
       console.error("❌ Kick command error:", error);
       return `❌ Failed to kick user: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Promote a user to group admin
+   */
+  async handlePromoteAdmin(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
+      );
+
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
+        return "❌ Only admins can use this command!";
+      }
+
+      const botJid = rawMessage.sock.user?.id;
+      const botLid = rawMessage.sock.user?.lid;
+      const botParticipant = groupMetadata.participants.find((p) => {
+        const botNumber = botJid?.split(":")[0]?.split("@")[0];
+        const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
+        const pJidNumber = p.jid?.split("@")[0];
+        const pIdNumber = p.id?.split("@")[0];
+        return pJidNumber === botNumber || pIdNumber === botLidNumber;
+      });
+
+      if (!botParticipant) {
+        return "❌ I need to be an admin to promote users! (Bot not found in group)";
+      }
+
+      if (
+        botParticipant.admin !== "admin" &&
+        botParticipant.admin !== "superadmin"
+      ) {
+        return "❌ I need to be an admin to promote users! (Bot is not an admin)";
+      }
+
+      let targetJid = null;
+
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+      } else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-admin\`\n2️⃣ Mention a user: \`-admin @user\``;
+      }
+
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
+      );
+
+      if (!targetParticipant) {
+        return "❌ Could not find that user in the group!";
+      }
+
+      if (
+        targetParticipant.admin === "admin" ||
+        targetParticipant.admin === "superadmin"
+      ) {
+        return "❌ That user is already a group admin!";
+      }
+
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
+      try {
+        await rawMessage.sock.groupParticipantsUpdate(
+          groupJid,
+          [actualJid],
+          "promote",
+        );
+
+        console.log(`⬆️ ${senderName} promoted user ${actualJid} in ${groupJid}`);
+
+        const celebrationMessages = [
+          "Welcome to the unbearable responsibility club! 🎉",
+          "Congrats, you now have power and probably regret! 👑",
+          "One step closer to becoming the villain of the group. 😈",
+          "Promotion granted. Please use your powers for nonsense only. 🚀",
+          "You are now trusted with buttons. Terrifying. 🧨",
+        ];
+        const celebration =
+          celebrationMessages[
+            Math.floor(Math.random() * celebrationMessages.length)
+          ];
+
+        await rawMessage.reply(
+          `⬆️ *User Promoted*\n\n👤 User: @${mentionNumber}\n✅ ${celebration}\n\n*Promoted by:* ${senderName}`,
+          rawMessage.raw,
+          [actualJid],
+        );
+
+        return null;
+      } catch (error) {
+        console.error("Error promoting user:", error);
+        return `❌ Failed to promote user: ${error.message}\n\nPlease check my admin permissions!`;
+      }
+    } catch (error) {
+      console.error("❌ Promote admin command error:", error);
+      return `❌ Failed to promote user: ${error.message}`;
+    }
+  }
+
+  /**
+   * Admin command: Remove a user's group admin role
+   */
+  async handleDemoteAdmin(args, message) {
+    try {
+      const { senderName = "User", message: rawMessage } = this.currentContext;
+
+      if (!rawMessage.groupId) {
+        return "⚠️ This command can only be used in groups!";
+      }
+
+      const groupJid = rawMessage.groupId;
+      const adminJid = rawMessage.userId;
+
+      const groupMetadata = await rawMessage.sock.groupMetadata(groupJid);
+      const issuerParticipant = groupMetadata.participants.find(
+        (p) => p.id === adminJid || p.lid === rawMessage.lid,
+      );
+
+      if (
+        !issuerParticipant ||
+        (issuerParticipant.admin !== "admin" &&
+          issuerParticipant.admin !== "superadmin")
+      ) {
+        return "❌ Only admins can use this command!";
+      }
+
+      const botJid = rawMessage.sock.user?.id;
+      const botLid = rawMessage.sock.user?.lid;
+      const botParticipant = groupMetadata.participants.find((p) => {
+        const botNumber = botJid?.split(":")[0]?.split("@")[0];
+        const botLidNumber = botLid?.split(":")[0]?.split("@")[0];
+        const pJidNumber = p.jid?.split("@")[0];
+        const pIdNumber = p.id?.split("@")[0];
+        return pJidNumber === botNumber || pIdNumber === botLidNumber;
+      });
+
+      if (!botParticipant) {
+        return "❌ I need to be an admin to demote users! (Bot not found in group)";
+      }
+
+      if (
+        botParticipant.admin !== "admin" &&
+        botParticipant.admin !== "superadmin"
+      ) {
+        return "❌ I need to be an admin to demote users! (Bot is not an admin)";
+      }
+
+      let targetJid = null;
+
+      if (rawMessage.quoted?.userId) {
+        targetJid = rawMessage.quoted.userId;
+      } else if (rawMessage.mentions && rawMessage.mentions.length > 0) {
+        targetJid = rawMessage.mentions[0];
+      } else {
+        return `❌ *Invalid Usage*\n\nPlease use one of these methods:\n1️⃣ Reply to a message: \`-demote\`\n2️⃣ Mention a user: \`-demote @user\``;
+      }
+
+      const targetParticipant = groupMetadata.participants.find(
+        (p) => p.jid === targetJid || p.id === targetJid || p.lid === targetJid,
+      );
+
+      if (!targetParticipant) {
+        return "❌ Could not find that user in the group!";
+      }
+
+      if (
+        targetParticipant.admin !== "admin" &&
+        targetParticipant.admin !== "superadmin"
+      ) {
+        return "❌ That user is not a group admin!";
+      }
+
+      const actualJid = targetJid.includes("@s.whatsapp.net")
+        ? targetJid
+        : targetParticipant.jid || targetJid;
+      const mentionNumber = actualJid.split("@")[0];
+
+      try {
+        await rawMessage.sock.groupParticipantsUpdate(
+          groupJid,
+          [actualJid],
+          "demote",
+        );
+
+        console.log(`⬇️ ${senderName} demoted user ${actualJid} in ${groupJid}`);
+
+        const reactionMessages = [
+          "Your admin badge has been retired. 🪪",
+          "Back to civilian life. 🫡",
+          "Power revoked. Responsibility removed. 📉",
+          "You have been peacefully un-promoted. 🌧️",
+          "One less ruler in the kingdom. 👋",
+        ];
+        const reaction =
+          reactionMessages[Math.floor(Math.random() * reactionMessages.length)];
+
+        await rawMessage.reply(
+          `⬇️ *User Demoted*\n\n👤 User: @${mentionNumber}\n✅ ${reaction}\n\n*Demoted by:* ${senderName}`,
+          rawMessage.raw,
+          [actualJid],
+        );
+
+        return null;
+      } catch (error) {
+        console.error("Error demoting user:", error);
+        return `❌ Failed to demote user: ${error.message}\n\nPlease check my admin permissions!`;
+      }
+    } catch (error) {
+      console.error("❌ Demote admin command error:", error);
+      return `❌ Failed to demote user: ${error.message}`;
     }
   }
 

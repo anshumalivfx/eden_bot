@@ -488,21 +488,52 @@ class DubService {
           });
 
           const timestamp = Date.now();
-          const outputPath = path.join(this.tempDir, `speech_${timestamp}.mp3`);
+          const mp3Path = path.join(this.tempDir, `speech_${timestamp}.mp3`);
+          const oggPath = path.join(this.tempDir, `speech_${timestamp}.ogg`);
 
-          fs.writeFileSync(outputPath, audioResponse.data);
+          fs.writeFileSync(mp3Path, audioResponse.data);
 
-          const stats = fs.statSync(outputPath);
+          console.log(`🔄 Converting ElevenLabs MP3 to OGG for WhatsApp...`);
+
+          await new Promise((resolve, reject) => {
+            ffmpeg(mp3Path)
+              .toFormat("ogg")
+              .audioCodec("libopus")
+              .audioChannels(1)
+              .audioFrequency(16000)
+              .audioBitrate("32k")
+              .on("end", () => {
+                try {
+                  fs.unlinkSync(mp3Path);
+                } catch (e) {}
+                console.log(`✅ Converted to OGG`);
+                resolve();
+              })
+              .on("error", (err) => {
+                try {
+                  if (fs.existsSync(mp3Path)) fs.unlinkSync(mp3Path);
+                  if (fs.existsSync(oggPath)) fs.unlinkSync(oggPath);
+                } catch (e) {}
+                reject(new Error(`FFmpeg conversion failed: ${err.message}`));
+              })
+              .save(oggPath);
+          });
+
+          const stats = fs.statSync(oggPath);
           console.log(
             `✅ Downloaded dubbed audio: ${(stats.size / 1024).toFixed(2)} KB`,
           );
 
           return {
-            filepath: outputPath,
+            filepath: oggPath,
             cleanup: () => {
-              if (fs.existsSync(outputPath)) {
-                fs.unlinkSync(outputPath);
-                console.log(`🗑️ Cleaned up: ${outputPath}`);
+              if (fs.existsSync(oggPath)) {
+                fs.unlinkSync(oggPath);
+                console.log(`🗑️ Cleaned up: ${oggPath}`);
+              }
+              if (fs.existsSync(mp3Path)) {
+                fs.unlinkSync(mp3Path);
+                console.log(`🗑️ Cleaned up: ${mp3Path}`);
               }
             },
           };
