@@ -16,6 +16,7 @@ const LLMService = require("./services/llmService");
 const CommandHandler = require("./handlers/commandHandler");
 const MessageStore = require("./database/messageStore");
 const MuteStore = require("./database/muteStore");
+const AfkStore = require("./database/afkStore");
 const BanStore = require("./database/banStore");
 require("dotenv").config();
 
@@ -62,8 +63,14 @@ function getNiceUserInfo(jid) {
 // Initialize services
 const llmService = new LLMService();
 const muteStore = new MuteStore();
+const afkStore = new AfkStore();
 const banStore = new BanStore();
-const commandHandler = new CommandHandler(llmService, muteStore, banStore);
+const commandHandler = new CommandHandler(
+  llmService,
+  muteStore,
+  banStore,
+  afkStore,
+);
 
 // Bot configuration
 const COMMAND_PREFIX = process.env.COMMAND_PREFIX || "-";
@@ -540,6 +547,82 @@ function getSenderName(message) {
   }
 }
 
+function getNormalizedCommandName(messageText) {
+  const trimmedText = String(messageText || "").trim();
+  if (!trimmedText.startsWith(COMMAND_PREFIX)) {
+    return "";
+  }
+
+  return trimmedText
+    .slice(COMMAND_PREFIX.length)
+    .trim()
+    .split(/\s+/)[0]
+    .toLowerCase();
+}
+
+function resolveDisplayNameFromJid(targetJid, groupMetadata = null) {
+  const targetKey = String(targetJid || "").split("@")[0].split(":")[0];
+
+  if (groupMetadata?.participants?.length) {
+    const participant = groupMetadata.participants.find(
+      (entry) =>
+        entry.jid === targetJid ||
+        entry.id === targetJid ||
+        entry.lid === targetJid ||
+        entry.jid?.split("@")[0] === targetKey ||
+        entry.id?.split("@")[0] === targetKey ||
+        entry.lid?.split("@")[0] === targetKey,
+    );
+
+    if (participant?.notify || participant?.name) {
+      return participant.notify || participant.name;
+    }
+  }
+
+  return contactNameCache.get(targetJid) || targetKey || "user";
+}
+
+function getAfkTargetsFromMessage(message) {
+  const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+  const targets = new Set();
+
+  if (contextInfo?.participant && contextInfo.quotedMessage) {
+    targets.add(contextInfo.participant);
+  }
+
+  for (const jid of contextInfo?.mentionedJid || []) {
+    targets.add(jid);
+  }
+
+  return Array.from(targets);
+}
+
+function formatAfkReplayLine(note, groupMetadata = null) {
+  const senderName = note.sender_name || resolveDisplayNameFromJid(note.sender_jid, groupMetadata);
+  const cleanMessage = String(note.message_text || "").trim() || "(no text)";
+  const preview = cleanMessage.length > 220 ? `${cleanMessage.slice(0, 220)}...` : cleanMessage;
+
+  return `• ${senderName}: ${preview}`;
+}
+
+function chunkText(text, maxLength = 1800) {
+  const chunks = [];
+  let remaining = String(text || "").trim();
+
+  while (remaining.length > maxLength) {
+    const sliceIndex = remaining.lastIndexOf("\n", maxLength);
+    const chunkEnd = sliceIndex > 400 ? sliceIndex : maxLength;
+    chunks.push(remaining.slice(0, chunkEnd).trim());
+    remaining = remaining.slice(chunkEnd).trim();
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
 // Helper function to check if sender is owner
 function isOwner(senderName) {
   return senderName.toLowerCase().includes("ansh");
@@ -1000,6 +1083,98 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
               } catch (e) {
                 // Ignore errors
               }
+            }
+          }
+
+          const normalizedCommandName = getNormalizedCommandName(messageText);
+          let senderReturnedFromAfk = false;
+
+          if (
+            isGroup &&
+            afkStore.isAfk(senderJid, chatJid) &&
+            normalizedCommandName !== "afk"
+          ) {
+            const afkEntry = afkStore.getAfk(senderJid, chatJid);
+            if (afkEntry) {
+              const afkNotes = afkStore.getAfkMessages(senderJid, chatJid);
+              afkStore.clearAfk(senderJid, chatJid);
+              afkStore.clearAfkMessages(senderJid, chatJid);
+              senderReturnedFromAfk = true;
+
+              const elapsedText = afkStore.formatDuration(
+                Date.now() - afkEntry.started_at,
+              );
+              const senderNumber = senderJid.split("@")[0].split(":")[0];
+
+              await sock.sendMessage(
+                chatJid,
+                {
+                  text: `Welcome back @${senderNumber}. You were afk for ${elapsedText}.`,
+                  mentions: [senderJid],
+                },
+                { quoted: message },
+              );
+
+              if (afkNotes.length > 0) {
+                const groupMetadata = await sock.groupMetadata(chatJid).catch(() => null);
+                const noteLines = afkNotes.map((note) =>
+                  formatAfkReplayLine(note, groupMetadata),
+                );
+                const noteHeader = `You also have ${afkNotes.length} message${afkNotes.length === 1 ? "" : "s"} from while you were away:`;
+                const replayChunks = chunkText([noteHeader, ...noteLines].join("\n"));
+
+                for (const chunk of replayChunks) {
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      text: chunk,
+                      mentions: [senderJid],
+                    },
+                    { quoted: message },
+                  );
+                }
+              }
+            }
+          }
+
+          if (isGroup && !senderReturnedFromAfk) {
+            const groupMetadata = await sock.groupMetadata(chatJid).catch(() => null);
+            const afkTargets = getAfkTargetsFromMessage(message);
+
+            for (const targetJid of afkTargets) {
+              const afkEntry = afkStore.getAfk(targetJid, chatJid);
+              if (!afkEntry) {
+                continue;
+              }
+
+              const elapsedText = afkStore.formatDuration(
+                Date.now() - afkEntry.started_at,
+              );
+              const mentionNumber = String(afkEntry.user_jid || targetJid)
+                .split("@")[0]
+                .split(":")[0];
+              const displayName = resolveDisplayNameFromJid(
+                afkEntry.user_jid || targetJid,
+                groupMetadata,
+              );
+
+              afkStore.addAfkMessage(
+                afkEntry.user_jid || targetJid,
+                chatJid,
+                senderJid,
+                senderName,
+                messageText,
+              );
+
+              await sock.sendMessage(
+                chatJid,
+                {
+                  text: `@${mentionNumber} (${displayName}) is afk for ${elapsedText}. I’ll inform them when they come back.`,
+                  mentions: [afkEntry.user_jid || targetJid],
+                },
+                { quoted: message },
+              );
+              break;
             }
           }
 

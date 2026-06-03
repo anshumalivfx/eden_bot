@@ -10,7 +10,7 @@ const MuteStore = require("../database/muteStore");
 const BanStore = require("../database/banStore");
 
 class CommandHandler {
-  constructor(llmService, muteStore = null, banStore = null) {
+  constructor(llmService, muteStore = null, banStore = null, afkStore = null) {
     this.llmService = llmService;
     this.stickerService = new StickerService();
     this.voiceService = VoiceService;
@@ -20,6 +20,7 @@ class CommandHandler {
     this.warningStore = new WarningStore();
     this.muteStore = muteStore || new MuteStore();
     this.banStore = banStore || new BanStore();
+    this.afkStore = afkStore;
     this.currentContext = {};
     this.lastVoiceClipByFolder = {};
     this.commands = {
@@ -68,6 +69,7 @@ class CommandHandler {
       yt: this.downloadYouTubeVideo.bind(this), // YouTube video download
       status: this.showStatus.bind(this),
       stats: this.showStatus.bind(this), // Alias for status
+      afk: this.setAfk.bind(this),
       ping: this.ping.bind(this), // Quick response check
       sys: this.systemInfo.bind(this), // System information
       // Interaction commands
@@ -225,6 +227,7 @@ class CommandHandler {
     const normalizedCmd = cmd.toLowerCase();
     const {
       senderName = "User",
+      senderJid = null,
       isOwner = false,
       mood = "sarcastic",
       isNiceUser = false,
@@ -233,6 +236,7 @@ class CommandHandler {
     // Add context to command execution
     this.currentContext = {
       senderName,
+      senderJid,
       isOwner,
       mood,
       isNiceUser,
@@ -356,6 +360,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-pfp\` - Reply to message and download that person's profile photo (👤 NEW!)
 - \`-upscale\` or \`-up\` - Reply to sticker and convert to media (✨ NEW!)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
+- \`-afk\` - Mark yourself away in this chat
 - \`-ping\` - Quick response check (am I alive?)
 - \`-sys\` - Show system information (🖥️)
 
@@ -1750,6 +1755,29 @@ Reply to a voice message with:
       return status;
     } catch (error) {
       return "✅ Bot is active and responding to commands!";
+    }
+  }
+
+  async setAfk(args, message) {
+    try {
+      if (!this.afkStore) {
+        return "❌ AFK storage is not available right now.";
+      }
+
+      const { senderName = "User", senderJid = null, message: rawMessage } =
+        this.currentContext;
+      const chatJid = rawMessage?.groupId || rawMessage?.from;
+      const resolvedSenderJid = senderJid || rawMessage?.userId || rawMessage?.lid;
+
+      if (!chatJid || !resolvedSenderJid) {
+        return "❌ I couldn't identify the chat or sender for AFK mode.";
+      }
+
+      this.afkStore.setAfk(resolvedSenderJid, chatJid, senderName);
+      return "😴 You are now AFK in this chat. I’ll tell people when they mention or reply to you.";
+    } catch (error) {
+      console.error("AFK command error:", error);
+      return `❌ Failed to set AFK mode: ${error.message}`;
     }
   }
 
