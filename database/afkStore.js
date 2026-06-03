@@ -91,6 +91,10 @@ class AfkStore {
     return stmt.get(userKey, groupJid) || null;
   }
 
+  isAfk(userJid, groupJid) {
+    return !!this.getAfk(userJid, groupJid);
+  }
+
   clearAfk(userJid, groupJid) {
     const userKey = AfkStore.getUserKey(userJid);
     const stmt = this.db.prepare(`
