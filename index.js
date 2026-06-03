@@ -1091,7 +1091,7 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
           if (
             isGroup &&
-            afkStore.isAfk(senderJid, chatJid) &&
+            afkStore.getAfk(senderJid, chatJid) &&
             normalizedCommandName !== "afk"
           ) {
             const afkEntry = afkStore.getAfk(senderJid, chatJid);
