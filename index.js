@@ -345,8 +345,15 @@ class MessageWrapper {
 
     return {
       body: this.quoted.content,
+      userId: this.quoted.userId,
+      number: this.quoted.number,
+      lid: this.quoted.lid,
       fromMe: false,
       hasMedia: false, // We can enhance this later if needed
+      getContact: async () => ({
+        pushname: this.quoted.number || "Unknown",
+        name: this.quoted.number || "Unknown",
+      }),
       downloadMedia: async () => {
         // Try to download media from quoted message
         if (!this.quoted.raw) return null;
@@ -1249,12 +1256,51 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                       quotedMsg.imageMessage?.caption ||
                       quotedMsg.videoMessage?.caption ||
                       "",
+                    userId: contextInfo.participant,
+                    number: contextInfo.participant?.split("@")[0],
                     fromMe: contextInfo.participant === botId,
                     hasMedia: !!(
                       quotedMsg.imageMessage ||
                       quotedMsg.videoMessage ||
                       quotedMsg.stickerMessage
                     ),
+                    getContact: async () => {
+                      const quotedJid = contextInfo.participant;
+                      let quotedName = null;
+
+                      if (quotedJid && contactNameCache.has(quotedJid)) {
+                        quotedName = contactNameCache.get(quotedJid);
+                      }
+
+                      if (!quotedName && quotedJid && isGroupChat(chatJid)) {
+                        try {
+                          const groupMetadata = await sock.groupMetadata(chatJid);
+                          const participant = groupMetadata.participants.find(
+                            (p) =>
+                              p.id === quotedJid ||
+                              p.jid === quotedJid ||
+                              p.lid === quotedJid,
+                          );
+                          quotedName =
+                            participant?.notify ||
+                            participant?.name ||
+                            participant?.pushName ||
+                            null;
+                        } catch (error) {
+                          // Ignore metadata misses; the number fallback is enough.
+                        }
+                      }
+
+                      quotedName =
+                        quotedName ||
+                        contextInfo.participant?.split("@")[0] ||
+                        "Unknown";
+
+                      return {
+                        pushname: quotedName,
+                        name: quotedName,
+                      };
+                    },
                     downloadMedia: async () => {
                       try {
                         // Create a pseudo-message object for the quoted message

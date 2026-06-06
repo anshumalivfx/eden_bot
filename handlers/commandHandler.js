@@ -1015,14 +1015,18 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         await message.reply(textProcessingMsg);
 
         const messageText = targetMessage.body.trim();
-        const quoteSender = isReply
-          ? await this.getMessageSenderName(targetMessage)
-          : senderName;
+        const quoteMeta = isReply
+          ? await this.getTextStickerSenderMeta(message, targetMessage)
+          : {
+              senderName,
+              avatarBuffer: await this.fetchProfilePictureBuffer(senderJid),
+            };
 
         const stickerBuffer = await this.stickerService.createTextSticker(
           messageText,
-          quoteSender,
+          quoteMeta.senderName,
           "text",
+          { avatarBuffer: quoteMeta.avatarBuffer },
         );
 
         // Send text sticker with Baileys with proper metadata
@@ -1134,6 +1138,65 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       return contact.pushname || contact.name || "Unknown";
     } catch (error) {
       return "Unknown";
+    }
+  }
+
+  async getTextStickerSenderMeta(commandMessage, quotedMessage) {
+    const quotedJid =
+      quotedMessage?.userId ||
+      commandMessage?.quoted?.userId ||
+      commandMessage?.quoted?.participant ||
+      null;
+
+    let senderName = await this.getMessageSenderName(quotedMessage);
+
+    if (!senderName || senderName === "Unknown") {
+      senderName =
+        quotedMessage?.pushName ||
+        quotedMessage?.senderName ||
+        commandMessage?.quoted?.pushName ||
+        commandMessage?.quoted?.name ||
+        commandMessage?.quoted?.number ||
+        quotedJid?.split("@")[0] ||
+        "Unknown";
+    }
+
+    return {
+      senderName,
+      avatarBuffer: await this.fetchProfilePictureBuffer(quotedJid),
+    };
+  }
+
+  async fetchProfilePictureBuffer(jid) {
+    try {
+      const rawMessage = this.currentContext?.message;
+      const sock = rawMessage?.sock;
+
+      if (!jid || !sock || typeof sock.profilePictureUrl !== "function") {
+        return null;
+      }
+
+      const profilePicUrl = await sock
+        .profilePictureUrl(jid, "preview")
+        .catch(() => null);
+
+      if (!profilePicUrl) {
+        return null;
+      }
+
+      const axios = require("axios");
+      const response = await axios.get(profilePicUrl, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+      });
+
+      return Buffer.from(response.data);
+    } catch (error) {
+      console.warn(
+        "Could not fetch profile picture for text sticker:",
+        error.message,
+      );
+      return null;
     }
   }
 

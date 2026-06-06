@@ -402,21 +402,21 @@ class StickerService {
   async createTextSticker(
     text,
     senderName = "User",
-    filename = "text_sticker"
+    filename = "text_sticker",
+    options = {},
   ) {
     try {
       const outputPath = path.join(this.tempDir, `${filename}_text.webp`);
 
       // Clean and limit text length
-      const cleanText = text.trim().substring(0, 200); // Limit to 200 characters
-      const lines = this.wrapText(cleanText, 25); // Wrap text to fit nicely
-
-      // Choose random theme
-      const themes = this.getTextStickerThemes();
-      const theme = themes[Math.floor(Math.random() * themes.length)];
+      const cleanText = text.trim().substring(0, 260); // Limit to 260 characters
+      const lines = this.wrapText(cleanText, 29); // Wrap text to fit nicely
+      const avatarDataUri = await this.createAvatarDataUri(options.avatarBuffer);
 
       // Create SVG for the text sticker
-      const svgText = this.createTextStickerSVG(lines, senderName, theme);
+      const svgText = this.createTextStickerSVG(lines, senderName, {
+        avatarDataUri,
+      });
 
       // Convert SVG to WebP using Sharp
       await sharp(Buffer.from(svgText))
@@ -531,6 +531,18 @@ class StickerService {
     let currentLine = "";
 
     for (const word of words) {
+      if (word.length > maxLength) {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = "";
+        }
+
+        for (let i = 0; i < word.length; i += maxLength) {
+          lines.push(word.slice(i, i + maxLength));
+        }
+        continue;
+      }
+
       if ((currentLine + word).length <= maxLength) {
         currentLine += (currentLine ? " " : "") + word;
       } else {
@@ -546,127 +558,132 @@ class StickerService {
   getTextStickerThemes() {
     return [
       {
-        name: "classic",
-        bg: "#FFFFFF",
-        border: "#000000",
-        textColor: "#000000",
-        headerColor: "#666666",
-        shadow: "rgba(0,0,0,0.2)",
-      },
-      {
-        name: "dark",
-        bg: "#2C2C2C",
-        border: "#555555",
-        textColor: "#FFFFFF",
-        headerColor: "#CCCCCC",
-        shadow: "rgba(255,255,255,0.1)",
-      },
-      {
-        name: "blue",
-        bg: "#E3F2FD",
-        border: "#1976D2",
-        textColor: "#0D47A1",
-        headerColor: "#1976D2",
-        shadow: "rgba(25,118,210,0.2)",
-      },
-      {
-        name: "green",
-        bg: "#E8F5E8",
-        border: "#4CAF50",
-        textColor: "#2E7D32",
-        headerColor: "#4CAF50",
-        shadow: "rgba(76,175,80,0.2)",
-      },
-      {
-        name: "purple",
-        bg: "#F3E5F5",
-        border: "#9C27B0",
-        textColor: "#6A1B9A",
-        headerColor: "#9C27B0",
-        shadow: "rgba(156,39,176,0.2)",
-      },
-      {
-        name: "orange",
-        bg: "#FFF3E0",
-        border: "#FF9800",
-        textColor: "#E65100",
-        headerColor: "#FF9800",
-        shadow: "rgba(255,152,0,0.2)",
+        name: "whatsapp",
       },
     ];
   }
 
-  createTextStickerSVG(lines, senderName, theme) {
-    const lineHeight = 30;
-    const padding = 40;
-    const headerHeight = 50;
-    const contentHeight = lines.length * lineHeight;
-    const totalHeight = headerHeight + contentHeight + padding * 2;
+  async createAvatarDataUri(avatarBuffer) {
+    if (!Buffer.isBuffer(avatarBuffer)) {
+      return null;
+    }
 
-    const maxWidth = Math.max(
-      ...lines.map((line) => line.length * 12), // Approximate character width
-      senderName.length * 12 + 100 // Header width
-    );
-    const width = Math.max(400, Math.min(500, maxWidth + padding * 2));
+    try {
+      const pngBuffer = await sharp(avatarBuffer)
+        .resize(96, 96, { fit: "cover" })
+        .png()
+        .toBuffer();
+
+      return `data:image/png;base64,${pngBuffer.toString("base64")}`;
+    } catch (error) {
+      console.warn("Could not prepare avatar for text sticker:", error.message);
+      return null;
+    }
+  }
+
+  createTextStickerSVG(lines, senderName, options = {}) {
+    const safeLines = Array.isArray(lines) && lines.length ? lines : [""];
+    const safeSender = String(senderName || "Unknown").slice(0, 34);
+    const initials = this.getInitials(safeSender);
+    const lineCount = safeLines.length;
+    const fontSize = lineCount > 6 ? 23 : lineCount > 4 ? 25 : 28;
+    const lineHeight = Math.round(fontSize * 1.35);
+    const nameHeight = 28;
+    const verticalPadding = 28;
+    const contentHeight = nameHeight + safeLines.length * lineHeight;
+    const bubbleHeight = Math.min(378, contentHeight + verticalPadding * 2);
+    const bubbleY = Math.round((512 - bubbleHeight) / 2);
+    const bubbleX = 118;
+    const bubbleWidth = 352;
+    const avatarSize = 76;
+    const avatarX = 28;
+    const avatarY = bubbleY + 6;
+    const textY = bubbleY + verticalPadding + nameHeight + fontSize;
+    const avatarMarkup = options.avatarDataUri
+      ? `<image href="${options.avatarDataUri}" x="${avatarX}" y="${avatarY}" width="${avatarSize}" height="${avatarSize}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
+      : `<circle cx="${avatarX + avatarSize / 2}" cy="${
+          avatarY + avatarSize / 2
+        }" r="${avatarSize / 2}" fill="url(#avatarGradient)"/>
+         <text x="${avatarX + avatarSize / 2}" y="${
+          avatarY + avatarSize / 2 + 11
+        }" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#ffffff">${this.escapeXml(initials)}</text>`;
 
     return `
-        <svg width="${width}" height="${totalHeight}" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="${
-                      theme.shadow
-                    }"/>
-                </filter>
-            </defs>
-            
-            <!-- Background -->
-            <rect width="${width}" height="${totalHeight}" rx="20" ry="20" 
-                  fill="${theme.bg}" stroke="${
-      theme.border
-    }" stroke-width="3" filter="url(#shadow)"/>
-            
-            <!-- Header -->
-            <rect x="0" y="0" width="${width}" height="${headerHeight}" rx="20" ry="20" 
-                  fill="${theme.border}" opacity="0.1"/>
-            <line x1="20" y1="${headerHeight}" x2="${
-      width - 20
-    }" y2="${headerHeight}" 
-                  stroke="${theme.border}" stroke-width="1" opacity="0.3"/>
-            
-            <!-- Header Text -->
-            <text x="${padding}" y="${headerHeight / 2 + 6}" 
-                  font-family="Arial, sans-serif" font-size="16" font-weight="bold" 
-                  fill="${theme.headerColor}">💬 ${this.escapeXml(
-      senderName
-    )}</text>
-            
-            <!-- Message Icon -->
-            <text x="${width - 60}" y="${headerHeight / 2 + 6}" 
-                  font-family="Arial, sans-serif" font-size="20">📱</text>
-            
-            <!-- Message Lines -->
-            ${lines
-              .map(
-                (line, index) => `
-                <text x="${padding}" y="${
-                  headerHeight + padding + index * lineHeight
-                }" 
-                      font-family="Arial, sans-serif" font-size="18" 
-                      fill="${theme.textColor}">${this.escapeXml(line)}</text>
-            `
-              )
-              .join("")}
-            
-            <!-- Quote marks -->
-            <text x="${padding - 15}" y="${headerHeight + padding + 5}" 
-                  font-family="serif" font-size="40" font-weight="bold" 
-                  fill="${theme.border}" opacity="0.3">"</text>
-            <text x="${width - padding}" y="${
-      headerHeight + contentHeight + padding - 10
-    }" 
-                  font-family="serif" font-size="40" font-weight="bold" 
-                  fill="${theme.border}" opacity="0.3">"</text>
-        </svg>`;
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+    <linearGradient id="avatarGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00a884"/>
+      <stop offset="100%" stop-color="#128c7e"/>
+    </linearGradient>
+    <clipPath id="avatarClip">
+      <circle cx="${avatarX + avatarSize / 2}" cy="${
+        avatarY + avatarSize / 2
+      }" r="${avatarSize / 2}"/>
+    </clipPath>
+  </defs>
+
+  <circle cx="${avatarX + avatarSize / 2}" cy="${
+      avatarY + avatarSize / 2
+    }" r="${avatarSize / 2 + 4}" fill="#ffffff" opacity="0.95" filter="url(#bubbleShadow)"/>
+  ${avatarMarkup}
+
+  <path d="M${bubbleX + 16} ${bubbleY}
+           H${bubbleX + bubbleWidth - 24}
+           Q${bubbleX + bubbleWidth} ${bubbleY} ${
+      bubbleX + bubbleWidth
+    } ${bubbleY + 24}
+           V${bubbleY + bubbleHeight - 24}
+           Q${bubbleX + bubbleWidth} ${bubbleY + bubbleHeight} ${
+      bubbleX + bubbleWidth - 24
+    } ${bubbleY + bubbleHeight}
+           H${bubbleX + 24}
+           Q${bubbleX} ${bubbleY + bubbleHeight} ${bubbleX} ${
+      bubbleY + bubbleHeight - 24
+    }
+           V${bubbleY + 38}
+           L${bubbleX - 24} ${bubbleY + 26}
+           L${bubbleX} ${bubbleY + 82}
+           V${bubbleY + 24}
+           Q${bubbleX} ${bubbleY} ${bubbleX + 16} ${bubbleY} Z"
+        fill="#dcf8c6" filter="url(#bubbleShadow)"/>
+
+  <text x="${bubbleX + 28}" y="${bubbleY + 38}"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="22"
+        font-weight="700"
+        fill="#075e54">${this.escapeXml(safeSender)}</text>
+
+  ${safeLines
+    .map(
+      (line, index) => `
+  <text x="${bubbleX + 28}" y="${textY + index * lineHeight}"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${fontSize}"
+        font-weight="400"
+        fill="#111b21">${this.escapeXml(line)}</text>`,
+    )
+    .join("")}
+</svg>`;
+  }
+
+  getInitials(name) {
+    const words = String(name || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (!words.length) {
+      return "?";
+    }
+
+    return words
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase();
   }
 
   escapeXml(text) {
