@@ -2960,72 +2960,9 @@ Provide a structured analysis with emojis.`;
         );
       }
 
-      // Fallback: Bing Images
-      if (images.length < count) {
-        try {
-          const bingQuery = encodeURIComponent(query);
-          const bingUrl = `https://www.bing.com/images/search?q=${bingQuery}`;
-
-          const bingResponse = await axios.get(bingUrl, {
-            timeout: 15000,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            },
-          });
-
-          const bingHtml = String(bingResponse.data || "");
-
-          // Extract image URLs from Bing
-          const bingPinimgRegex =
-            /https:\/\/i\.pinimg\.com\/[^\s"'<>{}|\\^`\[\]]+/gi;
-          const bingDirect = bingHtml.match(bingPinimgRegex) || [];
-
-          let newCandidates = bingDirect
-            .map(normalizeUrl)
-            .filter(
-              (url) =>
-                url.startsWith("https://i.pinimg.com/") &&
-                !/\.(ico|svg)($|\?)/i.test(url),
-            );
-
-          images = [...new Set([...images, ...newCandidates])];
-        } catch (bingError) {
-          console.log("Bing fallback failed:", bingError.message);
-        }
-      }
-
-      // Final fallback: Generic image URLs from web
-      if (images.length < count) {
-        try {
-          const webQuery = encodeURIComponent(query);
-          const webUrl = `https://pixabay.com/api/?key=dummy&q=${webQuery}&per_page=${count}&image_type=photo`;
-
-          const webResponse = await axios.get(webUrl, {
-            timeout: 10000,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            },
-          });
-
-          const data = webResponse.data;
-          if (data.hits && Array.isArray(data.hits)) {
-            const webImages = data.hits
-              .map((hit) => hit.webformatURL || hit.imageURL)
-              .filter(Boolean)
-              .slice(0, count);
-
-            images = [...new Set([...images, ...webImages])];
-          }
-        } catch (webError) {
-          console.log("Web fallback failed:", webError.message);
-        }
-      }
-
-      // Check if we got enough images
-      if (images.length < 4) {
-        return `❌ Couldn't find enough images for *${query}*. Try another keyword!`;
+      // Check if Pinterest yielded anything usable
+      if (images.length === 0) {
+        return `❌ Couldn't find Pinterest images for *${query}*. Try another keyword!`;
       }
 
       // Slice to requested count
