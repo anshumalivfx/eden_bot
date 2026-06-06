@@ -998,7 +998,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         }
 
         // Send sticker with Baileys with proper metadata
-        const packname = isNiceUser ? "Eden's Stickers" : "Fuck Off";
+        const packname = this.buildStickerPackName(senderName);
         const author = isNiceUser ? "Eden 💫" : "Eden's Sarcasm 😈";
 
         await message.reply({
@@ -1030,7 +1030,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
         );
 
         // Send text sticker with Baileys with proper metadata
-        const packname = isNiceUser ? "Eden's Stickers" : "Fuck Off";
+        const packname = this.buildStickerPackName(senderName);
         const author = isNiceUser ? "Eden 💫" : "Eden's Sarcasm 😈";
 
         await message.reply({
@@ -1062,7 +1062,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
   }
 
   async createMemeSticker(args, message) {
-    const { isNiceUser = false } = this.currentContext;
+    const { senderName = "User", isNiceUser = false } = this.currentContext;
 
     try {
       const memeText = args.join(" ").trim();
@@ -1112,7 +1112,7 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           `meme_${Date.now()}`,
         );
 
-      const packname = isNiceUser ? "Eden's Stickers" : "Fuck Off";
+      const packname = this.buildStickerPackName(senderName);
       const author = isNiceUser ? "Eden 💫" : "Eden's Sarcasm 😈";
 
       await message.reply({
@@ -1139,6 +1139,17 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
     } catch (error) {
       return "Unknown";
     }
+  }
+
+  buildStickerPackName(senderName = "User") {
+    const cleanName = String(senderName || "User")
+      .replace(/[@\n\r\t]/g, " ")
+      .replace(/[^\w .'-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+
+    return `Eden-${cleanName || "User"}`;
   }
 
   async getTextStickerSenderMeta(commandMessage, quotedMessage) {
