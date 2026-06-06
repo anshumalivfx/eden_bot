@@ -86,6 +86,60 @@ let botLid = null; // Bot's LID in groups
 // Maps JID -> display name from pushName or message text
 const contactNameCache = new Map();
 
+function looksLikeRawIdentifier(value) {
+  const text = String(value || "").trim();
+  if (!text) return true;
+  if (text.includes("@")) return true;
+  return /^\+?\d{7,}$/.test(text) || /^\d{7,}(:\d+)?$/.test(text);
+}
+
+function getJidCacheKeys(jid) {
+  const raw = String(jid || "").trim();
+  if (!raw) return [];
+
+  const base = raw.split(":")[0];
+  const user = base.split("@")[0];
+  const keys = new Set([raw, base]);
+
+  if (user) {
+    keys.add(user);
+    keys.add(`${user}@s.whatsapp.net`);
+    keys.add(`${user}@lid`);
+  }
+
+  return [...keys].filter(Boolean);
+}
+
+function cacheDisplayNameForJid(jid, displayName) {
+  if (looksLikeRawIdentifier(displayName)) return;
+
+  for (const key of getJidCacheKeys(jid)) {
+    contactNameCache.set(key, displayName);
+  }
+}
+
+function getCachedDisplayNameForJid(jid) {
+  for (const key of getJidCacheKeys(jid)) {
+    const cached = contactNameCache.get(key);
+    if (!looksLikeRawIdentifier(cached)) {
+      return cached;
+    }
+  }
+
+  return null;
+}
+
+function getParticipantDisplayName(participant) {
+  if (!participant) return null;
+
+  return [
+    participant.notify,
+    participant.name,
+    participant.pushName,
+    participant.verifiedName,
+  ].find((name) => !looksLikeRawIdentifier(name)) || null;
+}
+
 // Horse excitement cooldown (chatJid -> timestamp)
 const horseCooldowns = new Map();
 const HORSE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
@@ -351,8 +405,8 @@ class MessageWrapper {
       fromMe: false,
       hasMedia: false, // We can enhance this later if needed
       getContact: async () => ({
-        pushname: this.quoted.number || "Unknown",
-        name: this.quoted.number || "Unknown",
+        pushname: "Unknown User",
+        name: "Unknown User",
       }),
       downloadMedia: async () => {
         // Try to download media from quoted message
@@ -581,12 +635,78 @@ function resolveDisplayNameFromJid(targetJid, groupMetadata = null) {
         entry.lid?.split("@")[0] === targetKey,
     );
 
-    if (participant?.notify || participant?.name) {
-      return participant.notify || participant.name;
+    const participantName = getParticipantDisplayName(participant);
+    if (participantName) {
+      cacheDisplayNameForJid(targetJid, participantName);
+      return participantName;
     }
   }
 
-  return contactNameCache.get(targetJid) || targetKey || "user";
+  return getCachedDisplayNameForJid(targetJid) || "Unknown User";
+}
+
+async function resolveQuotedDisplayName(sock, chatJid, quotedJid, stanzaId) {
+  if (quotedJid === botId || quotedJid === botLid) {
+    return "Eden";
+  }
+
+  const cachedName = getCachedDisplayNameForJid(quotedJid);
+  if (cachedName) {
+    return cachedName;
+  }
+
+  if (stanzaId) {
+    try {
+      const stored = messageStore.db
+        .prepare(
+          `SELECT sender_name, sender_jid
+           FROM messages
+           WHERE chat_id = ? AND message_id = ?
+           ORDER BY timestamp DESC
+           LIMIT 1`,
+        )
+        .get(chatJid, stanzaId);
+
+      if (stored && !looksLikeRawIdentifier(stored.sender_name)) {
+        cacheDisplayNameForJid(
+          stored.sender_jid || quotedJid,
+          stored.sender_name,
+        );
+        return stored.sender_name;
+      }
+    } catch (error) {
+      console.warn("Could not resolve quoted sender from store:", error.message);
+    }
+  }
+
+  if (quotedJid && isGroupChat(chatJid)) {
+    try {
+      const groupMetadata = await sock.groupMetadata(chatJid);
+      const targetKey = String(quotedJid).split("@")[0].split(":")[0];
+      const participant = groupMetadata.participants.find(
+        (p) =>
+          p.id === quotedJid ||
+          p.jid === quotedJid ||
+          p.lid === quotedJid ||
+          p.id?.split("@")[0] === targetKey ||
+          p.jid?.split("@")[0] === targetKey ||
+          p.lid?.split("@")[0] === targetKey,
+      );
+      const participantName = getParticipantDisplayName(participant);
+
+      if (participantName) {
+        cacheDisplayNameForJid(quotedJid, participantName);
+        cacheDisplayNameForJid(participant?.id, participantName);
+        cacheDisplayNameForJid(participant?.jid, participantName);
+        cacheDisplayNameForJid(participant?.lid, participantName);
+        return participantName;
+      }
+    } catch (error) {
+      console.warn("Could not resolve quoted sender from group:", error.message);
+    }
+  }
+
+  return "Unknown User";
 }
 
 function getAfkTargetsFromMessage(message) {
@@ -998,15 +1118,9 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
         if (update.notify || update.name) {
           const displayName = update.notify || update.name;
           // Cache using all possible ID formats
-          if (update.id) {
-            contactNameCache.set(update.id, displayName);
-          }
-          if (update.lid) {
-            contactNameCache.set(update.lid, displayName);
-          }
-          if (update.phoneNumber) {
-            contactNameCache.set(update.phoneNumber, displayName);
-          }
+          cacheDisplayNameForJid(update.id, displayName);
+          cacheDisplayNameForJid(update.lid, displayName);
+          cacheDisplayNameForJid(update.phoneNumber, displayName);
           console.log(
             `📇 Contact updated: ${displayName} (${update.id || update.lid})`,
           );
@@ -1071,7 +1185,7 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
           // Cache the pushName for this user for future mentions
           if (message.pushName) {
-            contactNameCache.set(senderJid, message.pushName);
+            cacheDisplayNameForJid(senderJid, message.pushName);
             console.log(`💾 Cached name: ${message.pushName} for ${senderJid}`);
 
             // Also cache using the phone number JID if this is a LID
@@ -1082,7 +1196,7 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                   (p) => p.lid === senderJid,
                 );
                 if (participant && participant.id) {
-                  contactNameCache.set(participant.id, message.pushName);
+                  cacheDisplayNameForJid(participant.id, message.pushName);
                   console.log(
                     `💾 Also cached for phone JID: ${participant.id}`,
                   );
@@ -1247,6 +1361,12 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                   message.message?.extendedTextMessage?.contextInfo;
                 if (contextInfo?.quotedMessage) {
                   const quotedMsg = contextInfo.quotedMessage;
+                  const quotedSenderName = await resolveQuotedDisplayName(
+                    sock,
+                    chatJid,
+                    contextInfo.participant,
+                    contextInfo.stanzaId,
+                  );
 
                   // Create a message-like object for the quoted message
                   return {
@@ -1258,6 +1378,8 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                       "",
                     userId: contextInfo.participant,
                     number: contextInfo.participant?.split("@")[0],
+                    pushName: quotedSenderName,
+                    senderName: quotedSenderName,
                     fromMe: contextInfo.participant === botId,
                     hasMedia: !!(
                       quotedMsg.imageMessage ||
@@ -1265,40 +1387,9 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                       quotedMsg.stickerMessage
                     ),
                     getContact: async () => {
-                      const quotedJid = contextInfo.participant;
-                      let quotedName = null;
-
-                      if (quotedJid && contactNameCache.has(quotedJid)) {
-                        quotedName = contactNameCache.get(quotedJid);
-                      }
-
-                      if (!quotedName && quotedJid && isGroupChat(chatJid)) {
-                        try {
-                          const groupMetadata = await sock.groupMetadata(chatJid);
-                          const participant = groupMetadata.participants.find(
-                            (p) =>
-                              p.id === quotedJid ||
-                              p.jid === quotedJid ||
-                              p.lid === quotedJid,
-                          );
-                          quotedName =
-                            participant?.notify ||
-                            participant?.name ||
-                            participant?.pushName ||
-                            null;
-                        } catch (error) {
-                          // Ignore metadata misses; the number fallback is enough.
-                        }
-                      }
-
-                      quotedName =
-                        quotedName ||
-                        contextInfo.participant?.split("@")[0] ||
-                        "Unknown";
-
                       return {
-                        pushname: quotedName,
-                        name: quotedName,
+                        pushname: quotedSenderName,
+                        name: quotedSenderName,
                       };
                     },
                     downloadMedia: async () => {

@@ -1150,21 +1150,27 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
 
     let senderName = await this.getMessageSenderName(quotedMessage);
 
-    if (!senderName || senderName === "Unknown") {
+    if (!this.isUsableDisplayName(senderName)) {
       senderName =
-        quotedMessage?.pushName ||
-        quotedMessage?.senderName ||
-        commandMessage?.quoted?.pushName ||
-        commandMessage?.quoted?.name ||
-        commandMessage?.quoted?.number ||
-        quotedJid?.split("@")[0] ||
-        "Unknown";
+        [
+          quotedMessage?.pushName,
+          quotedMessage?.senderName,
+          commandMessage?.quoted?.pushName,
+          commandMessage?.quoted?.name,
+        ].find((name) => this.isUsableDisplayName(name)) || "Unknown User";
     }
 
     return {
       senderName,
       avatarBuffer: await this.fetchProfilePictureBuffer(quotedJid),
     };
+  }
+
+  isUsableDisplayName(name) {
+    const text = String(name || "").trim();
+    if (!text || text === "Unknown") return false;
+    if (text.includes("@")) return false;
+    return !/^\+?\d{7,}$/.test(text) && !/^\d{7,}(:\d+)?$/.test(text);
   }
 
   async fetchProfilePictureBuffer(jid) {
