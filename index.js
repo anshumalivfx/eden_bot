@@ -1668,12 +1668,40 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                   Array.isArray(response.mediaList) &&
                   response.mediaList.length > 0
                 ) {
+                  const axios = require("axios");
+
+                  const resolveMediaItem = async (mediaItem) => {
+                    if (mediaItem?.image?.url) {
+                      const imageResponse = await axios.get(
+                        mediaItem.image.url,
+                        {
+                          responseType: "arraybuffer",
+                          timeout: 15000,
+                          headers: {
+                            "User-Agent":
+                              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                            Accept:
+                              "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                          },
+                        },
+                      );
+
+                      return {
+                        image: Buffer.from(imageResponse.data),
+                        caption: mediaItem.caption,
+                      };
+                    }
+
+                    return mediaItem;
+                  };
+
                   const batchResults = await Promise.allSettled(
-                    response.mediaList.map((mediaItem) =>
-                      sock.sendMessage(chatJid, mediaItem, {
+                    response.mediaList.map(async (mediaItem) => {
+                      const sendableMedia = await resolveMediaItem(mediaItem);
+                      return sock.sendMessage(chatJid, sendableMedia, {
                         quoted: quotedMsg,
-                      }),
-                    ),
+                      });
+                    }),
                   );
 
                   const failed = batchResults.filter(

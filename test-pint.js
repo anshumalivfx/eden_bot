@@ -10,6 +10,9 @@ async function run() {
     <html>
       <body>
         <img src="https://i.pinimg.com/236x/aa/bb/cc/sample-one.jpg" />
+        <img src="https://i.pinimg.com/236x/11/22/33/sample-two.jpg" />
+        <img src="https://i.pinimg.com/236x/44/55/66/sample-three.webp" />
+        <img src="https://i.pinimg.com/236x/77/88/99/sample-four.png" />
         <script>
           window.__data = "https://i.pinimg.com/236x/dd/ee/ff/sample-two.webp";
         </script>
@@ -51,8 +54,8 @@ async function run() {
   console.log("Result media count:", result?.mediaList?.length || 0);
   console.log("First image URL:", result?.mediaList?.[0]?.image?.url || "<missing>");
 
-  if (!result?.mediaList || result.mediaList.length !== 2) {
-    throw new Error(`Expected 2 Pinterest images, got ${result?.mediaList?.length || 0}`);
+  if (!result?.mediaList || result.mediaList.length !== 4) {
+    throw new Error(`Expected 4 Pinterest images, got ${result?.mediaList?.length || 0}`);
   }
 
   if (!String(result.mediaList[0].image.url).startsWith("https://i.pinimg.com/")) {

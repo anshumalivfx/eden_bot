@@ -2960,9 +2960,9 @@ Provide a structured analysis with emojis.`;
         );
       }
 
-      // Check if Pinterest yielded anything usable
-      if (images.length === 0) {
-        return `❌ Couldn't find Pinterest images for *${query}*. Try another keyword!`;
+      // Check if Pinterest yielded enough usable images
+      if (images.length < 4) {
+        return `❌ Couldn't find at least 4 Pinterest images for *${query}*. Try another keyword!`;
       }
 
       // Slice to requested count
