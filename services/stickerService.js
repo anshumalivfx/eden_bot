@@ -409,9 +409,10 @@ class StickerService {
       const outputPath = path.join(this.tempDir, `${filename}_text.webp`);
 
       // Clean and limit text length
-      const cleanText = text.trim().substring(0, 260); // Limit to 260 characters
-      const lines = this.wrapText(cleanText, 29); // Wrap text to fit nicely
+      const cleanText = this.prepareStickerText(text).substring(0, 260);
+      const lines = this.wrapText(cleanText, 27); // Wrap text to fit nicely
       const avatarDataUri = await this.createAvatarDataUri(options.avatarBuffer);
+      const backgroundBuffer = await this.createTextStickerBackgroundBuffer();
 
       // Create SVG for the text sticker
       const svgText = this.createTextStickerSVG(lines, senderName, {
@@ -419,11 +420,8 @@ class StickerService {
       });
 
       // Convert SVG to WebP using Sharp
-      await sharp(Buffer.from(svgText))
-        .resize(512, 512, {
-          fit: "contain",
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        })
+      await sharp(backgroundBuffer)
+        .composite([{ input: Buffer.from(svgText), blend: "over" }])
         .webp({ quality: 90 })
         .toFile(outputPath);
 
@@ -555,6 +553,20 @@ class StickerService {
     return lines.slice(0, 8); // Limit to 8 lines
   }
 
+  prepareStickerText(text) {
+    return String(text || "")
+      .trim()
+      .replace(/😔|😞|☹️|🙁/gu, ":(")
+      .replace(/😂|🤣/gu, "xD")
+      .replace(/😭/gu, "T_T")
+      .replace(/❤️|♥️/gu, "<3")
+      .replace(/🔥/gu, "fire")
+      .replace(/✨/gu, "*")
+      .replace(/\p{Extended_Pictographic}/gu, "")
+      .replace(/[\uFE0E\uFE0F]/g, "")
+      .replace(/\s+/g, " ");
+  }
+
   getTextStickerThemes() {
     return [
       {
@@ -581,42 +593,98 @@ class StickerService {
     }
   }
 
+  async createTextStickerBackgroundBuffer() {
+    const backgroundPath = path.join(
+      __dirname,
+      "..",
+      "background_chat",
+      "patrick-drooling-patrick-star.gif",
+    );
+
+    try {
+      return await sharp(backgroundPath, { animated: false })
+        .resize(512, 512, { fit: "cover" })
+        .blur(1)
+        .modulate({ brightness: 0.42, saturation: 0.7 })
+        .composite([
+          {
+            input: Buffer.from(
+              '<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" fill="#050708" opacity="0.56"/></svg>',
+            ),
+            blend: "over",
+          },
+        ])
+        .png()
+        .toBuffer();
+    } catch (error) {
+      console.warn(
+        "Could not load text sticker chat background:",
+        error.message,
+      );
+
+      return sharp(Buffer.from(this.createFallbackChatBackgroundSVG()))
+        .png()
+        .toBuffer();
+    }
+  }
+
+  createFallbackChatBackgroundSVG() {
+    return `
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#060808"/>
+  <g fill="none" stroke="#303536" stroke-width="4" opacity="0.35">
+    <circle cx="52" cy="60" r="26"/>
+    <circle cx="418" cy="86" r="34"/>
+    <path d="M126 36 h92 v70 h-92 z"/>
+    <path d="M32 286 h82 v64 h-82 z"/>
+    <path d="M362 302 h96 v78 h-96 z"/>
+    <path d="M152 390 c34 -48 96 -48 132 0"/>
+    <path d="M278 156 l38 26 -22 40 -42 -24 z"/>
+    <path d="M66 166 l70 46 -36 56 -72 -48 z"/>
+    <path d="M404 178 c44 0 76 30 76 68"/>
+  </g>
+</svg>`;
+  }
+
   createTextStickerSVG(lines, senderName, options = {}) {
     const safeLines = Array.isArray(lines) && lines.length ? lines : [""];
-    const safeSender = String(senderName || "Unknown").slice(0, 34);
+    const safeSender = this.formatDisplayName(senderName).slice(0, 26);
     const initials = this.getInitials(safeSender);
     const lineCount = safeLines.length;
-    const fontSize = lineCount > 6 ? 23 : lineCount > 4 ? 25 : 28;
+    const fontSize = lineCount > 6 ? 22 : lineCount > 4 ? 24 : 27;
     const lineHeight = Math.round(fontSize * 1.35);
-    const nameHeight = 28;
-    const verticalPadding = 28;
-    const contentHeight = nameHeight + safeLines.length * lineHeight;
-    const bubbleHeight = Math.min(378, contentHeight + verticalPadding * 2);
+    const headerHeight = 38;
+    const timeHeight = 28;
+    const verticalPadding = 20;
+    const contentHeight = headerHeight + safeLines.length * lineHeight + timeHeight;
+    const bubbleHeight = Math.min(390, contentHeight + verticalPadding * 2);
     const bubbleY = Math.round((512 - bubbleHeight) / 2);
-    const bubbleX = 118;
-    const bubbleWidth = 352;
-    const avatarSize = 76;
-    const avatarX = 28;
-    const avatarY = bubbleY + 6;
-    const textY = bubbleY + verticalPadding + nameHeight + fontSize;
+    const bubbleX = 88;
+    const bubbleWidth = 420;
+    const avatarSize = 58;
+    const avatarX = 18;
+    const avatarY = bubbleY + Math.max(20, Math.round((bubbleHeight - avatarSize) / 2));
+    const messageTop = bubbleY + verticalPadding + headerHeight + fontSize;
+    const timeLabel = this.getStickerTimeLabel();
+    const timeY = bubbleY + bubbleHeight - 20;
     const avatarMarkup = options.avatarDataUri
       ? `<image href="${options.avatarDataUri}" x="${avatarX}" y="${avatarY}" width="${avatarSize}" height="${avatarSize}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
       : `<circle cx="${avatarX + avatarSize / 2}" cy="${
           avatarY + avatarSize / 2
         }" r="${avatarSize / 2}" fill="url(#avatarGradient)"/>
          <text x="${avatarX + avatarSize / 2}" y="${
-          avatarY + avatarSize / 2 + 11
-        }" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#ffffff">${this.escapeXml(initials)}</text>`;
+          avatarY + avatarSize / 2 + 8
+        }" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#ffffff">${this.escapeXml(initials)}</text>`;
 
     return `
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#000000" flood-opacity="0.38"/>
     </filter>
     <linearGradient id="avatarGradient" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#00a884"/>
-      <stop offset="100%" stop-color="#128c7e"/>
+      <stop offset="0%" stop-color="#ff6fae"/>
+      <stop offset="100%" stop-color="#7f5af0"/>
     </linearGradient>
     <clipPath id="avatarClip">
       <circle cx="${avatarX + avatarSize / 2}" cy="${
@@ -627,10 +695,10 @@ class StickerService {
 
   <circle cx="${avatarX + avatarSize / 2}" cy="${
       avatarY + avatarSize / 2
-    }" r="${avatarSize / 2 + 4}" fill="#ffffff" opacity="0.95" filter="url(#bubbleShadow)"/>
+    }" r="${avatarSize / 2 + 3}" fill="#d9d0c8" opacity="0.95" filter="url(#bubbleShadow)"/>
   ${avatarMarkup}
 
-  <path d="M${bubbleX + 16} ${bubbleY}
+  <path d="M${bubbleX + 22} ${bubbleY}
            H${bubbleX + bubbleWidth - 24}
            Q${bubbleX + bubbleWidth} ${bubbleY} ${
       bubbleX + bubbleWidth
@@ -643,30 +711,53 @@ class StickerService {
            Q${bubbleX} ${bubbleY + bubbleHeight} ${bubbleX} ${
       bubbleY + bubbleHeight - 24
     }
-           V${bubbleY + 38}
-           L${bubbleX - 24} ${bubbleY + 26}
-           L${bubbleX} ${bubbleY + 82}
+           V${bubbleY + 52}
+           L${bubbleX - 20} ${bubbleY + 42}
+           L${bubbleX} ${bubbleY + 86}
            V${bubbleY + 24}
-           Q${bubbleX} ${bubbleY} ${bubbleX + 16} ${bubbleY} Z"
-        fill="#dcf8c6" filter="url(#bubbleShadow)"/>
+           Q${bubbleX} ${bubbleY} ${bubbleX + 22} ${bubbleY} Z"
+        fill="#202526" filter="url(#bubbleShadow)"/>
 
-  <text x="${bubbleX + 28}" y="${bubbleY + 38}"
+  <text x="${bubbleX + 24}" y="${bubbleY + 35}"
         font-family="Arial, Helvetica, sans-serif"
-        font-size="22"
+        font-size="24"
         font-weight="700"
-        fill="#075e54">${this.escapeXml(safeSender)}</text>
+        fill="#ff74ad">~ ${this.escapeXml(safeSender)}</text>
 
   ${safeLines
     .map(
       (line, index) => `
-  <text x="${bubbleX + 28}" y="${textY + index * lineHeight}"
+  <text x="${bubbleX + 24}" y="${messageTop + index * lineHeight}"
         font-family="Arial, Helvetica, sans-serif"
         font-size="${fontSize}"
-        font-weight="400"
-        fill="#111b21">${this.escapeXml(line)}</text>`,
+        font-weight="650"
+        fill="#f1f4f3">${this.escapeXml(line)}</text>`,
     )
     .join("")}
+
+  <text x="${bubbleX + bubbleWidth - 28}" y="${timeY}"
+        text-anchor="end"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="22"
+        font-weight="700"
+        fill="#aeb5b7">${this.escapeXml(timeLabel)}</text>
 </svg>`;
+  }
+
+  formatDisplayName(name) {
+    const text = String(name || "").trim();
+    if (!text || text.includes("@") || /^\+?\d{7,}$/.test(text)) {
+      return "Unknown User";
+    }
+
+    return text;
+  }
+
+  getStickerTimeLabel() {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes(),
+    ).padStart(2, "0")}`;
   }
 
   getInitials(name) {
