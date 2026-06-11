@@ -85,6 +85,18 @@ let botLid = null; // Bot's LID in groups
 // Contact name cache for mentions
 // Maps JID -> display name from pushName or message text
 const contactNameCache = new Map();
+const pollResultsCache = new Map();
+
+function unwrapMessageContent(message) {
+  const msg = message?.message || message || {};
+  return (
+    msg.ephemeralMessage?.message ||
+    msg.viewOnceMessage?.message ||
+    msg.viewOnceMessageV2?.message ||
+    msg.documentWithCaptionMessage?.message ||
+    msg
+  );
+}
 
 function looksLikeRawIdentifier(value) {
   const text = String(value || "").trim();
@@ -127,6 +139,221 @@ function getCachedDisplayNameForJid(jid) {
   }
 
   return null;
+}
+
+function getPollCreationMessage(content) {
+  return (
+    content?.pollCreationMessage ||
+    content?.pollCreationMessageV2 ||
+    content?.pollCreationMessageV3 ||
+    null
+  );
+}
+
+function getPollOptionNames(pollCreation) {
+  const options =
+    pollCreation?.options ||
+    pollCreation?.selectableOptions ||
+    pollCreation?.pollOptions ||
+    [];
+
+  return options
+    .map((option) => option?.optionName || option?.name || option?.text || "")
+    .filter(Boolean);
+}
+
+function getPollQuestion(pollCreation) {
+  return (
+    pollCreation?.name ||
+    pollCreation?.title ||
+    pollCreation?.question ||
+    "WhatsApp Poll"
+  );
+}
+
+function resolveDisplayNameForPollVoter(jid, groupMetadata = null) {
+  const cached = getCachedDisplayNameForJid(jid);
+  if (cached) return cached;
+  return resolveDisplayNameFromJid(jid, groupMetadata);
+}
+
+function normalizePollVoteOption(option) {
+  if (!option) return "";
+  if (typeof option === "string") return option;
+  return option.optionName || option.name || option.text || option.id || "";
+}
+
+function getSelectedPollOptionsFromUpdate(pollUpdateMessage) {
+  const vote = pollUpdateMessage?.vote || pollUpdateMessage?.pollVote || {};
+  const selected =
+    vote.selectedOptions ||
+    vote.selectedOptionNames ||
+    vote.options ||
+    pollUpdateMessage?.selectedOptions ||
+    [];
+
+  return selected.map(normalizePollVoteOption).filter(Boolean);
+}
+
+async function refreshPollAggregate(pollEntry, groupMetadata = null) {
+  let aggregateVotes = null;
+
+  try {
+    const { getAggregateVotesInPollMessage } = require("@whiskeysockets/baileys");
+    if (typeof getAggregateVotesInPollMessage === "function") {
+      aggregateVotes = await getAggregateVotesInPollMessage({
+        message: pollEntry.creationMessage,
+        pollUpdates: pollEntry.updates.map(
+          (update) => update?.pollUpdateMessage || update,
+        ),
+      });
+    }
+  } catch (error) {
+    console.warn("Could not aggregate encrypted poll votes:", error.message);
+  }
+
+  const optionMap = new Map(
+    pollEntry.options.map((name) => [name, { name, voters: [] }]),
+  );
+
+  if (Array.isArray(aggregateVotes) && aggregateVotes.length > 0) {
+    for (const voteGroup of aggregateVotes) {
+      const optionName = voteGroup?.name || voteGroup?.optionName;
+      if (!optionName) continue;
+
+      const option = optionMap.get(optionName) || {
+        name: optionName,
+        voters: [],
+      };
+
+      option.voters = (voteGroup.voters || [])
+        .map((jid) => ({
+          jid,
+          name: resolveDisplayNameForPollVoter(jid, groupMetadata),
+        }))
+        .filter((voter) => voter.jid);
+      optionMap.set(optionName, option);
+    }
+  } else {
+    const latestVoteByVoter = new Map();
+
+    for (const update of pollEntry.updates) {
+      const voterJid = update?.senderJid;
+      const selectedOptions = getSelectedPollOptionsFromUpdate(
+        update?.pollUpdateMessage,
+      );
+      if (voterJid) {
+        latestVoteByVoter.set(voterJid, selectedOptions);
+      }
+    }
+
+    for (const [voterJid, selectedOptions] of latestVoteByVoter) {
+      for (const optionName of selectedOptions) {
+        const option = optionMap.get(optionName) || {
+          name: optionName,
+          voters: [],
+        };
+        option.voters.push({
+          jid: voterJid,
+          name: resolveDisplayNameForPollVoter(voterJid, groupMetadata),
+        });
+        optionMap.set(optionName, option);
+      }
+    }
+  }
+
+  pollEntry.results = [...optionMap.values()];
+  pollEntry.totalVotes = pollEntry.results.reduce(
+    (total, option) => total + option.voters.length,
+    0,
+  );
+  pollEntry.updatedAt = Date.now();
+}
+
+async function trackPollMessage(sock, message) {
+  const chatJid = message?.key?.remoteJid;
+  const content = unwrapMessageContent(message);
+  if (!chatJid || !content) return;
+
+  const pollCreation = getPollCreationMessage(content);
+  const pollUpdateMessage = content.pollUpdateMessage;
+
+  if (!pollCreation && !pollUpdateMessage) return;
+
+  let groupMetadata = null;
+  if (chatJid.endsWith("@g.us")) {
+    groupMetadata = await sock.groupMetadata(chatJid).catch(() => null);
+  }
+
+  if (pollCreation) {
+    const pollId = message.key.id;
+    const senderJid = message.key.participant || message.key.remoteJid;
+    const senderName =
+      message.pushName || resolveDisplayNameForPollVoter(senderJid, groupMetadata);
+
+    pollResultsCache.set(`${chatJid}:${pollId}`, {
+      id: pollId,
+      chatJid,
+      creatorJid: senderJid,
+      creatorName: senderName,
+      question: getPollQuestion(pollCreation),
+      options: getPollOptionNames(pollCreation),
+      creationMessage: content,
+      updates: [],
+      results: getPollOptionNames(pollCreation).map((name) => ({
+        name,
+        voters: [],
+      })),
+      totalVotes: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    console.log(`📊 Tracking poll: ${getPollQuestion(pollCreation)}`);
+    return;
+  }
+
+  const pollKey = pollUpdateMessage?.pollCreationMessageKey;
+  const pollId = pollKey?.id;
+  if (!pollId) {
+    console.warn("Received poll update without pollCreationMessageKey.id");
+    return;
+  }
+
+  const cacheKey = `${chatJid}:${pollId}`;
+  const pollEntry = pollResultsCache.get(cacheKey);
+  if (!pollEntry) {
+    console.warn(`Received poll update for untracked poll ${pollId}`);
+    return;
+  }
+
+  pollEntry.updates.push({
+    pollUpdateMessage,
+    senderJid: message.key.participant || message.key.remoteJid,
+    key: message.key,
+  });
+
+  await refreshPollAggregate(pollEntry, groupMetadata);
+  pollResultsCache.set(cacheKey, pollEntry);
+}
+
+async function getTrackedPollResults(chatJid, pollId = null, sock = null) {
+  let matches = [...pollResultsCache.values()].filter(
+    (entry) => entry.chatJid === chatJid,
+  );
+
+  if (pollId) {
+    matches = matches.filter((entry) => entry.id === pollId);
+  }
+
+  const pollEntry = matches.sort((a, b) => b.updatedAt - a.updatedAt)[0] || null;
+  if (!pollEntry) return null;
+
+  if (sock && chatJid?.endsWith("@g.us")) {
+    const groupMetadata = await sock.groupMetadata(chatJid).catch(() => null);
+    await refreshPollAggregate(pollEntry, groupMetadata);
+  }
+
+  return pollEntry;
 }
 
 function getParticipantDisplayName(participant) {
@@ -1146,6 +1373,8 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
           const owner = isOwner(senderName);
           const senderJid = message.key.participant || message.key.remoteJid;
 
+          await trackPollMessage(sock, message);
+
           // Enforce active mutes in groups: delete message and notify remaining time.
           if (isGroup) {
             const muteStatus = muteStore.isMuted(senderJid, chatJid);
@@ -1355,6 +1584,9 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                   null,
                   limit,
                 );
+              },
+              getPollResults: async (pollId = null) => {
+                return getTrackedPollResults(chatJid, pollId, sock);
               },
               getQuotedMessage: async () => {
                 const contextInfo =

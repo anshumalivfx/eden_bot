@@ -111,6 +111,10 @@ class CommandHandler {
       viina: this.addViinaOverlay.bind(this),
       vv: this.resendImage.bind(this),
       pfp: this.getRepliedUserPfp.bind(this),
+      poll: this.showPollResults.bind(this),
+      polls: this.showPollResults.bind(this),
+      pollresult: this.showPollResults.bind(this),
+      pollresults: this.showPollResults.bind(this),
       upscale: this.upscaleSticker.bind(this),
       up: this.upscaleSticker.bind(this),
       // Admin commands
@@ -291,6 +295,7 @@ Hi! I'm Eden - your friendly AI assistant! 😊
 - \`-viina\` - Add viina overlay at bottom-right (send/reply to image) 🍾
 - \`-vv\` - Resend an image from message/reply 🖼️
 - \`-pfp\` - Reply to a message and fetch that person's profile photo 👤
+- \`-poll\` - Show WhatsApp poll results as a graphic 📊
 - \`-upscale\` or \`-up\` - Reply to sticker and convert to media ✨
 
 *🎨 Sticker Usage:*
@@ -358,6 +363,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-viina\` - Add viina overlay at bottom-right (send/reply to image) (🍾 NEW!)
 - \`-vv\` - Resend image from message/reply (🖼️ NEW!)
 - \`-pfp\` - Reply to message and download that person's profile photo (👤 NEW!)
+- \`-poll\` - Show WhatsApp poll results as a graphic (📊 NEW!)
 - \`-upscale\` or \`-up\` - Reply to sticker and convert to media (✨ NEW!)
 - \`-status\` or \`-stats\` - Check bot statistics and uptime
 - \`-afk\` - Mark yourself away in this chat
@@ -399,6 +405,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 • \`-viina\` = Add viina overlay at bottom-right (send/reply to image)
 • \`-vv\` = Resend an image from message/reply
 • \`-pfp\` = Reply to a message and fetch that person's profile photo
+• \`-poll\` = Reply to a poll or show latest poll results as an image
 • \`-upscale\` or \`-up\` = Reply to sticker and convert to media
 • Models: flux, turbo, flux-realism, flux-anime, flux-3d
 • Example: \`-imagine a cyberpunk city at night\`
@@ -3546,6 +3553,208 @@ Provide a structured analysis with emojis.`;
     } catch (error) {
       console.error("PFP command error:", error);
       return "❌ Failed to fetch profile photo. Try again in a moment.";
+    }
+  }
+
+  escapeSvgText(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  truncateText(value, maxLength = 32) {
+    const text = String(value || "").trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
+  }
+
+  wrapSvgText(value, maxChars = 34, maxLines = 2) {
+    const words = String(value || "Untitled poll").trim().split(/\s+/);
+    const lines = [];
+    let line = "";
+
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (candidate.length > maxChars && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+
+      if (lines.length === maxLines) break;
+    }
+
+    if (line && lines.length < maxLines) lines.push(line);
+    if (words.join(" ").length > lines.join(" ").length && lines.length) {
+      lines[lines.length - 1] = this.truncateText(lines[lines.length - 1], maxChars);
+    }
+
+    return lines.length ? lines : ["Untitled poll"];
+  }
+
+  avatarPlaceholderSvg(name, color = "#2563eb") {
+    const initial = this.escapeSvgText(
+      String(name || "?")
+        .trim()
+        .charAt(0)
+        .toUpperCase() || "?",
+    );
+
+    return Buffer.from(
+      `<svg width="96" height="96" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="96" rx="48" fill="${color}"/>
+        <text x="48" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" font-weight="800" fill="#ffffff">${initial}</text>
+      </svg>`,
+    );
+  }
+
+  async makeCircularAvatarBuffer(voter, color) {
+    const sharp = require("sharp");
+    let avatarBuffer = await this.fetchProfilePictureBuffer(voter.jid);
+
+    if (!avatarBuffer) {
+      avatarBuffer = this.avatarPlaceholderSvg(voter.name, color);
+    }
+
+    return sharp(avatarBuffer, { failOn: "none" })
+      .resize(72, 72, { fit: "cover" })
+      .composite([
+        {
+          input: Buffer.from(
+            `<svg width="72" height="72" xmlns="http://www.w3.org/2000/svg"><circle cx="36" cy="36" r="36" fill="#fff"/></svg>`,
+          ),
+          blend: "dest-in",
+        },
+      ])
+      .png()
+      .toBuffer();
+  }
+
+  async renderPollResultsImage(poll) {
+    const sharp = require("sharp");
+    const width = 1080;
+    const optionHeight = 250;
+    const headerHeight = 230;
+    const footerHeight = 90;
+    const options = Array.isArray(poll.results) ? poll.results : [];
+    const height = Math.max(720, headerHeight + options.length * optionHeight + footerHeight);
+    const totalVotes = poll.totalVotes || options.reduce((sum, option) => sum + (option.voters || []).length, 0);
+    const maxVotes = Math.max(1, ...options.map((option) => (option.voters || []).length));
+    const palette = ["#2563eb", "#dc2626", "#059669", "#7c3aed", "#ea580c", "#0891b2"];
+    const sideLabels = ["LEFT SIDE", "RIGHT SIDE", "THIRD SIDE", "FOURTH SIDE", "FIFTH SIDE", "SIXTH SIDE"];
+    const overlays = [];
+
+    const titleLines = this.wrapSvgText(poll.question, 42, 2)
+      .map(
+        (line, index) =>
+          `<text x="64" y="${82 + index * 58}" font-family="Arial, sans-serif" font-size="46" font-weight="900" fill="#111827">${this.escapeSvgText(line)}</text>`,
+      )
+      .join("");
+
+    const optionBlocks = [];
+
+    for (let index = 0; index < options.length; index++) {
+      const option = options[index];
+      const voters = option.voters || [];
+      const y = headerHeight + index * optionHeight;
+      const color = palette[index % palette.length];
+      const pct = totalVotes > 0 ? Math.round((voters.length / totalVotes) * 100) : 0;
+      const barWidth = Math.max(16, Math.round((voters.length / maxVotes) * 610));
+      const avatarY = y + 126;
+      const visibleVoters = voters.slice(0, 8);
+
+      optionBlocks.push(`
+        <g>
+          <rect x="48" y="${y + 18}" width="984" height="214" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="2"/>
+          <rect x="48" y="${y + 18}" width="14" height="214" rx="7" fill="${color}"/>
+          <text x="86" y="${y + 68}" font-family="Arial, sans-serif" font-size="22" font-weight="800" fill="${color}">${sideLabels[index] || `SIDE ${index + 1}`}</text>
+          <text x="86" y="${y + 112}" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#111827">${this.escapeSvgText(this.truncateText(option.name, 36))}</text>
+          <rect x="86" y="${y + 142}" width="610" height="22" rx="11" fill="#e5e7eb"/>
+          <rect x="86" y="${y + 142}" width="${barWidth}" height="22" rx="11" fill="${color}"/>
+          <text x="948" y="${y + 88}" text-anchor="end" font-family="Arial, sans-serif" font-size="52" font-weight="900" fill="#111827">${voters.length}</text>
+          <text x="948" y="${y + 122}" text-anchor="end" font-family="Arial, sans-serif" font-size="22" font-weight="800" fill="#6b7280">${pct}%</text>
+        </g>`);
+
+      for (let voterIndex = 0; voterIndex < visibleVoters.length; voterIndex++) {
+        const voter = visibleVoters[voterIndex];
+        const x = 86 + voterIndex * 112;
+        const avatarBuffer = await this.makeCircularAvatarBuffer(voter, color);
+        overlays.push({ input: avatarBuffer, left: x, top: avatarY });
+        optionBlocks.push(`
+          <text x="${x + 36}" y="${avatarY + 92}" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#374151">${this.escapeSvgText(this.truncateText(voter.name || "User", 11))}</text>`);
+      }
+
+      if (voters.length > visibleVoters.length) {
+        optionBlocks.push(`
+          <circle cx="${86 + visibleVoters.length * 112 + 36}" cy="${avatarY + 36}" r="36" fill="#111827"/>
+          <text x="${86 + visibleVoters.length * 112 + 36}" y="${avatarY + 45}" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="900" fill="#ffffff">+${voters.length - visibleVoters.length}</text>`);
+      }
+    }
+
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="${width}" height="${height}" fill="#f8fafc"/>
+        <rect x="0" y="0" width="${width}" height="180" fill="#e0f2fe"/>
+        <rect x="0" y="180" width="${width}" height="${height - 180}" fill="#f8fafc"/>
+        <text x="64" y="46" font-family="Arial, sans-serif" font-size="22" font-weight="900" fill="#0369a1">WHATSAPP POLL RESULTS</text>
+        ${titleLines}
+        <text x="64" y="190" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#475569">Total votes: ${totalVotes} • Created by ${this.escapeSvgText(this.truncateText(poll.creatorName || "Someone", 28))}</text>
+        ${optionBlocks.join("")}
+        <text x="540" y="${height - 34}" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="800" fill="#64748b">Generated by Eden</text>
+      </svg>`;
+
+    return sharp(Buffer.from(svg))
+      .composite(overlays)
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  }
+
+  /**
+   * Show WhatsApp poll results as a graphic.
+   */
+  async showPollResults(args, message) {
+    try {
+      if (typeof message.getPollResults !== "function") {
+        return "❌ Poll tracking is unavailable in this runtime. Start the bot from `index.js`.";
+      }
+
+      const quotedRaw = message.quoted?.raw || {};
+      const quotedPollId =
+        quotedRaw.pollCreationMessage ||
+        quotedRaw.pollCreationMessageV2 ||
+        quotedRaw.pollCreationMessageV3
+          ? message.quoted.stanzaId
+          : null;
+      const poll = await message.getPollResults(quotedPollId);
+
+      if (!poll) {
+        return "📊 I don't have poll results yet. Reply to a poll with `-poll`, or use `-poll` after people vote in a poll I've seen.";
+      }
+
+      const imageBuffer = await this.renderPollResultsImage(poll);
+      const mentions = [
+        ...new Set(
+          (poll.results || [])
+            .flatMap((option) => option.voters || [])
+            .map((voter) => voter.jid)
+            .filter(Boolean),
+        ),
+      ];
+
+      return {
+        text: `📊 Poll results: ${poll.question}`,
+        mentions,
+        media: {
+          image: imageBuffer,
+        },
+      };
+    } catch (error) {
+      console.error("Poll results command error:", error);
+      return "❌ Failed to render poll results. WhatsApp polls enjoy being mysterious, apparently.";
     }
   }
 
