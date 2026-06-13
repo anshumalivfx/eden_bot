@@ -473,8 +473,8 @@ async function sendAlbumMessage(sock, chatJid, mediaItems, quotedMsg = null) {
       { upload: sock.waUploadToServer },
     );
 
-    content.imageMessage.contextInfo = {
-      ...(content.imageMessage.contextInfo || {}),
+    content.messageContextInfo = {
+      ...(content.messageContextInfo || {}),
       messageAssociation: {
         associationType: proto.MessageAssociation.AssociationType.MEDIA_ALBUM,
         parentMessageKey: albumMessage.key,

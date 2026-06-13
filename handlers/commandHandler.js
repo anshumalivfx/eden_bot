@@ -3055,12 +3055,8 @@ Provide a structured analysis with emojis.`;
       images = images.slice(0, count);
 
       // Format response
-      const mediaList = images.map((url, index) => ({
+      const mediaList = images.map((url) => ({
         image: { url },
-        caption:
-          index === 0
-            ? `📌 *Image Search*\n🔎 Query: ${query}\n🖼️ Found ${images.length} images`
-            : undefined,
       }));
 
       return {
