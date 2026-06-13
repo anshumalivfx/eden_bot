@@ -81,8 +81,7 @@ See: [index.js](index.js) command response media send logic
 All special mentions (Heikki, Yousef) use per-chat cooldowns stored in Maps:
 - **Heikki berserk:** 20-minute cooldown (prevents spam retriggers in same chat)
 - **Yousef berserk:** 20-minute cooldown (positive praise mode)
-- **Horse excitement:** 10-minute cooldown per chat
-- Maps: `heikkiCooldowns`, `yousefCooldowns`, `horseCooldowns`
+- Maps: `heikkiCooldowns`, `yousefCooldowns`
 
 ## 🔧 Development Conventions
 

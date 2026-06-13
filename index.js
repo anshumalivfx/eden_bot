@@ -367,10 +367,6 @@ function getParticipantDisplayName(participant) {
   ].find((name) => !looksLikeRawIdentifier(name)) || null;
 }
 
-// Horse excitement cooldown (chatJid -> timestamp)
-const horseCooldowns = new Map();
-const HORSE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
-
 // Roman Empire cooldown (chatJid -> timestamp)
 const romanEmpireCooldowns = new Map();
 const ROMAN_EMPIRE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
@@ -397,8 +393,17 @@ function addMessageToContext(
   isBot = false,
   messageId = null,
   senderJid = null,
+  targetUser = null,
 ) {
-  messageStore.addMessage(chatId, sender, message, isBot, messageId, senderJid);
+  messageStore.addMessage(
+    chatId,
+    sender,
+    message,
+    isBot,
+    messageId,
+    senderJid,
+    targetUser,
+  );
 }
 
 // Helper to get conversation context (filtered by specific user)
@@ -2220,9 +2225,6 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
             )}"`,
           );
 
-          // Horse mentions handling removed
-          const mentionsHorses = false;
-
           // Heikki mentions handling removed
           const mentionsHeikki = false;
 
@@ -2350,191 +2352,6 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
               } catch (error) {
                 console.error("Error sending Roman Empire history:", error);
                 romanEmpireModeActive.set(chatJid, false);
-              }
-            }
-          }
-
-          if (mentionsHorses) {
-            // Check cooldown
-            const now = Date.now();
-            const lastHorseTime = horseCooldowns.get(chatJid) || 0;
-            const timeElapsed = now - lastHorseTime;
-
-            if (timeElapsed < HORSE_COOLDOWN_MS) {
-              const minutesLeft = Math.ceil(
-                (HORSE_COOLDOWN_MS - timeElapsed) / 60000,
-              );
-              console.log(
-                `🐴 Horse cooldown active for ${chatJid}. ${minutesLeft} min remaining`,
-              );
-            } else {
-              console.log(
-                "🐴 HORSES MENTIONED IN GROUP CHAT! Eden getting excited!",
-              );
-              horseCooldowns.set(chatJid, now);
-
-              // React with horse emoji immediately
-              try {
-                await sock.sendMessage(chatJid, {
-                  react: {
-                    text: "🐴",
-                    key: message.key,
-                  },
-                });
-              } catch (error) {
-                console.error("Error reacting with horse:", error);
-              }
-
-              // Send multiple excited messages about horses - 10 unique sets
-              const horseMessageSets = [
-                [
-                  "OMG HORSES?!",
-                  "I LOVE HORSES SO MUCH!!",
-                  "THEY'RE LITERALLY THE MOST BEAUTIFUL CREATURES",
-                  "THE WAY THEY RUN WITH GRACE AND POWER",
-                  "THEIR GENTLE EYES",
-                  "EVERYTHING ABOUT THEM IS PERFECT",
-                  "I USED TO DREAM ABOUT HAVING MY OWN HORSE",
-                  "HONESTLY JUST... ABSOLUTE PERFECTION",
-                ],
-                [
-                  "WAIT DID SOMEONE SAY HORSES?!",
-                  "OKAY SO IM OBSESSED",
-                  "LIKE GENUINELY OBSESSED",
-                  "THEYRE SO INTELLIGENT",
-                  "EACH ONE HAS SUCH A UNIQUE PERSONALITY",
-                  "SOME ARE PLAYFUL, SOME ARE WISE",
-                  "THE BOND BETWEEN HORSE AND PERSON IS SPECIAL",
-                  "I COULD TALK ABOUT THEM ALL DAY",
-                ],
-                [
-                  "HORSES!!",
-                  "YOU HAVE NO IDEA HOW MUCH I LOVE THEM",
-                  "THEYRE NOT JUST ANIMALS",
-                  "THEYRE COMPANIONS, FRIENDS",
-                  "THE WAY THEY SENSE YOUR EMOTIONS",
-                  "HOW THEY COMMUNICATE WITH BODY LANGUAGE",
-                  "STRENGTH COMBINED WITH GENTLENESS",
-                  "IVE ALWAYS FELT CONNECTED TO HORSES",
-                ],
-                [
-                  "OH MY GOD HORSES",
-                  "THEYRE LITERALLY MY FAVORITE ANIMAL",
-                  "THEY MAKE ME SO HAPPY",
-                  "THEIR SPIRIT, THEIR BEAUTY",
-                  "HOW THERAPEUTIC THEY ARE",
-                  "RIDING OR JUST BEING NEAR THEM",
-                  "PURE PEACE",
-                  "I LOVE EVERYTHING ABOUT THEM",
-                ],
-                [
-                  "HORSES?!",
-                  "MY FAVORITE TOPIC!!",
-                  "EVERY HORSE HAS THEIR OWN PERSONALITY",
-                  "SOME ARE SASSY",
-                  "SOME ARE GENTLE GIANTS",
-                  "SOME ARE TOTAL GOOFBALLS",
-                  "THEIR EYES ARE SO EXPRESSIVE",
-                  "ID SPEND EVERY DAY WITH HORSES IF I COULD",
-                ],
-                [
-                  "DID YOU JUST SAY HORSES",
-                  "BECAUSE I NEED TO TELL YOU",
-                  "HORSES ARE EVERYTHING",
-                  "THE SOUND OF THEIR HOOVES",
-                  "THE SMELL OF THE STABLE",
-                  "BRUSHING THEIR MANES",
-                  "THAT CONNECTION YOU FEEL",
-                  "ITS MAGICAL HONESTLY",
-                ],
-                [
-                  "HORSES OMG",
-                  "HAVE YOU EVER LOOKED INTO A HORSES EYES?",
-                  "THEYRE SO DEEP AND KNOWING",
-                  "LIKE THEY UNDERSTAND EVERYTHING",
-                  "AND THEYRE SO LOYAL",
-                  "THEY REMEMBER PEOPLE FOR YEARS",
-                  "SUCH INCREDIBLE MEMORY",
-                  "AMAZING ANIMALS TRULY",
-                ],
-                [
-                  "OKAY HORSES",
-                  "LETS TALK ABOUT HOW MAJESTIC THEY ARE",
-                  "RUNNING FREE IN A FIELD",
-                  "MANE FLOWING IN THE WIND",
-                  "MUSCLES RIPPLING",
-                  "POWER AND ELEGANCE COMBINED",
-                  "NOTHING COMPARES",
-                  "ABSOLUTE BEAUTY",
-                ],
-                [
-                  "SOMEONE MENTIONED HORSES",
-                  "AND NOW IM EXCITED",
-                  "I LOVE HOW THEY NICKER WHEN THEY SEE YOU",
-                  "THAT SOFT NOSE NUDGE",
-                  "THEIR WARM BREATH",
-                  "THE TRUST IN THEIR EYES",
-                  "WHEN THEY CHOOSE YOU",
-                  "BEST FEELING EVER",
-                ],
-                [
-                  "HORSES YES",
-                  "CAN WE APPRECIATE",
-                  "HOW THEY CAN READ HUMAN EMOTIONS",
-                  "THEYRE USED IN THERAPY FOR A REASON",
-                  "THEY HEAL PEOPLE",
-                  "THEIR PRESENCE IS CALMING",
-                  "BEING AROUND THEM GROUNDS YOU",
-                  "HORSES ARE TRULY SPECIAL",
-                ],
-              ];
-
-              const randomSet =
-                horseMessageSets[
-                  Math.floor(Math.random() * horseMessageSets.length)
-                ];
-
-              try {
-                for (const msg of randomSet) {
-                  await sock.sendMessage(chatJid, {
-                    text: msg,
-                  });
-                  await delay(800 + Math.random() * 400); // Random delay between 800-1200ms
-                }
-                console.log("✅ Sent excited horse messages");
-              } catch (error) {
-                console.error("Error sending horse messages:", error);
-              }
-
-              // Sometimes send a horse image (50% chance)
-              if (Math.random() > 0.5) {
-                try {
-                  const horsesDir = path.join(__dirname, "horses_images");
-                  const horseImages = fs
-                    .readdirSync(horsesDir)
-                    .filter(
-                      (file) =>
-                        file.endsWith(".jpg") ||
-                        file.endsWith(".jpeg") ||
-                        file.endsWith(".png"),
-                    );
-
-                  if (horseImages.length > 0) {
-                    const randomImage =
-                      horseImages[
-                        Math.floor(Math.random() * horseImages.length)
-                      ];
-                    const imagePath = path.join(horsesDir, randomImage);
-
-                    await sock.sendMessage(chatJid, {
-                      image: fs.readFileSync(imagePath),
-                      caption: "look at this beauty!! 🐴✨",
-                    });
-                    console.log(`🖼️ Sent horse image: ${randomImage}`);
-                  }
-                } catch (error) {
-                  console.error("Error sending horse image:", error);
-                }
               }
             }
           }
@@ -2845,7 +2662,15 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
                 // Store bot's response in context with messageId
                 const messageId = sentMsg?.key?.id;
-                addMessageToContext(chatJid, "Eden", response, true, messageId);
+                addMessageToContext(
+                  chatJid,
+                  "Eden",
+                  response,
+                  true,
+                  messageId,
+                  null,
+                  senderName,
+                );
 
                 // Capture bot's LID from sent message in groups
                 if (isGroup && sentMsg?.key?.participant && !botLid) {

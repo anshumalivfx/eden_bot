@@ -38,6 +38,14 @@ class MessageStore {
       CREATE INDEX IF NOT EXISTS idx_message_id ON messages(message_id);
     `);
 
+    // Migration: add target_user column so bot replies can be tied to
+    // the person they were addressed to (avoids mixing one user's
+    // conversation into another user's context)
+    const columns = this.db.prepare("PRAGMA table_info(messages)").all();
+    if (!columns.some((col) => col.name === "target_user")) {
+      this.db.exec("ALTER TABLE messages ADD COLUMN target_user TEXT");
+    }
+
     console.log("✅ SQLite message store initialized");
   }
 
@@ -48,7 +56,8 @@ class MessageStore {
     message,
     isBot = false,
     messageId = null,
-    senderJid = null
+    senderJid = null,
+    targetUser = null
   ) {
     // Check if message already exists (prevent duplicates)
     if (messageId) {
@@ -61,8 +70,8 @@ class MessageStore {
     }
 
     const stmt = this.db.prepare(`
-      INSERT INTO messages (chat_id, sender_name, sender_jid, message, is_bot, message_id, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (chat_id, sender_name, sender_jid, message, is_bot, message_id, timestamp, target_user)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     try {
@@ -73,7 +82,8 @@ class MessageStore {
         message,
         isBot ? 1 : 0,
         messageId,
-        Date.now()
+        Date.now(),
+        targetUser
       );
     } catch (error) {
       console.error("Error adding message to database:", error);
@@ -86,14 +96,26 @@ class MessageStore {
     let params;
 
     if (targetUser) {
-      // Get messages between bot and specific user only, deduplicated
+      // Get messages between bot and specific user only, deduplicated.
+      // Bot replies are only included if they were addressed to this
+      // user (or have no recorded target, e.g. older messages) - this
+      // stops a reply meant for one person from bleeding into another
+      // person's conversation context.
       query = `
-        SELECT sender_name, sender_jid, message, is_bot, message_id, timestamp
+        SELECT sender_name, sender_jid, message, is_bot, message_id, timestamp, target_user
         FROM messages
-        WHERE chat_id = ? AND (is_bot = 1 OR sender_name = ? OR sender_jid = ?)
+        WHERE chat_id = ?
+          AND (
+            sender_name = ? OR sender_jid = ?
+            OR (is_bot = 1 AND (target_user IS NULL OR target_user = ?))
+          )
         AND id IN (
           SELECT MIN(id) FROM messages
-          WHERE chat_id = ? AND (is_bot = 1 OR sender_name = ? OR sender_jid = ?)
+          WHERE chat_id = ?
+            AND (
+              sender_name = ? OR sender_jid = ?
+              OR (is_bot = 1 AND (target_user IS NULL OR target_user = ?))
+            )
           GROUP BY message, sender_name, timestamp
         )
         ORDER BY timestamp DESC
@@ -103,7 +125,9 @@ class MessageStore {
         chatId,
         targetUser,
         targetUser,
+        targetUser,
         chatId,
+        targetUser,
         targetUser,
         targetUser,
         limit,
