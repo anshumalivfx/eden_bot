@@ -2969,77 +2969,76 @@ Provide a structured analysis with emojis.`;
 
       const axios = require("axios");
 
-      // Helper to normalize URLs
-      const normalizeUrl = (rawUrl) => {
-        if (!rawUrl) return "";
-        return String(rawUrl)
-          .replace(/\\u002F/g, "/")
-          .replace(/\\\//g, "/")
-          .replace(/\\"/g, '"')
-          .replace(/&amp;/g, "&")
-          .replace(/&quot;/g, '"')
-          .replace(/["'\\]+$/g, "")
-          .trim();
-      };
+      const USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-      // Pinterest primary attempt
+      // Pinterest primary attempt - the search page no longer embeds pin
+      // data in the raw HTML (it's loaded client-side), so we replicate
+      // that client-side call against Pinterest's internal search API.
+      // This needs a session cookie + CSRF token from the search page.
       let images = [];
       try {
         const encodedQuery = encodeURIComponent(query);
-        const pinterestUrl = `https://www.pinterest.com/search/pins/?q=${encodedQuery}`;
+        const searchPath = `/search/pins/?q=${encodedQuery}`;
+        const pageUrl = `https://www.pinterest.com${searchPath}`;
 
-        const pinterestResponse = await axios.get(pinterestUrl, {
+        const pageResponse = await axios.get(pageUrl, {
           timeout: 15000,
           headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": USER_AGENT,
             Accept:
               "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
           },
         });
 
-        const html = String(pinterestResponse.data || "");
+        const setCookies = pageResponse.headers["set-cookie"] || [];
+        const cookieHeader = setCookies
+          .map((cookie) => cookie.split(";")[0])
+          .join("; ");
+        const csrfMatch = cookieHeader.match(/csrftoken=([^;]+)/);
+        const csrfToken = csrfMatch ? csrfMatch[1] : "";
 
-        // Extract pinimg URLs with multiple regex patterns
-        const pinimgRegex = /https:\/\/i\.pinimg\.com\/[^\s"'<>{}|\\^`\[\]]+/gi;
-        const escapedPinimgRegex =
-          /https\\u002F\\u002Fi\.pinimg\.com\\u002F[^\s"'<>{}|\\^`\[\]]+/gi;
+        const apiData = JSON.stringify({
+          options: { query, scope: "pins", page_size: 25 },
+          context: {},
+        });
 
-        const directMatches = html.match(pinimgRegex) || [];
-        const escapedMatches = html.match(escapedPinimgRegex) || [];
+        const apiUrl = `https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=${encodeURIComponent(
+          searchPath,
+        )}&data=${encodeURIComponent(apiData)}&_=${Date.now()}`;
 
-        // Also try to extract from JSON data
-        const jsonMatches = [];
-        const jsonDataRegex = /"(https:\/\/i\.pinimg\.com\/[^\s"<>]+)"/gi;
-        let match;
-        while ((match = jsonDataRegex.exec(html)) !== null) {
-          jsonMatches.push(match[1]);
-        }
+        const apiResponse = await axios.get(apiUrl, {
+          timeout: 15000,
+          headers: {
+            "User-Agent": USER_AGENT,
+            Accept: "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": csrfToken,
+            "X-Pinterest-AppState": "active",
+            "X-Pinterest-PWS-Handler": "www/search/[scope].js",
+            Referer: pageUrl,
+            Cookie: cookieHeader,
+          },
+        });
 
-        let candidates = [
-          ...new Set([...directMatches, ...escapedMatches, ...jsonMatches]),
-        ].map(normalizeUrl);
+        const results = apiResponse.data?.resource_response?.data?.results || [];
 
-        // Filter valid Pinterest image URLs
-        candidates = candidates.filter(
-          (url) =>
-            url.startsWith("https://i.pinimg.com/") &&
-            !/\.(ico|svg)($|\?)/i.test(url) &&
-            !url.includes("blank.gif"),
-        );
-
-        // Prioritize by file type (jpg/jpeg > webp > png > gif)
-        const priority = (url) => {
-          if (/\.jpg($|\?|&)/i.test(url)) return 0;
-          if (/\.jpeg($|\?|&)/i.test(url)) return 1;
-          if (/\.webp($|\?|&)/i.test(url)) return 2;
-          if (/\.png($|\?|&)/i.test(url)) return 3;
-          if (/\.gif($|\?|&)/i.test(url)) return 4;
-          return 5;
-        };
-
-        images = candidates.sort((a, b) => priority(a) - priority(b));
+        images = [
+          ...new Set(
+            results
+              .map(
+                (pin) =>
+                  pin?.images?.orig?.url || pin?.images?.["736x"]?.url,
+              )
+              .filter(
+                (url) =>
+                  typeof url === "string" &&
+                  url.startsWith("https://i.pinimg.com/"),
+              ),
+          ),
+        ];
       } catch (pinterestError) {
         console.log(
           "Pinterest primary attempt failed:",
