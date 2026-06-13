@@ -399,7 +399,7 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 *🎨 AI Image Generation (NEW!):*
 • \`-imagine [prompt]\` = Generate image from text
 • \`-img [prompt]\` = Short alias for imagine
-• \`-pint [search]\` = Send Pinterest images (default: 4)
+• \`-pint [search]\` = Send Pinterest images (default: 8)
 • \`-pint [count] [search]\` = Send custom count (min 4, max 10)
 • \`-transform [prompt]\` = Transform an image (reply to image)
 • \`-viina\` = Add viina overlay at bottom-right (send/reply to image)
@@ -2945,10 +2945,10 @@ Provide a structured analysis with emojis.`;
   async sendPinterestImages(args, message) {
     try {
       if (!args.length) {
-        return "📌 *Pinterest Image Search*\n\nUsage:\n`-pint [search]`\n`-pint [count] [search]`\n\nExamples:\n`-pint Manali`\n`-pint 6 Manali`\n\nLimits: minimum 4, maximum 10 images.";
+        return "📌 *Pinterest Image Search*\n\nUsage:\n`-pint [search]`\n`-pint [count] [search]`\n\nExamples:\n`-pint Manali`\n`-pint 6 Manali`\n\nDefault: 8 images. Limits: minimum 4, maximum 10 images.";
       }
 
-      let count = 4;
+      let count = 8;
       let query = args.join(" ").trim();
 
       const firstArgNumber = parseInt(args[0], 10);
@@ -3065,6 +3065,7 @@ Provide a structured analysis with emojis.`;
 
       return {
         mediaList,
+        album: true,
       };
     } catch (error) {
       console.error("❌ Image search error:", error.message);

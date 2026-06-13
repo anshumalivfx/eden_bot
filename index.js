@@ -6,6 +6,9 @@ const {
   delay,
   makeCacheableSignalKeyStore,
   fetchLatestBaileysVersion,
+  proto,
+  generateWAMessageFromContent,
+  prepareWAMessageMedia,
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const qrcode = require("qrcode-terminal");
@@ -435,6 +438,61 @@ function getConversationContext(chatId, targetUser = null, limit = 15) {
         `${m.is_bot ? "Eden" : m.sender_name}: ${m.message || "[no message]"}`,
     )
     .join("\n");
+}
+
+// Send multiple images as a single WhatsApp "album" (multiselect-style
+// grouped media message) instead of one message per image. Builds the
+// album parent message + per-image messages tagged with a MEDIA_ALBUM
+// messageAssociation, then relays them directly.
+async function sendAlbumMessage(sock, chatJid, mediaItems, quotedMsg = null) {
+  const imageItems = mediaItems.filter((item) => item?.image);
+
+  const albumMessage = generateWAMessageFromContent(
+    chatJid,
+    {
+      albumMessage: {
+        expectedImageCount: imageItems.length,
+        expectedVideoCount: 0,
+      },
+    },
+    {
+      userJid: sock.user.id,
+      quoted: quotedMsg || undefined,
+    },
+  );
+
+  await sock.relayMessage(chatJid, albumMessage.message, {
+    messageId: albumMessage.key.id,
+  });
+
+  for (let i = 0; i < imageItems.length; i++) {
+    const { image, caption } = imageItems[i];
+
+    const content = await prepareWAMessageMedia(
+      { image },
+      { upload: sock.waUploadToServer },
+    );
+
+    content.imageMessage.contextInfo = {
+      ...(content.imageMessage.contextInfo || {}),
+      messageAssociation: {
+        associationType: proto.MessageAssociation.AssociationType.MEDIA_ALBUM,
+        parentMessageKey: albumMessage.key,
+      },
+    };
+
+    if (caption) {
+      content.imageMessage.caption = caption;
+    }
+
+    const waMessage = generateWAMessageFromContent(chatJid, content, {
+      userJid: sock.user.id,
+    });
+
+    await sock.relayMessage(chatJid, waMessage.message, {
+      messageId: waMessage.key.id,
+    });
+  }
 }
 
 function formatRemainingDuration(ms) {
@@ -2069,22 +2127,48 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                     return mediaItem;
                   };
 
-                  const batchResults = await Promise.allSettled(
-                    response.mediaList.map(async (mediaItem) => {
-                      const sendableMedia = await resolveMediaItem(mediaItem);
-                      return sock.sendMessage(chatJid, sendableMedia, {
-                        quoted: quotedMsg,
-                      });
-                    }),
+                  const resolvedMedia = await Promise.all(
+                    response.mediaList.map(resolveMediaItem),
                   );
 
-                  const failed = batchResults.filter(
-                    (r) => r.status === "rejected",
-                  );
-                  if (failed.length > 0) {
-                    console.error(
-                      `❌ Failed to send ${failed.length}/${response.mediaList.length} media items in batch`,
+                  if (response.album && resolvedMedia.length > 1) {
+                    try {
+                      await sendAlbumMessage(
+                        sock,
+                        chatJid,
+                        resolvedMedia,
+                        quotedMsg,
+                      );
+                    } catch (error) {
+                      console.error(
+                        "❌ Failed to send album, falling back to individual messages:",
+                        error.message,
+                      );
+                      await Promise.allSettled(
+                        resolvedMedia.map((sendableMedia) =>
+                          sock.sendMessage(chatJid, sendableMedia, {
+                            quoted: quotedMsg,
+                          }),
+                        ),
+                      );
+                    }
+                  } else {
+                    const batchResults = await Promise.allSettled(
+                      resolvedMedia.map((sendableMedia) =>
+                        sock.sendMessage(chatJid, sendableMedia, {
+                          quoted: quotedMsg,
+                        }),
+                      ),
                     );
+
+                    const failed = batchResults.filter(
+                      (r) => r.status === "rejected",
+                    );
+                    if (failed.length > 0) {
+                      console.error(
+                        `❌ Failed to send ${failed.length}/${response.mediaList.length} media items in batch`,
+                      );
+                    }
                   }
                 } else if (typeof response === "object" && response.media) {
                   // Remove quotes from text
