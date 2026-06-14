@@ -229,6 +229,209 @@ class DubService {
   }
 
   /**
+   * Natural-sounding female ("pretty girl") neural voice per language for
+   * Edge TTS (Microsoft's free online neural voices - no API key needed).
+   */
+  getEdgeVoice(langCode) {
+    // Natural female ("pretty girl") neural voice for every language Edge TTS
+    // supports - so Eden can voice-reply in whatever language was spoken.
+    const voices = {
+      af: "af-ZA-AdriNeural",
+      am: "am-ET-MekdesNeural",
+      ar: "ar-EG-SalmaNeural",
+      az: "az-AZ-BanuNeural",
+      bg: "bg-BG-KalinaNeural",
+      bn: "bn-IN-TanishaaNeural",
+      bs: "bs-BA-VesnaNeural",
+      ca: "ca-ES-JoanaNeural",
+      cs: "cs-CZ-VlastaNeural",
+      cy: "cy-GB-NiaNeural",
+      da: "da-DK-ChristelNeural",
+      de: "de-DE-KatjaNeural",
+      el: "el-GR-AthinaNeural",
+      en: "en-US-JennyNeural",
+      es: "es-ES-ElviraNeural",
+      et: "et-EE-AnuNeural",
+      fa: "fa-IR-DilaraNeural",
+      fi: "fi-FI-NooraNeural",
+      fil: "fil-PH-BlessicaNeural",
+      fr: "fr-FR-DeniseNeural",
+      ga: "ga-IE-OrlaNeural",
+      gl: "gl-ES-SabelaNeural",
+      gu: "gu-IN-DhwaniNeural",
+      he: "he-IL-HilaNeural",
+      hi: "hi-IN-SwaraNeural",
+      hr: "hr-HR-GabrijelaNeural",
+      hu: "hu-HU-NoemiNeural",
+      id: "id-ID-GadisNeural",
+      is: "is-IS-GudrunNeural",
+      it: "it-IT-ElsaNeural",
+      iu: "iu-Latn-CA-SiqiniqNeural",
+      ja: "ja-JP-NanamiNeural",
+      jv: "jv-ID-SitiNeural",
+      jw: "jv-ID-SitiNeural", // Whisper uses "jw" for Javanese
+      ka: "ka-GE-EkaNeural",
+      kk: "kk-KZ-AigulNeural",
+      km: "km-KH-SreymomNeural",
+      kn: "kn-IN-SapnaNeural",
+      ko: "ko-KR-SunHiNeural",
+      lo: "lo-LA-KeomanyNeural",
+      lt: "lt-LT-OnaNeural",
+      lv: "lv-LV-EveritaNeural",
+      mk: "mk-MK-MarijaNeural",
+      ml: "ml-IN-SobhanaNeural",
+      mn: "mn-MN-YesuiNeural",
+      mr: "mr-IN-AarohiNeural",
+      ms: "ms-MY-YasminNeural",
+      mt: "mt-MT-GraceNeural",
+      my: "my-MM-NilarNeural",
+      nb: "nb-NO-PernilleNeural",
+      ne: "ne-NP-HemkalaNeural",
+      nl: "nl-NL-ColetteNeural",
+      no: "nb-NO-PernilleNeural", // Whisper uses "no" for Norwegian
+      pl: "pl-PL-ZofiaNeural",
+      ps: "ps-AF-LatifaNeural",
+      pt: "pt-BR-FranciscaNeural",
+      ro: "ro-RO-AlinaNeural",
+      ru: "ru-RU-SvetlanaNeural",
+      si: "si-LK-ThiliniNeural",
+      sk: "sk-SK-ViktoriaNeural",
+      sl: "sl-SI-PetraNeural",
+      so: "so-SO-UbaxNeural",
+      sq: "sq-AL-AnilaNeural",
+      sr: "sr-RS-SophieNeural",
+      su: "su-ID-TutiNeural",
+      sv: "sv-SE-SofieNeural",
+      sw: "sw-KE-ZuriNeural",
+      ta: "ta-IN-PallaviNeural",
+      te: "te-IN-ShrutiNeural",
+      th: "th-TH-PremwadeeNeural",
+      tr: "tr-TR-EmelNeural",
+      uk: "uk-UA-PolinaNeural",
+      ur: "ur-PK-UzmaNeural",
+      uz: "uz-UZ-MadinaNeural",
+      vi: "vi-VN-HoaiMyNeural",
+      zh: "zh-CN-XiaoxiaoNeural",
+      zu: "zu-ZA-ThandoNeural",
+    };
+
+    // Whisper (esp. Groq verbose_json) returns full language NAMES like
+    // "english"/"urdu" rather than ISO codes - map those to codes too.
+    const nameToCode = {
+      english: "en", spanish: "es", french: "fr", german: "de",
+      italian: "it", portuguese: "pt", russian: "ru", japanese: "ja",
+      korean: "ko", chinese: "zh", mandarin: "zh", cantonese: "zh",
+      arabic: "ar", hindi: "hi", urdu: "ur", bengali: "bn", punjabi: "pa",
+      turkish: "tr", polish: "pl", dutch: "nl", flemish: "nl", swedish: "sv",
+      danish: "da", finnish: "fi", norwegian: "no", czech: "cs", greek: "el",
+      hungarian: "hu", romanian: "ro", ukrainian: "uk", indonesian: "id",
+      malay: "ms", thai: "th", vietnamese: "vi", tamil: "ta", telugu: "te",
+      hebrew: "he", persian: "fa", farsi: "fa", pashto: "ps", swahili: "sw",
+      tagalog: "fil", filipino: "fil", afrikaans: "af", albanian: "sq",
+      amharic: "am", armenian: "hy", azerbaijani: "az", basque: "eu",
+      belarusian: "be", bosnian: "bs", bulgarian: "bg", catalan: "ca",
+      croatian: "hr", estonian: "et", galician: "gl", georgian: "ka",
+      gujarati: "gu", icelandic: "is", javanese: "jv", kannada: "kn",
+      kazakh: "kk", khmer: "km", lao: "lo", latvian: "lv", lithuanian: "lt",
+      macedonian: "mk", malayalam: "ml", maltese: "mt", marathi: "mr",
+      mongolian: "mn", myanmar: "my", burmese: "my", nepali: "ne",
+      serbian: "sr", sinhala: "si", slovak: "sk", slovenian: "sl",
+      somali: "so", sundanese: "su", uzbek: "uz", welsh: "cy", zulu: "zu",
+    };
+
+    let raw = String(langCode || "en").toLowerCase().trim();
+    if (nameToCode[raw]) raw = nameToCode[raw];
+
+    // Normalize: strip region (e.g. "en-US" -> "en"); keep 3-letter "fil"
+    const code = raw.split(/[-_]/)[0];
+    return voices[raw] || voices[code] || voices["en"];
+  }
+
+  /**
+   * Generate a natural female voice note using Edge TTS (free, no API key).
+   * Falls back to local Piper TTS if Edge TTS is unavailable (e.g. offline).
+   * @param {string} text - Text to speak (already cleaned of emojis/actions)
+   * @param {string} langCode - ISO-639-1 language code
+   * @returns {Promise<{filepath: string, cleanup: Function}>}
+   */
+  async generateNaturalVoice(text, langCode = "en") {
+    try {
+      return await this.generateSpeechEdgeTTS(text, langCode);
+    } catch (error) {
+      console.warn(
+        `⚠️ Edge TTS failed (${error.message}), falling back to Piper...`,
+      );
+      return await this.generateSpeechPiper(text, langCode);
+    }
+  }
+
+  /**
+   * Generate speech with Microsoft Edge's free neural TTS voices.
+   * @returns {Promise<{filepath: string, cleanup: Function}>}
+   */
+  async generateSpeechEdgeTTS(text, langCode = "en") {
+    const { EdgeTTS } = require("node-edge-tts");
+
+    const voice = this.getEdgeVoice(langCode);
+    // Locale is the first two segments of the voice id (e.g. ur-PK-Uzma... -> ur-PK)
+    const lang = voice.split("-").slice(0, 2).join("-");
+
+    console.log(`🗣️ Generating natural voice with Edge TTS (${voice})...`);
+
+    const timestamp = Date.now();
+    const mp3Path = path.join(this.tempDir, `edge_${timestamp}.mp3`);
+    const oggPath = path.join(this.tempDir, `edge_${timestamp}.ogg`);
+
+    const tts = new EdgeTTS({
+      voice,
+      lang,
+      outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+      rate: "default",
+      pitch: "default",
+      volume: "default",
+    });
+
+    await tts.ttsPromise(text, mp3Path);
+
+    if (!fs.existsSync(mp3Path)) {
+      throw new Error("Edge TTS produced no audio file");
+    }
+
+    // Convert MP3 -> OGG (Opus) so WhatsApp shows it as a proper voice note
+    await new Promise((resolve, reject) => {
+      ffmpeg(mp3Path)
+        .toFormat("ogg")
+        .audioCodec("libopus")
+        .audioChannels(1)
+        .audioFrequency(48000)
+        .audioBitrate("48k")
+        .on("end", resolve)
+        .on("error", (err) =>
+          reject(new Error(`FFmpeg conversion failed: ${err.message}`)),
+        )
+        .save(oggPath);
+    });
+
+    // Clean up intermediate mp3
+    try {
+      fs.unlinkSync(mp3Path);
+    } catch (e) {}
+
+    console.log(`✅ Edge TTS voice note ready`);
+
+    return {
+      filepath: oggPath,
+      cleanup: () => {
+        if (fs.existsSync(oggPath)) {
+          try {
+            fs.unlinkSync(oggPath);
+          } catch (e) {}
+        }
+      },
+    };
+  }
+
+  /**
    * Transcribe audio to text using selected engine
    * @param {string} audioFilePath - Path to audio file
    * @returns {Promise<{text: string, language: string}>}

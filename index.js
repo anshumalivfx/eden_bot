@@ -914,7 +914,7 @@ function isVoiceMessage(message) {
 }
 
 // Download + transcribe an incoming voice note so Eden can "listen" to it.
-// Returns the transcribed text, or null if it couldn't be transcribed.
+// Returns { text, language } or null if it couldn't be transcribed.
 async function transcribeIncomingVoice(message) {
   try {
     if (!isVoiceMessage(message)) return null;
@@ -946,10 +946,75 @@ async function transcribeIncomingVoice(message) {
     if (text) {
       console.log(`📝 Transcribed voice message: "${text.substring(0, 80)}"`);
     }
-    return text || null;
+    return text ? { text, language: transcription.language || null } : null;
   } catch (error) {
     console.error("Error transcribing incoming voice:", error.message);
     return null;
+  }
+}
+
+// Strip everything that shouldn't be *spoken* out loud: roleplay stage
+// directions like *laughs softly*, emojis, markdown, hashtags, etc. Leaves
+// only the plain human message so the voice sounds natural.
+function cleanTextForSpeech(text) {
+  if (!text) return "";
+  let cleaned = text;
+
+  // Remove *action* / _action_ roleplay directions (e.g. *laughs softly*)
+  cleaned = cleaned.replace(/\*[^*]*\*/g, " ");
+  cleaned = cleaned.replace(/_[^_]*_/g, " ");
+  // Remove bracketed stage directions like (laughs) or [sighs]
+  cleaned = cleaned.replace(/\((?:[^()]{0,40})\)/g, " ");
+  cleaned = cleaned.replace(/\[[^\]]{0,40}\]/g, " ");
+  // Remove hashtags
+  cleaned = cleaned.replace(/#\w+/g, " ");
+  // Remove emojis and pictographs
+  cleaned = cleaned.replace(
+    /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{200D}]/gu,
+    "",
+  );
+  // Remove leftover markdown emphasis chars and quotes
+  cleaned = cleaned.replace(/[*_`~]/g, "");
+  cleaned = cleaned.replace(/["""'']/g, "");
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+  return cleaned;
+}
+
+// Generate a natural female ("pretty girl") voice note for `text` in the
+// given language and send it as a WhatsApp voice message (ptt). Returns true
+// on success, false if voice generation/sending failed.
+async function sendVoiceReply(sock, chatJid, text, langCode, quotedMessage) {
+  const spoken = cleanTextForSpeech(text);
+  if (!spoken) return false;
+
+  let voiceResult = null;
+  try {
+    voiceResult = await DubService.generateNaturalVoice(spoken, langCode);
+    const audioData = fs.readFileSync(voiceResult.filepath);
+
+    await sock.sendMessage(
+      chatJid,
+      {
+        audio: audioData,
+        mimetype: "audio/ogg; codecs=opus",
+        ptt: true, // send as a real voice note
+      },
+      { quoted: quotedMessage },
+    );
+    return true;
+  } catch (error) {
+    console.error("❌ Failed to send voice reply:", error.message);
+    return false;
+  } finally {
+    if (voiceResult?.cleanup) {
+      try {
+        voiceResult.cleanup();
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    }
   }
 }
 
@@ -1538,6 +1603,11 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
           let messageText = getMessageText(message);
 
+          // Tracks whether this incoming message was a voice note (so Eden can
+          // reply back with a voice note) and the language that was spoken.
+          let incomingWasVoice = false;
+          let voiceReplyLang = null;
+
           // Voice message support: if someone replies to Eden (or DMs Eden)
           // with a voice note, listen to it by transcribing the audio and
           // treating the transcription as the message text.
@@ -1546,7 +1616,9 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
             if (repliedToBot || !isGroup) {
               const transcribed = await transcribeIncomingVoice(message);
               if (transcribed) {
-                messageText = transcribed;
+                messageText = transcribed.text;
+                incomingWasVoice = true;
+                voiceReplyLang = transcribed.language;
               } else {
                 try {
                   await sock.sendMessage(
@@ -2831,12 +2903,29 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
                 response = response.trim(); // Clean whitespace
 
-                // Quote the original message when replying
-                const sentMsg = await sock.sendMessage(
-                  chatJid,
-                  { text: response },
-                  { quoted: message },
-                );
+                let sentMsg = null;
+                let sentAsVoice = false;
+
+                // If they sent Eden a voice note, reply with a voice note too
+                // (natural pretty-girl voice, spoken answer only).
+                if (incomingWasVoice) {
+                  sentAsVoice = await sendVoiceReply(
+                    sock,
+                    chatJid,
+                    response,
+                    voiceReplyLang,
+                    message,
+                  );
+                }
+
+                // Fall back to text if not a voice reply (or voice failed)
+                if (!sentAsVoice) {
+                  sentMsg = await sock.sendMessage(
+                    chatJid,
+                    { text: response },
+                    { quoted: message },
+                  );
+                }
 
                 // Store bot's response in context with messageId
                 const messageId = sentMsg?.key?.id;
