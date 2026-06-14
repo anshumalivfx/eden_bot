@@ -36,7 +36,6 @@
     "groq-sdk": "^0.8.0",
     "gtts": "^0.2.1",
     "jimp": "^1.6.0",
-    "node-edge-tts": "^1.2.10",
     "node-gtts": "^2.0.2",
     "node-webpmux": "^3.2.1",
     "openai": "^4.20.1",
