@@ -16,6 +16,7 @@ const readline = require("readline");
 const fs = require("fs");
 const path = require("path");
 const LLMService = require("./services/llmService");
+const DubService = require("./services/dubService");
 const CommandHandler = require("./handlers/commandHandler");
 const MessageStore = require("./database/messageStore");
 const MuteStore = require("./database/muteStore");
@@ -821,9 +822,26 @@ function isBotMentioned(message) {
 }
 
 // Helper function to check if message is a reply to bot
+// Get the reply/quote contextInfo regardless of the message type the user
+// sent (text, voice note, image, etc.) - WhatsApp attaches contextInfo to
+// whichever message wrapper carries the reply.
+function getReplyContextInfo(message) {
+  const msg = message.message;
+  if (!msg) return null;
+  return (
+    msg.extendedTextMessage?.contextInfo ||
+    msg.imageMessage?.contextInfo ||
+    msg.videoMessage?.contextInfo ||
+    msg.audioMessage?.contextInfo ||
+    msg.documentMessage?.contextInfo ||
+    msg.stickerMessage?.contextInfo ||
+    null
+  );
+}
+
 function isReplyToBot(message) {
   try {
-    const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+    const contextInfo = getReplyContextInfo(message);
     if (!contextInfo || !contextInfo.quotedMessage) return false;
 
     // Check if the quoted message has fromMe flag (Baileys way)
@@ -885,6 +903,52 @@ function getMessageText(message) {
       null
     );
   } catch (error) {
+    return null;
+  }
+}
+
+// Returns true if the incoming message is itself a voice note / audio
+function isVoiceMessage(message) {
+  const msg = message.message;
+  return !!(msg?.audioMessage || msg?.pttMessage);
+}
+
+// Download + transcribe an incoming voice note so Eden can "listen" to it.
+// Returns the transcribed text, or null if it couldn't be transcribed.
+async function transcribeIncomingVoice(message) {
+  try {
+    if (!isVoiceMessage(message)) return null;
+
+    const { downloadMediaMessage } = require("@whiskeysockets/baileys");
+    console.log("🎧 Voice message received - downloading to transcribe...");
+    const buffer = await downloadMediaMessage(message, "buffer", {});
+    if (!buffer || !buffer.length) return null;
+
+    const tempDir = path.join(__dirname, "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    const tempAudioPath = path.join(tempDir, `voice_in_${Date.now()}.ogg`);
+    fs.writeFileSync(tempAudioPath, buffer);
+
+    let transcription;
+    try {
+      transcription = await DubService.transcribeAudio(tempAudioPath);
+    } finally {
+      try {
+        fs.unlinkSync(tempAudioPath);
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    }
+
+    const text = transcription?.text?.trim();
+    if (text) {
+      console.log(`📝 Transcribed voice message: "${text.substring(0, 80)}"`);
+    }
+    return text || null;
+  } catch (error) {
+    console.error("Error transcribing incoming voice:", error.message);
     return null;
   }
 }
@@ -1472,7 +1536,34 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
             }
           }
 
-          const messageText = getMessageText(message);
+          let messageText = getMessageText(message);
+
+          // Voice message support: if someone replies to Eden (or DMs Eden)
+          // with a voice note, listen to it by transcribing the audio and
+          // treating the transcription as the message text.
+          if (!messageText && isVoiceMessage(message)) {
+            const repliedToBot = isReplyToBot(message);
+            if (repliedToBot || !isGroup) {
+              const transcribed = await transcribeIncomingVoice(message);
+              if (transcribed) {
+                messageText = transcribed;
+              } else {
+                try {
+                  await sock.sendMessage(
+                    chatJid,
+                    {
+                      text: "couldn't quite make out that voice note, mind typing it or sending again?",
+                    },
+                    { quoted: { key: message.key, message: message.message } },
+                  );
+                } catch (e) {
+                  // ignore send errors
+                }
+                continue;
+              }
+            }
+          }
+
           if (!messageText) continue;
 
           // Cache the pushName for this user for future mentions
@@ -2638,10 +2729,13 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
               }
 
               if (repliedTo) {
-                // Get the quoted message for context
+                // Get the quoted message for context (works for replies sent
+                // as text, voice notes, images, etc.)
+                const replyCtx = getReplyContextInfo(message);
                 const quotedText =
-                  message.message?.extendedTextMessage?.contextInfo
-                    ?.quotedMessage?.conversation || "[Media/Sticker]";
+                  replyCtx?.quotedMessage?.conversation ||
+                  replyCtx?.quotedMessage?.extendedTextMessage?.text ||
+                  "[Media/Sticker]";
 
                 // Get recent conversation history with THIS specific user
                 const conversationHistory = getConversationContext(
