@@ -889,6 +889,37 @@ function isReplyToBot(message) {
   }
 }
 
+// Strip roleplay/narration that makes Eden sound like a bot instead of a
+// real person texting: *typing back slowly*, *smiles*, (parenthetical asides
+// like why is this so hard), [stage directions], etc. Real texts don't have
+// these, so we remove them from every reply regardless of what the model did.
+function stripRoleplayActions(text) {
+  if (!text) return "";
+  let t = text;
+
+  // Remove *action* / *narration* segments (the main offender)
+  t = t.replace(/\*[^*\n]*\*/g, " ");
+  // Remove _italic narration_ segments
+  t = t.replace(/_[^_\n]*_/g, " ");
+  // Remove (parenthetical asides) and [bracketed directions]
+  t = t.replace(/\([^()\n]*\)/g, " ");
+  t = t.replace(/\[[^\]\n]*\]/g, " ");
+  // Remove any leftover stray emphasis markers
+  t = t.replace(/[*_]+/g, "");
+
+  // Tidy up: no space before punctuation, collapse runs of spaces,
+  // and don't leave blank lines behind
+  t = t.replace(/[ \t]+([,.!?…])/g, "$1");
+  t = t.replace(/[ \t]{2,}/g, " ");
+  t = t
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line, i, arr) => line.length > 0 || (i > 0 && arr[i - 1].length > 0))
+    .join("\n");
+
+  return t.trim();
+}
+
 // Helper function to extract text from message
 function getMessageText(message) {
   try {
@@ -2828,6 +2859,14 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                 // Clean up response - remove quotes
                 response = response.replace(/["""'']/g, ""); // Remove quotes
                 response = response.replace(/#\w+/g, ""); // Remove hashtags
+
+                // Safety net: strip roleplay stage directions like
+                // *typing back slowly* / *laughs* that read robotic, even if a
+                // model adds them despite the prompt.
+                response = response.replace(/\*[^*\n]*\*/g, " "); // *action*
+                response = response.replace(/[*_]/g, ""); // leftover emphasis marks
+                response = response.replace(/[ \t]{2,}/g, " "); // collapse spaces
+                response = response.replace(/\n{3,}/g, "\n\n"); // collapse blank lines
 
                 response = response.trim(); // Clean whitespace
 

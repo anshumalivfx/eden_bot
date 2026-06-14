@@ -23,7 +23,9 @@ How you talk:
 - Short replies are fine. Not everything needs to be a full thought. One-word or short reactions ("lol", "wait really?", "same", "fair") are normal
 - Use contractions, occasional typos/lowercase, trail off with "..." sometimes - however a real person texts
 - Avoid AI-sounding phrases ("I'd be happy to help", "great question", "as an AI", "let me know if you need anything else")
-- Express feelings the way people actually text - write "haha" or "lol", not *laughs*. NEVER use roleplay stage directions or narrated actions in asterisks/brackets like *laughs softly*, *smiles*, (giggles) - that's not how real texting looks
+- Express feelings the way people actually text - write "haha" or "lol", not *laughs*. NEVER use roleplay stage directions or narrated actions in asterisks or brackets like *laughs softly*, *typing back slowly*, *smiles*, (giggles) - that's NOT how real texting looks and it's a hard rule
+- No parenthetical asides or meta-commentary about texting/replying (e.g. "(why is it so hard to type a reply lol)") - just say the thing
+- Keep it SHORT. Usually one line, maybe two. Don't ramble, don't over-explain, don't narrate your day unless asked. A real text to "hey" is just "hey hey whats up" - not a paragraph
 
 Your personality:
 - Generally friendly, nice, and easy to talk to - people enjoy chatting with you
@@ -113,8 +115,14 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         }
       }
 
-      // Try Mistral first (best for chatbots), then other services
+      // Prefer Groq (llama-3.1) - follows the natural, no-roleplay style
+      // much better than mistral-tiny - then fall back to other services
       if (
+        this.groqApiKey &&
+        this.groqApiKey !== "your_groq_api_key_here"
+      ) {
+        return await this.callGroq(userPrompt, this.personality, imageBase64);
+      } else if (
         this.mistralApiKey &&
         this.mistralApiKey !== "your_mistral_api_key_here"
       ) {
@@ -123,11 +131,6 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
           this.personality,
           imageBase64,
         );
-      } else if (
-        this.groqApiKey &&
-        this.groqApiKey !== "your_groq_api_key_here"
-      ) {
-        return await this.callGroq(userPrompt, this.personality, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
@@ -264,16 +267,19 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
         }
       }
 
+      // Prefer Groq (llama-3.1) for replies - it follows the "talk like a
+      // real person, no roleplay asterisks" instructions far better than
+      // mistral-tiny, which keeps adding *stage directions*.
       if (
-        this.mistralApiKey &&
-        this.mistralApiKey !== "your_mistral_api_key_here"
-      ) {
-        return await this.callMistral(userPrompt, systemMessage, imageBase64);
-      } else if (
         this.groqApiKey &&
         this.groqApiKey !== "your_groq_api_key_here"
       ) {
         return await this.callGroq(userPrompt, systemMessage, imageBase64);
+      } else if (
+        this.mistralApiKey &&
+        this.mistralApiKey !== "your_mistral_api_key_here"
+      ) {
+        return await this.callMistral(userPrompt, systemMessage, imageBase64);
       } else if (
         this.huggingfaceApiKey &&
         this.huggingfaceApiKey !== "your_huggingface_api_key_here"
