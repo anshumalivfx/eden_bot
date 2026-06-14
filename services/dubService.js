@@ -233,7 +233,11 @@ class DubService {
    * @param {string} audioFilePath - Path to audio file
    * @returns {Promise<{text: string, language: string}>}
    */
-  async transcribeAudio(audioFilePath) {
+  async transcribeAudio(audioFilePath, options = {}) {
+    // options.language - ISO-639-1 hint (e.g. "hi", "es") to greatly improve
+    //   accuracy for non-English audio. When omitted, the model auto-detects.
+    const { language = null } = options;
+
     // Check audio duration to decide engine
     const duration = await this.getAudioDuration(audioFilePath);
     const durationMinutes = Math.floor(duration / 60);
@@ -242,13 +246,45 @@ class DubService {
       `🎤 Audio duration: ${durationMinutes}m ${Math.floor(duration % 60)}s`,
     );
 
-    // Use local Whisper for long files or if configured
-    if (this.transcriptionEngine === "whisper-local" || duration > 600) {
-      console.log(`📍 Using on-device Whisper (unlimited, no API limits)`);
-      return await this.transcribeWithWhisperLocal(audioFilePath);
-    } else {
-      console.log(`☁️ Using Groq Whisper (cloud, fast)`);
-      return await this.transcribeWithGroq(audioFilePath);
+    const hasGroqKey = !!process.env.GROQ_API_KEY;
+    const forceLocal = this.transcriptionEngine === "whisper-local";
+
+    // Prefer Groq Whisper large-v3 (free + far better multilingual accuracy)
+    // whenever a key is available and the file isn't too long for the API.
+    // Fall back to on-device Whisper for very long files or if forced local.
+    if (hasGroqKey && !forceLocal && duration <= 600) {
+      console.log(`☁️ Using Groq Whisper large-v3 (cloud, multilingual)`);
+      return await this.transcribeWithGroq(audioFilePath, language);
+    }
+
+    console.log(`📍 Using on-device Whisper (unlimited, no API limits)`);
+    return await this.transcribeWithWhisperLocal(audioFilePath, language);
+  }
+
+  /**
+   * Translate spoken audio directly to English using Groq Whisper's
+   * translation task. This is far more reliable for non-English speech than
+   * transcribing (often inaccurately) then running text translation.
+   * Returns { text, language } or null if it couldn't translate.
+   */
+  async translateAudioToEnglish(audioFilePath) {
+    if (!process.env.GROQ_API_KEY) return null;
+    try {
+      console.log("🌐 Translating audio → English with Groq Whisper...");
+      const translation = await this.groq.audio.translations.create({
+        file: fs.createReadStream(audioFilePath),
+        model: "whisper-large-v3",
+        response_format: "json",
+      });
+
+      const text = translation?.text?.trim();
+      if (!text) return null;
+
+      console.log(`✅ Audio translated to English: "${text.substring(0, 50)}..."`);
+      return { text, language: "en" };
+    } catch (error) {
+      console.error("❌ Groq audio translation failed:", error.message);
+      return null;
     }
   }
 
@@ -296,15 +332,26 @@ class DubService {
   /**
    * Transcribe using Groq Whisper (cloud, fast but limited)
    */
-  async transcribeWithGroq(audioFilePath) {
+  async transcribeWithGroq(audioFilePath, language = null) {
     try {
-      console.log("☁️ Transcribing with Groq Whisper...");
+      console.log(
+        `☁️ Transcribing with Groq Whisper${
+          language ? ` (language hint: ${language})` : ""
+        }...`,
+      );
 
-      const transcription = await this.groq.audio.transcriptions.create({
+      const params = {
         file: fs.createReadStream(audioFilePath),
         model: "whisper-large-v3",
         response_format: "verbose_json",
-      });
+      };
+      // Passing the language hint when known dramatically improves accuracy
+      // and prevents wrong-language auto-detection on short clips.
+      if (language) {
+        params.language = language;
+      }
+
+      const transcription = await this.groq.audio.transcriptions.create(params);
 
       console.log(
         `✅ Transcribed: "${transcription.text.substring(0, 50)}..." (${
@@ -319,25 +366,36 @@ class DubService {
     } catch (error) {
       console.error("❌ Groq transcription failed:", error.message);
       console.log("🔄 Falling back to local Whisper...");
-      return await this.transcribeWithWhisperLocal(audioFilePath);
+      return await this.transcribeWithWhisperLocal(audioFilePath, language);
     }
   }
 
   /**
    * Transcribe using local OpenAI Whisper (on-device, unlimited)
    */
-  async transcribeWithWhisperLocal(audioFilePath) {
+  async transcribeWithWhisperLocal(audioFilePath, language = null) {
     try {
+      // The 'tiny' model is very inaccurate for non-English audio. Default to
+      // 'base' (still light) for much better multilingual results; allow
+      // override via WHISPER_MODEL for low-power devices (e.g. "tiny") or
+      // higher accuracy ("small"/"medium").
+      const whisperModel = process.env.WHISPER_MODEL || "base";
+
       console.log(
-        "🖥️ Transcribing with local Whisper (faster-whisper - 4x faster)...",
+        `🖥️ Transcribing with local Whisper (faster-whisper, model: ${whisperModel}${
+          language ? `, language: ${language}` : ""
+        })...`,
       );
 
       // Convert to WAV format for better compatibility
       const wavPath = audioFilePath.replace(/\.[^.]+$/, "_temp.wav");
       await this.convertToWav(audioFilePath, wavPath);
 
-      // Run faster-whisper via Python (using 'tiny' model for Raspberry Pi)
-      const command = `${this.pythonPath} -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('tiny', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
+      // Build a language argument for the Python call when a hint is provided
+      const langArg = language ? `, language='${language}'` : "";
+
+      // Run faster-whisper via Python
+      const command = `${this.pythonPath} -c "from faster_whisper import WhisperModel; import json; model = WhisperModel('${whisperModel}', device='cpu', compute_type='int8'); segments, info = model.transcribe('${wavPath}', beam_size=5${langArg}); text = ' '.join([segment.text for segment in segments]); print(json.dumps({'text': text, 'language': info.language}))"`;
 
       const { stdout, stderr } = await execAsync(command, {
         maxBuffer: 50 * 1024 * 1024, // 50MB buffer for long transcriptions

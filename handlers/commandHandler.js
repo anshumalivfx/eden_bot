@@ -1477,16 +1477,14 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
       const tempAudioPath = path.join(tempDir, `voice_${Date.now()}.ogg`);
       fs.writeFileSync(tempAudioPath, audioBuffer);
 
-      // Transcribe using DubService (it's already a singleton instance)
+      // Transcribe using DubService (it's already a singleton instance).
+      // When the user requested a specific language (e.g. -tb hi), pass it as
+      // a hint so the model transcribes accurately in that language instead of
+      // mis-detecting on short clips.
       console.log("🎙️ Transcribing audio...");
-      let transcription = await DubService.transcribeAudio(tempAudioPath);
-
-      // Clean up temp file
-      try {
-        fs.unlinkSync(tempAudioPath);
-      } catch (e) {
-        console.warn("Failed to cleanup temp file:", e.message);
-      }
+      let transcription = await DubService.transcribeAudio(tempAudioPath, {
+        language: keepLanguage ? targetLang : null,
+      });
 
       let finalText = transcription.text;
       let displayLanguage = transcription.language || "auto-detected";
@@ -1522,8 +1520,24 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
           displayLanguage = `${transcription.language} (mixed with English)`;
           wasTranslated = false; // Not technically translated, but already readable
         } else {
-          // Retry logic for translation (up to 2 attempts)
-          for (let attempt = 1; attempt <= 2; attempt++) {
+          // First try Whisper's own audio→English translation (free, far more
+          // reliable for non-English speech than text translation of a
+          // possibly-inaccurate transcript).
+          const audioEnglish = await DubService.translateAudioToEnglish(
+            tempAudioPath,
+          );
+          if (
+            audioEnglish?.text &&
+            audioEnglish.text.trim() !== transcription.text.trim()
+          ) {
+            finalText = audioEnglish.text;
+            displayLanguage = `${transcription.language} → English`;
+            wasTranslated = true;
+            console.log(`✅ Translated audio directly to English`);
+          }
+
+          // Retry logic for text translation (up to 2 attempts) as a fallback
+          for (let attempt = 1; !wasTranslated && attempt <= 2; attempt++) {
             try {
               const translated = await DubService.translateText(
                 transcription.text,
@@ -1581,6 +1595,13 @@ I'm Eden - and yes, I'm better than you. Deal with it. 💅😈${ownerNote}`;
             }
           }
         }
+      }
+
+      // Clean up temp file now that transcription + translation are done
+      try {
+        fs.unlinkSync(tempAudioPath);
+      } catch (e) {
+        console.warn("Failed to cleanup temp file:", e.message);
       }
 
       // React with checkmark
