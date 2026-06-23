@@ -1,211 +1,179 @@
-# 🤖 Eden Bot - Your Sarcastic WhatsApp Companion
+# 🤖 Eden Bot - AI WhatsApp Companion
 
-A feature-rich WhatsApp bot built with whatsapp-web.js that's mean, sarcastic, but lovable! Eden responds to commands, mentions, and replies with witty, sarcastic humor.
+A feature-rich WhatsApp bot built with **[Baileys](https://github.com/WhiskeySockets/Baileys)** that chats like a real person and packs 50+ commands. Eden replies naturally when mentioned or replied to, runs on **free LLMs** (no paid APIs required), and self-hosts comfortably on a Raspberry Pi.
 
 ## 📋 Features
 
-- 🎯 **Smart Mentions** - Responds when mentioned or replied to in group chats and DMs
-- 💬 **Contextual Responses** - Remembers conversations and generates clever replies
-- � **YouTube Music Download** - Download songs from YouTube as MP3 files
-- �🎨 **Sticker Creation** - Convert images, text, and videos to stickers
-- 🎤 **Voice Messages** - Text-to-speech with multiple personalities
-- 😈 **Sarcastic Personality** - Mean but funny responses powered by free LLM
-- 👑 **Owner Recognition** - Special treatment for the bot creator
-- 🎭 **Mood System** - Dynamic personality that changes throughout the day
-- 📊 **Utility Commands** - 25+ commands for fun and functionality
-- 🔐 **Secure Authentication** - Uses WhatsApp Web's official authentication
-- 🆓 **Free LLM Support** - Works with Groq, Ollama, HuggingFace (no paid APIs needed)
+- 💬 **Natural Conversations** - Responds when mentioned, @-tagged, or replied to, in groups and DMs
+- 🧠 **Context-Aware Memory** - Per-user conversation history stored in SQLite for coherent, on-topic replies
+- 🎭 **Dynamic LLM Personality** - Warm, expressive, human-like replies (not robotic) with real moods
+- 🎨 **Stickers** - Convert images, videos, and text to stickers
+- 🖼️ **AI Images** - Image generation, upscaling, and transformation
+- 👁️ **Vision** - Understands images sent to it (Llama-4 Scout, Gemini)
+- 🎤 **Speech-to-Text** - Transcribes voice notes in 29+ languages (Whisper)
+- 🗣️ **Text-to-Speech** - Voice messages via Piper / gTTS
+- 📥 **Media Tools** - YouTube audio download, Pinterest image search
+- 🛡️ **Group Moderation** - Ban, mute, warn, kick, AFK tracking
+- 📊 **Polls & Utilities** - Polls, stats, ping, and more
+- 🆓 **Free LLM Stack** - Groq, Mistral, Ollama, HuggingFace, Cohere with automatic provider fallback
 
 ## 🛠️ Installation
 
-1. **Clone or download this repository**
+1. **Clone the repository** and install dependencies:
+   ```bash
+   npm install
+   ```
 
-2. **Install dependencies:**
-```bash
-npm install
-```
+2. **Configure environment** - copy `.env` and add your free API keys (at minimum a Groq key):
+   ```bash
+   GROQ_API_KEY=your_groq_key        # free at console.groq.com
+   # Optional fallbacks: MISTRAL_API_KEY, HUGGINGFACE_API_KEY, COHERE_API_KEY, OLLAMA_URL
+   COMMAND_PREFIX=-                  # command prefix (default "-")
+   ```
 
 3. **Run the bot:**
-```bash
-npm start
+   ```bash
+   npm start
+   ```
+
+4. **Scan the QR code** with WhatsApp on your phone:
+   - Open WhatsApp → Settings → Linked Devices → Link a Device
+   - Scan the QR code shown in your terminal
+
+   The session is saved to `baileys_auth/` (git-ignored) so you only scan once.
+
+## 🚀 Getting Started
+
+**Chat with Eden** - just talk to her naturally. She replies when you mention her name, @-tag her, or reply to one of her messages:
+
+```
+You: Hi Eden
+Eden: hey hey whats up 😄
+
+You: Eden how are you?
+Eden: pretty good honestly! just chilling. you?
 ```
 
-4. **Scan the QR code** with your WhatsApp mobile app:
-   - Open WhatsApp on your phone
-   - Go to Settings → Linked Devices
-   - Tap "Link a Device"
-   - Scan the QR code displayed in your terminal
+**Use commands** - prefix any command with `-`. Start with `-help` to see everything:
 
-## 📱 Available Commands
-
-| Command | Description | Usage |
-|---------|-------------|-------|
-| `.help` | Show all available commands | `.help` |
-| `.ping` | Check bot response time | `.ping` |
-| `.info` | Get bot information | `.info` |
-| `.sticker` | Convert image/video to sticker | Reply to media with `.sticker` |
-| `.roast` | Get a random roast | `.roast` or `.roast @mention` |
-| `.joke` | Get a random joke | `.joke` |
-| `.quote` | Get an inspirational quote | `.quote` |
-
-## 🎯 Usage Examples
-
-### 🎯 Mentions & Replies (NEW!)
-Eden now responds automatically when mentioned or replied to!
-
-**In Group Chats:**
 ```
-User: "Hey Eden, what do you think about this?"
-Eden: "Oh look, someone values my opinion. How flattering. 🙄"
-
-User: "@Eden help me"
-Eden: *responds with sarcasm*
+-help                 # list all commands
+-sticker              # reply to an image/video to make a sticker
+-imagine a red panda  # generate an AI image
+-transcribe / -tb     # reply to a voice note to transcribe it
+-ask <question>       # ask anything
+-play <song>          # download audio from YouTube
 ```
 
-**Replying to Bot:**
+## 📱 Commands
+
+Eden has 50+ commands (with aliases). Run `-help` in chat for the full, always-current list. A sample:
+
+| Category | Commands |
+|----------|----------|
+| Chat / Fun | `-ask` `-roast` `-joke` `-insult` `-sarcasm` `-rate` `-compliment` `-advice` `-fact` `-quote` |
+| Media | `-sticker` `-take` `-meme` `-imagine` `-draw` `-upscale` `-transform` `-reimagine` `-pint` |
+| Voice | `-voice` `-tts` `-speak` `-dub` `-transcribe` / `-tb` |
+| Downloads | `-play` `-song` `-yt` |
+| Social | `-hug` `-kiss` `-pat` `-slap` `-poke` `-cuddle` (and more reactions) |
+| Utility | `-help` `-ping` `-status` `-stats` `-afk` `-poll` `-sys` |
+| Moderation | `-ban` `-unban` `-mute` `-unmute` `-warn` `-kick` `-clean` |
+
+## 🔧 Project Structure
+
 ```
-Eden: "That's the worst idea I've heard today."
-You: [Reply] "It's not that bad!"
-Eden: "Oh sweetie, denial isn't just a river in Egypt. 🤦‍♀️"
-```
-
-**Special Treatment for Owner:**
-```
-Ansh: "Eden, roast me"
-Eden: "I'd roast you but... you're my creator. I'll go easy. This time. 😏"
-```
-
-📖 See [MENTION_REPLY_FEATURE.md](MENTION_REPLY_FEATURE.md) for detailed documentation!
-
-### Creating a Sticker
-1. Find an image or video in WhatsApp
-2. Reply to it with `-sticker`
-3. The bot will convert it to a sticker!
-
-### Using Commands
-- `-help` - Show all commands
-- `-roast` - Get roasted
-- `-joke` - Hear a joke
-- `-ask [question]` - Ask anything
-- `-voice [text]` - Create voice message
-- `-sticker` - Create sticker from media or text
-
-### Check Bot Status
-- `-ping` - Quick response check
-- `-status` - Detailed bot statistics
-
-## 🔧 Development
-
-### Project Structure
-```
-eden-bot/
-├── index.js              # Main bot file
-├── commands/             # Command modules
-│   ├── index.js         # Command registry
-│   ├── help.js          # Help command
-│   ├── sticker.js       # Sticker creator
-│   ├── roast.js         # Roast generator
-│   ├── ping.js          # Ping command
-│   ├── info.js          # Info command
-│   ├── joke.js          # Joke generator
-│   └── quote.js         # Quote generator
-├── package.json         # Dependencies
-└── README.md           # This file
+eden/
+├── index.js                 # Main bot: connection, message loop, reply logic
+├── start.js                 # Entry point (npm start)
+├── handlers/
+│   └── commandHandler.js    # Command registry + all command implementations
+├── services/                # LLM, image, sticker, voice/dub, YouTube, etc.
+│   ├── llmService.js        # Multi-provider LLM with fallback chain
+│   ├── dubService.js        # Whisper STT + Piper/gTTS TTS + dubbing
+│   ├── imageService.js      # AI image generation
+│   └── stickerService.js    # Sticker creation
+├── database/
+│   └── messageStore.js      # SQLite (better-sqlite3) conversation memory
+├── baileys_auth/            # WhatsApp session (git-ignored)
+└── package.json
 ```
 
-### Adding New Commands
+### Adding a New Command
 
-1. Create a new file in the `commands/` directory (e.g., `mycommand.js`)
-2. Use this template:
+Commands live in `handlers/commandHandler.js`. Register the command name in the `this.commands` registry (constructor) and implement the method:
 
 ```javascript
-module.exports = {
-    name: 'mycommand',
-    description: 'Description of your command',
-    usage: '.mycommand [args]',
-    
-    async execute(client, message, args) {
-        // Your command logic here
-        await message.reply('Command response');
-    }
-};
+// In the this.commands = { ... } registry
+mycommand: this.myCommand.bind(this),
+
+// Then add the method on the class
+async myCommand(args, message) {
+  return "Command response";
+}
 ```
 
-3. Register it in `commands/index.js`:
+The handler maps the `-mycommand` text to your method automatically; aliases are just extra keys pointing to the same method.
 
-```javascript
-const mycommand = require('./mycommand');
+## 📦 Tech Stack
 
-module.exports = {
-    // ... other commands
-    mycommand
-};
-```
-
-## 📦 Dependencies
-
-- **whatsapp-web.js** - WhatsApp Web API wrapper
-- **qrcode-terminal** - QR code generation for terminal
-- **axios** - HTTP client (for future API integrations)
+- **[Baileys](https://github.com/WhiskeySockets/Baileys)** - WhatsApp Web (multi-device) API
+- **better-sqlite3** - per-user conversation memory
+- **Groq SDK** + **Mistral / HuggingFace / Cohere / Ollama** - free LLM providers
+- **@google/generative-ai** - Gemini (vision / fallback)
+- **Whisper** (Groq `whisper-large-v3` + local `faster-whisper`) - speech-to-text
+- **Piper TTS / gTTS** - text-to-speech
+- **fluent-ffmpeg** + **ffmpeg-static** - audio/video processing
+- **Sharp / Jimp / node-webpmux** - image & sticker processing
+- **axios**, **pino**, **qrcode-terminal**, **dotenv**
 
 ## ⚙️ Configuration
 
-The bot uses LocalAuth strategy which saves your session locally. Authentication data is stored in:
-- `.wwebjs_auth/` - Session data
-- `.wwebjs_cache/` - Cache files
+Key environment variables (`.env`):
 
-These folders are git-ignored for security.
+| Variable | Purpose |
+|----------|---------|
+| `GROQ_API_KEY` | Primary free LLM + Whisper transcription |
+| `MISTRAL_API_KEY` / `HUGGINGFACE_API_KEY` / `COHERE_API_KEY` | Fallback LLM providers |
+| `OLLAMA_URL` | Local LLM endpoint (default `http://localhost:11434`) |
+| `GEMINI_API_KEY` | Google Gemini (vision / fallback) |
+| `COMMAND_PREFIX` | Command prefix (default `-`) |
+| `DUB_TRANSCRIPTION_ENGINE` | `groq` (free, best multilingual) or `whisper-local` |
+| `WHISPER_MODEL` | Local Whisper model: `tiny` / `base` / `small` |
 
-## 🚀 Deployment Tips
+## 🚀 Deployment
 
-### Running with PM2 (recommended for production)
+### Raspberry Pi (memory-limited)
+```bash
+npm run start:rpi      # caps Node heap at 512MB; uses RPi-tuned Whisper model
+```
+
+### Production with PM2 (recommended)
 ```bash
 npm install -g pm2
-pm2 start index.js --name eden-bot
+pm2 start start.js --name eden-bot
 pm2 save
 pm2 startup
 ```
 
-### Running in Development Mode
+### Development
 ```bash
-npm run dev
+npm run dev            # nodemon auto-reload
 ```
-
-## ⚠️ Important Notes
-
-- First run will require QR code scanning
-- Keep your session secure (don't share `.wwebjs_auth/`)
-- The bot needs to stay running to respond to messages
-- Large media files may take longer to process for stickers
-- WhatsApp may rate-limit if you send too many messages too quickly
 
 ## 🐛 Troubleshooting
 
-**QR Code not appearing?**
-- Make sure you have a stable internet connection
-- Try deleting `.wwebjs_auth/` and `.wwebjs_cache/` folders and restart
+**QR code / login issues** - delete the `baileys_auth/` folder and restart to re-link.
 
-**Bot not responding?**
-- Check if the bot is still running
-- Verify your internet connection
-- Check terminal logs for errors
+**Bot not responding** - confirm it's running, check terminal logs, and make sure at least one LLM key (e.g. `GROQ_API_KEY`) is set.
 
-**Sticker creation failing?**
-- Ensure the media file isn't too large (< 1MB recommended)
-- Supported formats: JPEG, PNG, WebP, MP4, GIF
+**Transcription fails** - set `DUB_TRANSCRIPTION_ENGINE=groq` with a valid `GROQ_API_KEY`, or install local Whisper (`pip install faster-whisper`) for offline use.
+
+**Sticker/voice issues** - ensure `ffmpeg` works (bundled via `ffmpeg-static`); very large media may take longer to process.
 
 ## 📄 License
 
 ISC
 
-## 💖 Contributing
-
-Feel free to fork this project and submit pull requests with new features or improvements!
-
-## 📞 Support
-
-If you encounter any issues or have questions, please open an issue on GitHub.
-
 ---
 
-Made with ❤️ using whatsapp-web.js
+Made with ❤️ using Baileys

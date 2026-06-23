@@ -8,9 +8,17 @@ const ImageService = require("../services/imageService");
 const WarningStore = require("../database/warningStore");
 const MuteStore = require("../database/muteStore");
 const BanStore = require("../database/banStore");
+const EconomyStore = require("../database/economyStore");
 
 class CommandHandler {
-  constructor(llmService, muteStore = null, banStore = null, afkStore = null) {
+  constructor(
+    llmService,
+    muteStore = null,
+    banStore = null,
+    afkStore = null,
+    economyStore = null,
+    mafiaManager = null,
+  ) {
     this.llmService = llmService;
     this.stickerService = new StickerService();
     this.voiceService = VoiceService;
@@ -21,6 +29,10 @@ class CommandHandler {
     this.muteStore = muteStore || new MuteStore();
     this.banStore = banStore || new BanStore();
     this.afkStore = afkStore;
+    this.economyStore = economyStore || new EconomyStore();
+    this.mafiaManager = mafiaManager; // set by index.js (needs sock)
+    this.currencyName = "coins";
+    this.currencyEmoji = "🪙";
     this.currentContext = {};
     this.lastVoiceClipByFolder = {};
     this.commands = {
@@ -131,6 +143,37 @@ class CommandHandler {
       unban: this.handleUnban.bind(this),
       banlist: this.handleBanList.bind(this),
       warnlist: this.handleWarnList.bind(this),
+
+      // Economy / currency
+      balance: this.handleBalance.bind(this),
+      bal: this.handleBalance.bind(this),
+      wallet: this.handleBalance.bind(this),
+      coins: this.handleBalance.bind(this),
+      daily: this.handleDaily.bind(this),
+      give: this.handleGive.bind(this),
+      pay: this.handleGive.bind(this),
+      leaderboard: this.handleLeaderboard.bind(this),
+      baltop: this.handleLeaderboard.bind(this),
+      rich: this.handleLeaderboard.bind(this),
+
+      // Gambling games
+      coinflip: this.handleCoinflip.bind(this),
+      cf: this.handleCoinflip.bind(this),
+      flip: this.handleCoinflip.bind(this),
+      dice: this.handleDice.bind(this),
+      roll: this.handleDice.bind(this),
+      slots: this.handleSlots.bind(this),
+      slot: this.handleSlots.bind(this),
+      roulette: this.handleRoulette.bind(this),
+      roul: this.handleRoulette.bind(this),
+
+      // Mafia game
+      mafia: this.handleMafia.bind(this),
+      join: this.handleMafiaJoin.bind(this),
+      leave: this.handleMafiaLeave.bind(this),
+      mafiastart: this.handleMafiaStart.bind(this),
+      vote: this.handleMafiaVote.bind(this),
+      players: this.handleMafiaPlayers.bind(this),
     };
   }
 
@@ -369,6 +412,26 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-afk\` - Mark yourself away in this chat
 - \`-ping\` - Quick response check (am I alive?)
 - \`-sys\` - Show system information (🖥️)
+
+*🪙 Economy:*
+- \`-balance\` / \`-bal\` - Check your coin balance
+- \`-daily\` - Claim your daily coins
+- \`-give @user [amount]\` - Send coins to someone
+- \`-leaderboard\` / \`-rich\` - Richest players
+
+*🎰 Gambling:* (bet your coins)
+- \`-coinflip heads/tails [bet]\` or \`-cf\`
+- \`-dice [bet]\` - Beat the house roll
+- \`-slots [bet]\` - Spin the reels 🎰
+- \`-roulette red/black/even/odd/0-36 [bet]\`
+
+*🕵️ Mafia Game:*
+- \`-mafia\` - Open a lobby (group only)
+- \`-join\` / \`-leave\` - Join or leave the lobby
+- \`-mafiastart\` - Host starts the game
+- \`-vote @user\` - Vote to lynch · \`-players\` - who's alive
+- \`-mafia rules\` - Full rules · \`-mafia stop\` - cancel
+- ⚠️ DM me once first so I can send your secret role!
 
 *🎨 Sticker Usage:*
 • Send media + \`-sticker\` = Media sticker
@@ -5217,6 +5280,329 @@ Provide a structured analysis with emojis.`;
       console.error("❌ Clean command error:", error);
       return `❌ Failed to clear warnings: ${error.message}`;
     }
+  }
+
+  // ===========================================================================
+  // ECONOMY / CURRENCY
+  // ===========================================================================
+
+  fmtCoins(n) {
+    return `${this.currencyEmoji} ${Number(n).toLocaleString("en-US")} ${this.currencyName}`;
+  }
+
+  // Resolve a bet amount from args; supports "all"/"half"/"max" and numbers
+  parseBetAmount(arg, balance) {
+    if (arg == null) return NaN;
+    const a = String(arg).toLowerCase().trim();
+    if (a === "all" || a === "max") return balance;
+    if (a === "half") return Math.floor(balance / 2);
+    const n = parseInt(a.replace(/[,_]/g, ""), 10);
+    return Number.isNaN(n) ? NaN : n;
+  }
+
+  // Pull the first mentioned/replied target JID from the message adapter
+  getTargetJid(message) {
+    if (message?.quoted?.userId) return message.quoted.userId;
+    if (Array.isArray(message?.mentions) && message.mentions.length > 0) {
+      return message.mentions[0];
+    }
+    return null;
+  }
+
+  async handleBalance(args, message) {
+    const { senderName = "User", senderJid } = this.currentContext;
+    const targetJid = this.getTargetJid(message) || senderJid;
+    const isSelf = targetJid === senderJid;
+    const balance = this.economyStore.getBalance(targetJid);
+
+    if (isSelf) {
+      return `💰 *Your wallet*\n${this.fmtCoins(balance)}\n\nPlay \`-coinflip\`, \`-dice\`, \`-slots\`, \`-roulette\` to win more, or grab your \`-daily\`!`;
+    }
+    return `💰 That wallet holds ${this.fmtCoins(balance)}`;
+  }
+
+  async handleDaily(args, message) {
+    const { senderName = "User", senderJid } = this.currentContext;
+    const result = this.economyStore.claimDaily(senderJid, senderName);
+
+    if (!result.ok) {
+      const mins = Math.ceil(result.remainingMs / 60000);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      const wait = h > 0 ? `${h}h ${m}m` : `${m}m`;
+      return `⏳ You already claimed your daily. Come back in *${wait}*.\nBalance: ${this.fmtCoins(result.balance)}`;
+    }
+    return `🎁 Daily reward claimed! +${this.fmtCoins(result.amount)}\nNew balance: ${this.fmtCoins(result.balance)}`;
+  }
+
+  async handleGive(args, message) {
+    const { senderName = "User", senderJid } = this.currentContext;
+    const targetJid = this.getTargetJid(message);
+
+    if (!targetJid) {
+      return "🤝 Tag or reply to who you want to pay.\nUsage: `-give @user 100`";
+    }
+
+    // Amount is the first numeric arg (mention text may occupy others)
+    const amountArg = args.find((a) => /^(all|half|max|[\d,_]+)$/i.test(a));
+    const balance = this.economyStore.getBalance(senderJid);
+    const amount = this.parseBetAmount(amountArg, balance);
+
+    if (!amount || amount <= 0) {
+      return "❌ How much? Usage: `-give @user 100`";
+    }
+
+    const targetName =
+      message?.quoted?.pushName || message?.quoted?.name || null;
+    const result = this.economyStore.transfer(
+      senderJid,
+      targetJid,
+      amount,
+      targetName,
+    );
+
+    if (!result.ok) {
+      if (result.reason === "self") return "🙃 You can't pay yourself.";
+      if (result.reason === "insufficient")
+        return `❌ Not enough coins. You have ${this.fmtCoins(balance)}.`;
+      return "❌ Couldn't complete that transfer.";
+    }
+
+    return {
+      text: `💸 ${senderName} gave ${this.fmtCoins(amount)} to @${String(targetJid).split("@")[0]}!\n${senderName}'s balance: ${this.fmtCoins(result.balance)}`,
+      mentions: [targetJid],
+    };
+  }
+
+  async handleLeaderboard(args, message) {
+    const top = this.economyStore.getLeaderboard(10);
+    if (!top.length) {
+      return "📊 Nobody has any coins yet. Be the first - try `-daily`!";
+    }
+    const medals = ["🥇", "🥈", "🥉"];
+    const lines = top.map((row, i) => {
+      const rank = medals[i] || `${i + 1}.`;
+      const name = row.user_name || `+${row.user_key}`;
+      return `${rank} ${name} — ${this.fmtCoins(row.balance)}`;
+    });
+    return `🏆 *Richest players*\n\n${lines.join("\n")}`;
+  }
+
+  // ===========================================================================
+  // GAMBLING
+  // ===========================================================================
+
+  // Shared bet validation: returns { ok, amount, balance, error }
+  validateBet(senderJid, amountArg) {
+    const balance = this.economyStore.getBalance(senderJid);
+    const amount = this.parseBetAmount(amountArg, balance);
+    if (!amount || amount <= 0) {
+      return { ok: false, error: "❌ Enter a valid bet amount." };
+    }
+    if (amount > balance) {
+      return {
+        ok: false,
+        error: `❌ You only have ${this.fmtCoins(balance)}.`,
+      };
+    }
+    const minBet = 10;
+    if (amount < minBet) {
+      return { ok: false, error: `❌ Minimum bet is ${this.fmtCoins(minBet)}.` };
+    }
+    return { ok: true, amount, balance };
+  }
+
+  async handleCoinflip(args, message) {
+    const { senderJid } = this.currentContext;
+    const side = String(args[0] || "").toLowerCase();
+    const choice = ["h", "heads"].includes(side)
+      ? "heads"
+      : ["t", "tails"].includes(side)
+        ? "tails"
+        : null;
+
+    if (!choice) {
+      return "🪙 *Coinflip*\nUsage: `-coinflip heads 100` (or tails)\nDouble your bet if you call it right!";
+    }
+    const bet = this.validateBet(senderJid, args[1]);
+    if (!bet.ok) return bet.error;
+
+    this.economyStore.deductBalance(senderJid, bet.amount, { wager: true });
+    const result = Math.random() < 0.5 ? "heads" : "tails";
+    const won = result === choice;
+
+    if (won) {
+      const payout = bet.amount * 2;
+      const balance = this.economyStore.addBalance(senderJid, payout, {
+        won: true,
+      });
+      return `🪙 It's *${result}*! You won ${this.fmtCoins(bet.amount)} 🎉\nBalance: ${this.fmtCoins(balance)}`;
+    }
+    const balance = this.economyStore.getBalance(senderJid);
+    return `🪙 It's *${result}*. You lost ${this.fmtCoins(bet.amount)} 😬\nBalance: ${this.fmtCoins(balance)}`;
+  }
+
+  async handleDice(args, message) {
+    const { senderJid } = this.currentContext;
+    const bet = this.validateBet(senderJid, args[0]);
+    if (!bet.ok) {
+      return `🎲 *Dice*\nUsage: \`-dice 100\`\nYou and the house each roll 2 dice. Beat the house to win; tie = push.\n${bet.error || ""}`.trim();
+    }
+
+    this.economyStore.deductBalance(senderJid, bet.amount, { wager: true });
+    const roll = () =>
+      1 + Math.floor(Math.random() * 6) + (1 + Math.floor(Math.random() * 6));
+    const you = roll();
+    const house = roll();
+
+    if (you > house) {
+      const balance = this.economyStore.addBalance(senderJid, bet.amount * 2, {
+        won: true,
+      });
+      return `🎲 You rolled *${you}*, house rolled *${house}*.\nYou win ${this.fmtCoins(bet.amount)}! 🎉\nBalance: ${this.fmtCoins(balance)}`;
+    }
+    if (you === house) {
+      const balance = this.economyStore.addBalance(senderJid, bet.amount); // refund
+      return `🎲 You rolled *${you}*, house rolled *${house}*. Push - bet returned.\nBalance: ${this.fmtCoins(balance)}`;
+    }
+    const balance = this.economyStore.getBalance(senderJid);
+    return `🎲 You rolled *${you}*, house rolled *${house}*.\nYou lost ${this.fmtCoins(bet.amount)} 😬\nBalance: ${this.fmtCoins(balance)}`;
+  }
+
+  async handleSlots(args, message) {
+    const { senderJid } = this.currentContext;
+    const bet = this.validateBet(senderJid, args[0]);
+    if (!bet.ok) {
+      return `🎰 *Slots*\nUsage: \`-slots 100\`\n3 matching = big win, 2 matching = small win.\n${bet.error || ""}`.trim();
+    }
+
+    this.economyStore.deductBalance(senderJid, bet.amount, { wager: true });
+    const reels = ["🍒", "🍋", "🍊", "🔔", "⭐", "💎", "7️⃣"];
+    // Weighted: rarer symbols (diamond, 7) pay more
+    const payoutFor = {
+      "🍒": 3,
+      "🍋": 4,
+      "🍊": 5,
+      "🔔": 8,
+      "⭐": 12,
+      "💎": 20,
+      "7️⃣": 50,
+    };
+    const spin = () => reels[Math.floor(Math.random() * reels.length)];
+    const a = spin();
+    const b = spin();
+    const c = spin();
+    const line = `[ ${a} | ${b} | ${c} ]`;
+
+    let winnings = 0;
+    let note = "No match - better luck next spin!";
+    if (a === b && b === c) {
+      winnings = bet.amount * payoutFor[a];
+      note = `JACKPOT! Three ${a} 🎉`;
+    } else if (a === b || b === c || a === c) {
+      winnings = Math.floor(bet.amount * 1.5);
+      note = "Two of a kind - small win!";
+    }
+
+    if (winnings > 0) {
+      const balance = this.economyStore.addBalance(senderJid, winnings, {
+        won: true,
+      });
+      return `🎰 ${line}\n${note}\nWon ${this.fmtCoins(winnings)} (net +${this.fmtCoins(winnings - bet.amount)})\nBalance: ${this.fmtCoins(balance)}`;
+    }
+    const balance = this.economyStore.getBalance(senderJid);
+    return `🎰 ${line}\n${note}\nLost ${this.fmtCoins(bet.amount)} 😬\nBalance: ${this.fmtCoins(balance)}`;
+  }
+
+  async handleRoulette(args, message) {
+    const { senderJid } = this.currentContext;
+    const betType = String(args[0] || "").toLowerCase();
+    const amountArg = args[1];
+
+    // Accepted bets: red, black, even, odd, a number 0-36
+    const isNumber = /^\d{1,2}$/.test(betType) && Number(betType) <= 36;
+    const validType = ["red", "black", "even", "odd"].includes(betType) || isNumber;
+
+    if (!validType) {
+      return "🎡 *Roulette*\nUsage: `-roulette red 100`\nBet on: `red`, `black`, `even`, `odd`, or a number `0`-`36`.\nNumber pays 35x, colors/even-odd pay 2x.";
+    }
+    const bet = this.validateBet(senderJid, amountArg);
+    if (!bet.ok) return bet.error;
+
+    this.economyStore.deductBalance(senderJid, bet.amount, { wager: true });
+
+    const result = Math.floor(Math.random() * 37); // 0-36
+    const redNumbers = new Set([
+      1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
+    ]);
+    const color =
+      result === 0 ? "green" : redNumbers.has(result) ? "red" : "black";
+    const colorEmoji =
+      color === "green" ? "🟢" : color === "red" ? "🔴" : "⚫";
+
+    let multiplier = 0;
+    if (isNumber) {
+      if (Number(betType) === result) multiplier = 36; // 35:1 + stake
+    } else if (betType === "red" || betType === "black") {
+      if (betType === color) multiplier = 2;
+    } else if (betType === "even" || betType === "odd") {
+      if (result !== 0 && (result % 2 === 0 ? "even" : "odd") === betType) {
+        multiplier = 2;
+      }
+    }
+
+    const spinLine = `🎡 The ball lands on *${result}* ${colorEmoji} (${color})`;
+    if (multiplier > 0) {
+      const payout = bet.amount * multiplier;
+      const balance = this.economyStore.addBalance(senderJid, payout, {
+        won: true,
+      });
+      return `${spinLine}\nYou win ${this.fmtCoins(payout - bet.amount)}! 🎉\nBalance: ${this.fmtCoins(balance)}`;
+    }
+    const balance = this.economyStore.getBalance(senderJid);
+    return `${spinLine}\nYou lost ${this.fmtCoins(bet.amount)} 😬\nBalance: ${this.fmtCoins(balance)}`;
+  }
+
+  // ===========================================================================
+  // MAFIA (delegates to the MafiaManager, which owns sock + timers)
+  // ===========================================================================
+
+  async handleMafia(args, message) {
+    if (!this.mafiaManager) return "❌ Mafia game is not available right now.";
+    if (!message?.groupId) return "🕵️ Mafia can only be played in a group chat.";
+    const sub = String(args[0] || "").toLowerCase();
+    if (sub === "stop" || sub === "cancel" || sub === "end") {
+      return this.mafiaManager.cancelGame(message, this.currentContext);
+    }
+    if (sub === "help" || sub === "rules") {
+      return this.mafiaManager.rules();
+    }
+    return this.mafiaManager.createLobby(message, this.currentContext);
+  }
+
+  async handleMafiaJoin(args, message) {
+    if (!this.mafiaManager || !message?.groupId) return null;
+    return this.mafiaManager.joinLobby(message, this.currentContext);
+  }
+
+  async handleMafiaLeave(args, message) {
+    if (!this.mafiaManager || !message?.groupId) return null;
+    return this.mafiaManager.leaveLobby(message, this.currentContext);
+  }
+
+  async handleMafiaStart(args, message) {
+    if (!this.mafiaManager || !message?.groupId) return null;
+    return this.mafiaManager.startGame(message, this.currentContext);
+  }
+
+  async handleMafiaVote(args, message) {
+    if (!this.mafiaManager || !message?.groupId) return null;
+    return this.mafiaManager.handleVote(args, message, this.currentContext);
+  }
+
+  async handleMafiaPlayers(args, message) {
+    if (!this.mafiaManager || !message?.groupId) return null;
+    return this.mafiaManager.listPlayers(message, this.currentContext);
   }
 }
 

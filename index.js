@@ -69,11 +69,17 @@ const llmService = new LLMService();
 const muteStore = new MuteStore();
 const afkStore = new AfkStore();
 const banStore = new BanStore();
+const EconomyStore = require("./database/economyStore");
+const MafiaManager = require("./games/mafiaManager");
+const economyStore = new EconomyStore();
+const mafiaManager = new MafiaManager(economyStore);
 const commandHandler = new CommandHandler(
   llmService,
   muteStore,
   banStore,
   afkStore,
+  economyStore,
+  mafiaManager,
 );
 
 // Bot configuration
@@ -1271,6 +1277,10 @@ async function connectToWhatsApp() {
         botId = sock.user?.id;
         console.log(`🤖 Bot ID: ${botId}\n`);
 
+        // Give the Mafia game engine the socket so it can DM players and
+        // run phase timers proactively.
+        mafiaManager.setSock(sock);
+
         // Clean up duplicate messages on startup
         console.log("🧹 Cleaning up duplicate messages...");
         const removed = messageStore.removeDuplicates();
@@ -1596,6 +1606,21 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
           }
 
           if (!messageText) continue;
+
+          // Mafia night actions arrive as plain-text DMs (e.g. "2"). If this
+          // DM is a pending secret action for an active game, consume it here
+          // so it never reaches the normal LLM reply path.
+          if (!isGroup && !messageText.startsWith(COMMAND_PREFIX)) {
+            try {
+              const consumed = await mafiaManager.handleDM(
+                senderJid,
+                messageText,
+              );
+              if (consumed) continue;
+            } catch (mafiaErr) {
+              console.error("Mafia DM handling error:", mafiaErr);
+            }
+          }
 
           // Cache the pushName for this user for future mentions
           if (message.pushName) {
