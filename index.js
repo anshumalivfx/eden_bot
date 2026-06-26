@@ -2400,15 +2400,21 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                     mentionJids,
                   });
 
-                  await sock.sendMessage(
-                    chatJid,
-                    {
-                      text: cleanResponse,
-                      mentions:
-                        mentionJids.length > 0 ? mentionJids : undefined,
-                    },
-                    { quoted: quotedMsg },
-                  );
+                  if (!cleanResponse || !cleanResponse.trim()) {
+                    console.log(
+                      "⚠️ Skipped sending an empty command response\n",
+                    );
+                  } else {
+                    await sock.sendMessage(
+                      chatJid,
+                      {
+                        text: cleanResponse,
+                        mentions:
+                          mentionJids.length > 0 ? mentionJids : undefined,
+                      },
+                      { quoted: quotedMsg },
+                    );
+                  }
                 }
                 console.log(`✅ Command response sent\n`);
               } else {
@@ -2899,36 +2905,46 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
 
                 response = response.trim(); // Clean whitespace
 
-                // Quote the original message when replying
-                const sentMsg = await sock.sendMessage(
-                  chatJid,
-                  { text: response },
-                  { quoted: message },
-                );
-
-                // Store bot's response in context with messageId
-                const messageId = sentMsg?.key?.id;
-                addMessageToContext(
-                  chatJid,
-                  "Eden",
-                  response,
-                  true,
-                  messageId,
-                  null,
-                  senderName,
-                );
-
-                // Capture bot's LID from sent message in groups
-                if (isGroup && sentMsg?.key?.participant && !botLid) {
-                  botLid = sentMsg.key.participant;
+                // Guard: never send a blank/whitespace-only message. The
+                // cleanup above (stripping roleplay asterisks/markdown) or an
+                // empty model reply can reduce the text to "", which would
+                // otherwise send a blank bubble.
+                if (!response) {
                   console.log(
-                    `💾 Captured bot LID from sent message: ${botLid}`,
+                    "⚠️ Skipped sending an empty reply after cleanup\n",
+                  );
+                } else {
+                  // Quote the original message when replying
+                  const sentMsg = await sock.sendMessage(
+                    chatJid,
+                    { text: response },
+                    { quoted: message },
+                  );
+
+                  // Store bot's response in context with messageId
+                  const messageId = sentMsg?.key?.id;
+                  addMessageToContext(
+                    chatJid,
+                    "Eden",
+                    response,
+                    true,
+                    messageId,
+                    null,
+                    senderName,
+                  );
+
+                  // Capture bot's LID from sent message in groups
+                  if (isGroup && sentMsg?.key?.participant && !botLid) {
+                    botLid = sentMsg.key.participant;
+                    console.log(
+                      `💾 Captured bot LID from sent message: ${botLid}`,
+                    );
+                  }
+
+                  console.log(
+                    `✅ Mention/Reply response sent (msgId: ${messageId})\n`,
                   );
                 }
-
-                console.log(
-                  `✅ Mention/Reply response sent (msgId: ${messageId})\n`,
-                );
               } else {
                 console.log(`⚠️ LLM returned no response\n`);
               }
