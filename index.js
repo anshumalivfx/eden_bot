@@ -1529,6 +1529,10 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
         if (type !== "notify") return;
 
         for (const message of messages) {
+          // Isolate each message: if processing one throws, skip just that one
+          // instead of aborting the whole batch (which made Eden "miss" the
+          // other commands that arrived at the same time).
+          try {
           // Skip if message is from bot itself
           if (message.key.fromMe) continue;
 
@@ -2942,6 +2946,13 @@ Violators will be shamed publicly and kicked immediately unless (under discretio
                 console.error("❌ Failed to send error message:", sendError);
               }
             }
+          }
+          } catch (perMessageError) {
+            console.error(
+              "❌ Error processing a message (skipping to next):",
+              perMessageError,
+            );
+            continue;
           }
         }
       } catch (error) {

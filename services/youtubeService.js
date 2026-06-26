@@ -13,9 +13,24 @@ class YouTubeService {
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
+
+    // Perf caches: resolving the binary path and checking for yt-dlp updates
+    // used to run on EVERY download (adding many seconds each time). Cache the
+    // resolved path for the process lifetime, and only check for updates once
+    // per day (persisted across restarts).
+    this._cachedYtDlpPath = null;
+    this._updateCheckFile = path.join(this.tempDir, ".ytdlp_update_check");
+    this._updateIntervalMs = 24 * 60 * 60 * 1000; // 24h
   }
 
   async resolveYtDlpPath() {
+    if (this._cachedYtDlpPath) return this._cachedYtDlpPath;
+    const result = await this._resolveYtDlpPathUncached();
+    this._cachedYtDlpPath = result;
+    return result;
+  }
+
+  async _resolveYtDlpPathUncached() {
     const candidates = [
       "/opt/anaconda3/bin/yt-dlp",
       "/opt/homebrew/bin/yt-dlp",
@@ -54,30 +69,60 @@ class YouTubeService {
   /**
    * Ensure yt-dlp is updated to the latest version
    */
-  async ensureYtDlpUpdated() {
+  // Returns true if an update check is due (more than 24h since the last one)
+  _isUpdateCheckDue() {
     try {
-      const ytdlpPath = await this.resolveYtDlpPath();
-      console.log("⬆️  Checking for yt-dlp updates...");
-
-      if (ytdlpPath.includes("python3 -m")) {
-        await execAsync("python3 -m pip install --upgrade yt-dlp", {
-          timeout: 60000,
-        });
-      } else {
-        // Try yt-dlp -U first
-        try {
-          await execAsync(`${ytdlpPath} -U`, { timeout: 60000 });
-        } catch (error) {
-          // If -U fails (common if installed via pip), try pip upgrade
-          await execAsync("pip3 install --upgrade yt-dlp", { timeout: 60000 });
-        }
-      }
-      console.log("✅ yt-dlp is up to date");
-      return true;
-    } catch (error) {
-      console.log("⚠️  Could not auto-update yt-dlp, continuing anyway...");
-      return false;
+      const last = parseInt(fs.readFileSync(this._updateCheckFile, "utf8"), 10);
+      if (Number.isNaN(last)) return true;
+      return Date.now() - last > this._updateIntervalMs;
+    } catch {
+      return true; // no record yet
     }
+  }
+
+  _markUpdateChecked() {
+    try {
+      fs.writeFileSync(this._updateCheckFile, String(Date.now()));
+    } catch {}
+  }
+
+  async ensureYtDlpUpdated() {
+    // Updating yt-dlp is slow (a pip/network upgrade). Running it on every
+    // download was the main reason downloads felt slow regardless of internet
+    // speed. Only check once per day, and never block the current download -
+    // run it in the background so this download starts immediately.
+    if (!this._isUpdateCheckDue()) {
+      return true;
+    }
+    this._markUpdateChecked();
+
+    // Fire-and-forget: don't await, so the download isn't delayed.
+    (async () => {
+      try {
+        const ytdlpPath = await this.resolveYtDlpPath();
+        console.log("⬆️  Checking for yt-dlp updates (background)...");
+        if (ytdlpPath.includes("python3 -m")) {
+          await execAsync("python3 -m pip install --upgrade yt-dlp", {
+            timeout: 120000,
+          });
+        } else {
+          try {
+            await execAsync(`${ytdlpPath} -U`, { timeout: 120000 });
+          } catch (error) {
+            await execAsync("pip3 install --upgrade yt-dlp", {
+              timeout: 120000,
+            });
+          }
+        }
+        // A new binary may live at a different path - clear the cache.
+        this._cachedYtDlpPath = null;
+        console.log("✅ yt-dlp updated (background)");
+      } catch (error) {
+        console.log("⚠️  Background yt-dlp update failed, continuing anyway...");
+      }
+    })();
+
+    return true;
   }
 
   normalizeYouTubeUrl(videoUrl, preferredHost = "youtube.com") {
@@ -279,6 +324,11 @@ class YouTubeService {
           ...cookiesArg,
           "--ignore-config",
           ...strategy,
+          // Speed: download stream fragments in parallel (uses fast internet),
+          // skip playlists, and avoid .part rename overhead.
+          "--concurrent-fragments", "5",
+          "--no-playlist",
+          "--no-part",
           "-x",
           "--audio-format", "mp3",
           "--audio-quality", "0",
@@ -482,6 +532,8 @@ class YouTubeService {
           ...cookiesArg,
           "--ignore-config",
           ...strategy,
+          "--concurrent-fragments", "5",
+          "--no-playlist",
           "-f", "b[height<=720]/best[height<=720]/b/best",
           "--merge-output-format", "mp4",
           "-o", `${outputPath}.%(ext)s`,
