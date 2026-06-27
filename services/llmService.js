@@ -6,6 +6,7 @@ class LLMService {
     this.openaiApiKey = process.env.OPENAI_API_KEY;
     this.mistralApiKey = process.env.MISTRAL_API_KEY;
     this.groqApiKey = process.env.GROQ_API_KEY;
+    this.geminiApiKey = process.env.GEMINI_API_KEY;
     this.huggingfaceApiKey = process.env.HUGGINGFACE_API_KEY;
     this.cohereApiKey = process.env.COHERE_API_KEY;
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -671,13 +672,67 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
 
   // Code-generation call: uses a large model with a big token budget and low
   // temperature for accurate, complete code output. Used by the agentic
-  // -build feature. Tries Groq (big Llama) first, then Mistral, then OpenAI.
+  // -build feature. Prefers code-strong free models: Gemini 2.5 -> Codestral
+  // -> Groq (big Llama) -> OpenAI.
   async generateCode(userPrompt, systemPrompt = null, maxTokens = 8000) {
     const messages = [];
     if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
     messages.push({ role: "user", content: userPrompt });
 
-    // 1) Groq big model
+    // 1) Google Gemini 2.5 (most generous free tier, strong at code, huge
+    // context so the whole app fits in one go).
+    if (this.geminiApiKey && this.geminiApiKey !== "your_gemini_api_key_here") {
+      const geminiModels = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
+      for (const model of geminiModels) {
+        try {
+          const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
+            {
+              ...(systemPrompt
+                ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
+                : {}),
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              generationConfig: { temperature: 0.3, maxOutputTokens: maxTokens },
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 120000 },
+          );
+          const parts =
+            response.data?.candidates?.[0]?.content?.parts || [];
+          const out = parts.map((p) => p.text || "").join("").trim();
+          if (out) return out;
+        } catch (err) {
+          console.warn(
+            `generateCode: Gemini ${model} failed: ${err.response?.status || err.message}`,
+          );
+        }
+      }
+    }
+
+    // 2) Mistral Codestral (code-specialized)
+    if (
+      this.mistralApiKey &&
+      this.mistralApiKey !== "your_mistral_api_key_here"
+    ) {
+      try {
+        const response = await axios.post(
+          "https://api.mistral.ai/v1/chat/completions",
+          { model: "codestral-latest", messages, max_tokens: maxTokens, temperature: 0.3 },
+          {
+            headers: {
+              Authorization: `Bearer ${this.mistralApiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 120000,
+          },
+        );
+        const out = response.data?.choices?.[0]?.message?.content;
+        if (out && out.trim()) return out;
+      } catch (err) {
+        console.warn(`generateCode: Codestral failed: ${err.response?.status || err.message}`);
+      }
+    }
+
+    // 3) Groq big model
     if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
       const groqModels = [
         "llama-3.3-70b-versatile",
@@ -707,7 +762,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       }
     }
 
-    // 2) Mistral fallback
+    // 4) Mistral Large fallback (general model)
     if (
       this.mistralApiKey &&
       this.mistralApiKey !== "your_mistral_api_key_here"
@@ -731,7 +786,7 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
       }
     }
 
-    // 3) OpenAI fallback (if configured)
+    // 5) OpenAI fallback (if configured)
     if (this.openaiApiKey && this.openaiApiKey !== "your_openai_api_key_here") {
       try {
         const response = await axios.post(
