@@ -9,6 +9,8 @@ const WarningStore = require("../database/warningStore");
 const MuteStore = require("../database/muteStore");
 const BanStore = require("../database/banStore");
 const EconomyStore = require("../database/economyStore");
+const AgentService = require("../services/agentService");
+const previewHost = require("../services/previewHost");
 
 class CommandHandler {
   constructor(
@@ -33,6 +35,8 @@ class CommandHandler {
     this.mafiaManager = mafiaManager; // set by index.js (needs sock)
     this.currencyName = "coins";
     this.currencyEmoji = "🪙";
+    this.agentService = new AgentService(llmService);
+    this.buildCooldowns = new Map(); // userKey -> last build timestamp
     this.currentContext = {};
     this.lastVoiceClipByFolder = {};
     this.commands = {
@@ -166,6 +170,11 @@ class CommandHandler {
       slot: this.handleSlots.bind(this),
       roulette: this.handleRoulette.bind(this),
       roul: this.handleRoulette.bind(this),
+
+      // Agentic code builder
+      build: this.handleBuild.bind(this),
+      make: this.handleBuild.bind(this),
+      app: this.handleBuild.bind(this),
 
       // Mafia game
       mafia: this.handleMafia.bind(this),
@@ -424,6 +433,10 @@ Hi, I'm Eden - your sarcastic AI companion! 😈
 - \`-dice [bet]\` - Beat the house roll
 - \`-slots [bet]\` - Spin the reels 🎰
 - \`-roulette red/black/even/odd/0-36 [bet]\`
+
+*🛠️ AI Builder:* (owner/trusted only)
+- \`-build [description]\` - Eden builds a web app/game and sends the file
+- e.g. \`-build a neon snake game\` · aliases: \`-make\`, \`-app\`
 
 *🕵️ Mafia Game:*
 - \`-mafia\` - Open a lobby (group only)
@@ -5561,6 +5574,95 @@ Provide a structured analysis with emojis.`;
     }
     const balance = this.economyStore.getBalance(senderJid);
     return `${spinLine}\nYou lost ${this.fmtCoins(bet.amount)} 😬\nBalance: ${this.fmtCoins(balance)}`;
+  }
+
+  // ===========================================================================
+  // AGENTIC CODE BUILDER (-build / -make / -app)
+  // ===========================================================================
+
+  async handleBuild(args, message) {
+    const { senderJid, isOwner = false, isNiceUser = false } =
+      this.currentContext;
+
+    // Access control: owner / nice-users only (code gen is heavy)
+    if (!isOwner && !isNiceUser) {
+      return "🔒 The build feature is limited to the owner and trusted users right now.";
+    }
+
+    const request = args.join(" ").trim();
+    if (!request) {
+      return "🛠️ *Eden Builder*\nDescribe what you want and I'll build it and send the file.\n\nExamples:\n`-build a neon snake game`\n`-build a pomodoro timer with a circular progress ring`\n`-build a tic-tac-toe game vs a simple AI`";
+    }
+
+    // Light cooldown to avoid back-to-back heavy jobs
+    const key = EconomyStore.getUserKey(senderJid);
+    const COOLDOWN_MS = 60 * 1000;
+    const last = this.buildCooldowns.get(key) || 0;
+    const sinceLast = Date.now() - last;
+    if (sinceLast < COOLDOWN_MS) {
+      const wait = Math.ceil((COOLDOWN_MS - sinceLast) / 1000);
+      return `⏳ Give me a sec - try another build in ${wait}s.`;
+    }
+    this.buildCooldowns.set(key, Date.now());
+
+    // Stream progress so the user sees Eden "working"
+    let lastProgressAt = 0;
+    const onProgress = async (msg) => {
+      // throttle so we don't spam (and tolerate send failures)
+      const now = Date.now();
+      if (now - lastProgressAt < 300) return;
+      lastProgressAt = now;
+      try {
+        await message.reply(msg);
+      } catch (e) {
+        // ignore progress send errors
+      }
+    };
+
+    try {
+      await message.reply(`🛠️ On it! Building: *${request}*\nThis can take a minute...`);
+
+      const result = await this.agentService.build(request, {
+        review: true,
+        onProgress,
+      });
+
+      const planNote = result.plan
+        ? `\n\n📋 What I built:\n${result.plan}`
+        : "";
+      const openNote = result.multi
+        ? "Unzip and open index.html in your browser."
+        : "Open it in any browser to run it.";
+
+      // For single-HTML builds, optionally publish a live preview link
+      let previewNote = "";
+      if (!result.multi && previewHost.isEnabled()) {
+        try {
+          await message.reply("🌐 Publishing a live preview...");
+          const url = await previewHost.publishHtml(
+            result.buffer.toString("utf8"),
+            `Eden build: ${request}`.slice(0, 100),
+          );
+          if (url) previewNote = `\n\n🔗 Live preview: ${url}`;
+        } catch (e) {
+          // preview is best-effort; ignore failures
+        }
+      }
+
+      return {
+        media: {
+          document: result.buffer,
+          fileName: result.fileName,
+          mimetype: result.mimetype,
+        },
+        text: `✅ Done! Here's *${request}* 🎮\n${openNote}${previewNote}${planNote}`,
+      };
+    } catch (error) {
+      console.error("❌ Build failed:", error);
+      // allow an immediate retry after a hard failure
+      this.buildCooldowns.delete(key);
+      return `❌ Build failed: ${error.message}\nTry rephrasing or simplifying the request.`;
+    }
   }
 
   // ===========================================================================

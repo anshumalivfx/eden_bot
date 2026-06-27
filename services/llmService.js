@@ -669,6 +669,92 @@ reply casually. if its a real question (what is, how to, explain) ANSWER IT with
     return "Respond naturally with 1-2 sentences. Keep it conversational, not an essay.";
   }
 
+  // Code-generation call: uses a large model with a big token budget and low
+  // temperature for accurate, complete code output. Used by the agentic
+  // -build feature. Tries Groq (big Llama) first, then Mistral, then OpenAI.
+  async generateCode(userPrompt, systemPrompt = null, maxTokens = 8000) {
+    const messages = [];
+    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: userPrompt });
+
+    // 1) Groq big model
+    if (this.groqApiKey && this.groqApiKey !== "your_groq_api_key_here") {
+      const groqModels = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+      ];
+      for (const model of groqModels) {
+        try {
+          const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            { model, messages, max_tokens: maxTokens, temperature: 0.3 },
+            {
+              headers: {
+                Authorization: `Bearer ${this.groqApiKey}`,
+                "Content-Type": "application/json",
+              },
+              timeout: 120000,
+            },
+          );
+          const out = response.data?.choices?.[0]?.message?.content;
+          if (out && out.trim()) return out;
+        } catch (err) {
+          console.warn(
+            `generateCode: Groq model ${model} failed: ${err.response?.status || err.message}`,
+          );
+        }
+      }
+    }
+
+    // 2) Mistral fallback
+    if (
+      this.mistralApiKey &&
+      this.mistralApiKey !== "your_mistral_api_key_here"
+    ) {
+      try {
+        const response = await axios.post(
+          "https://api.mistral.ai/v1/chat/completions",
+          { model: "mistral-large-latest", messages, max_tokens: maxTokens, temperature: 0.3 },
+          {
+            headers: {
+              Authorization: `Bearer ${this.mistralApiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 120000,
+          },
+        );
+        const out = response.data?.choices?.[0]?.message?.content;
+        if (out && out.trim()) return out;
+      } catch (err) {
+        console.warn(`generateCode: Mistral failed: ${err.message}`);
+      }
+    }
+
+    // 3) OpenAI fallback (if configured)
+    if (this.openaiApiKey && this.openaiApiKey !== "your_openai_api_key_here") {
+      try {
+        const response = await axios.post(
+          "https://api.openai.com/v1/chat/completions",
+          { model: "gpt-4o-mini", messages, max_tokens: maxTokens, temperature: 0.3 },
+          {
+            headers: {
+              Authorization: `Bearer ${this.openaiApiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 120000,
+          },
+        );
+        const out = response.data?.choices?.[0]?.message?.content;
+        if (out && out.trim()) return out;
+      } catch (err) {
+        console.warn(`generateCode: OpenAI failed: ${err.message}`);
+      }
+    }
+
+    throw new Error("All code-generation providers failed");
+  }
+
   async callOllama(prompt) {
     const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
       model: "llama2", // You can change this to any model you have installed
