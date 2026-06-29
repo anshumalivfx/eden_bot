@@ -1763,7 +1763,21 @@ Reply to a voice message with:
     try {
       const { senderName = "User", senderJid = "", isOwner = false } = this.currentContext;
 
-      if (!isOwner) {
+      // Users (besides the owner) explicitly allowed to use -dub.
+      // Matched on the numeric portion of the JID, same as nice-user matching,
+      // so it works whether the sender shows up as @s.whatsapp.net or @lid.
+      const DUB_ALLOWED_IDS = ["231426461028450"]; // Sarah
+      const senderNumber = String(senderJid)
+        .split("@")[0]
+        .replace(/[^0-9]/g, "");
+      const isDubAllowed =
+        isOwner ||
+        (senderNumber.length >= 6 &&
+          DUB_ALLOWED_IDS.some(
+            (id) => senderNumber.includes(id) || id.includes(senderNumber),
+          ));
+
+      if (!isDubAllowed) {
         return "🔒 Sorry, -dub is currently under development and only available to Ansh for now.";
       }
 
